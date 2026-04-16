@@ -60,7 +60,7 @@ pub fn init(cx: &mut App) {
         .with(tracing_subscriber::fmt::layer())
         .with(
             tracing_subscriber::EnvFilter::from_default_env()
-                .add_directive("gpui_starter=trace".parse().unwrap()),
+                .add_directive(format!("{}=trace", env!("CARGO_PKG_NAME")).parse().unwrap()),
         )
         .try_init();
 
@@ -74,14 +74,14 @@ pub fn init(cx: &mut App) {
     AppState::init(cx);
 
     // Restore persisted theme settings
-    let persisted = std::fs::read_to_string("target/state.json")
+    let persisted = std::fs::read_to_string(format!("{}/target/state.json", env!("CARGO_MANIFEST_DIR")))
         .ok()
         .and_then(|json| serde_json::from_str::<PersistedState>(&json).ok());
 
     // Load extra themes from the themes/ directory (with hot-reload)
     let persisted_for_closure = persisted.clone();
     if let Err(err) = gpui_component::ThemeRegistry::watch_dir(
-        std::path::PathBuf::from("./themes"),
+        std::path::PathBuf::from(format!("{}/themes", env!("CARGO_MANIFEST_DIR"))),
         cx,
         move |cx| {
             if let Some(ref s) = persisted_for_closure {
@@ -112,7 +112,7 @@ pub fn init(cx: &mut App) {
             scrollbar_show: Some(cx.theme().scrollbar_show),
         };
         if let Ok(json) = serde_json::to_string_pretty(&s) {
-            let _ = std::fs::write("target/state.json", json);
+            let _ = std::fs::write(format!("{}/target/state.json", env!("CARGO_MANIFEST_DIR")), json);
         }
     })
     .detach();
