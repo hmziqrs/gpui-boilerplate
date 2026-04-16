@@ -51,6 +51,38 @@ impl AppState {
 }
 
 // ---------------------------------------------------------------------------
+// Locale state (reactive global for settings page)
+// ---------------------------------------------------------------------------
+
+pub const LOCALE_EN: &str = "en";
+pub const LOCALE_ZH_CN: &str = "zh-CN";
+
+#[derive(Clone, Debug)]
+pub struct LocaleState(pub SharedString);
+
+impl Global for LocaleState {}
+
+pub fn current_locale(cx: &App) -> SharedString {
+    cx.global::<LocaleState>().0.clone()
+}
+
+pub fn set_locale(locale: &'static str, cx: &mut App) {
+    rust_i18n::set_locale(locale);
+    es_fluent_manager_embedded::select_language(
+        locale
+            .parse()
+            .unwrap_or_else(|_| es_fluent::unic_langid::langid!("en")),
+    );
+    cx.set_global::<LocaleState>(LocaleState(SharedString::from(locale)));
+    cx.refresh_windows();
+}
+
+pub fn set_theme_mode(mode: gpui_component::ThemeMode, cx: &mut App) {
+    gpui_component::Theme::change(mode, None, cx);
+    cx.refresh_windows();
+}
+
+// ---------------------------------------------------------------------------
 // Init
 // ---------------------------------------------------------------------------
 
@@ -72,6 +104,10 @@ pub fn init(cx: &mut App) {
     es_fluent_manager_embedded::select_language(<_ as Into<es_fluent::unic_langid::LanguageIdentifier>>::into(Languages::default()));
 
     AppState::init(cx);
+    cx.set_global::<LocaleState>(LocaleState(SharedString::from(
+        <_ as Into<es_fluent::unic_langid::LanguageIdentifier>>::into(Languages::default())
+            .to_string(),
+    )));
 
     // Restore persisted theme settings
     let persisted = std::fs::read_to_string(format!("{}/target/state.json", env!("CARGO_MANIFEST_DIR")))

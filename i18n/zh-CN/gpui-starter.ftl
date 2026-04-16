@@ -47,8 +47,12 @@ about_version = GPUI Starter v0.1.0
 
 settings_title = 设置
 settings_dark_mode = 深色模式
+settings_language = 语言
+settings_language_english = English
+settings_language_simplified_chinese = 简体中文
 settings_push_notification = 推送通知
 settings_notify = 通知
+settings_hello_notification = 来自设置页面的问候！
 
 ## FormPage
 

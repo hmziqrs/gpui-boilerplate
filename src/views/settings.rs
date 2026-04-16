@@ -1,31 +1,58 @@
 use gpui::{prelude::*, *};
 use gpui_component::{
-    ActiveTheme as _, Selectable as _, WindowExt as _, v_flex,
-    button::Button,
-    label::Label,
-    switch::Switch,
+    ActiveTheme as _, Selectable as _, Theme, WindowExt as _, button::Button, label::Label,
+    switch::Switch, v_flex,
 };
 
-use crate::app::SwitchThemeMode;
+use crate::app::{self, LocaleState, LOCALE_EN, LOCALE_ZH_CN};
 
-pub struct SettingsPage;
+pub struct SettingsPage {
+    dark_mode: bool,
+    locale: SharedString,
+    _subscriptions: Vec<Subscription>,
+}
 
 impl SettingsPage {
-    pub fn new(_: &mut Window, _: &mut App) -> Self {
-        Self
+    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let _subscriptions = vec![
+            cx.observe_global_in::<Theme>(window, |this, _, cx| {
+                let dark_mode = cx.theme().mode.is_dark();
+                if this.dark_mode != dark_mode {
+                    this.dark_mode = dark_mode;
+                    cx.notify();
+                }
+            }),
+            cx.observe_global_in::<LocaleState>(window, |this, _, cx| {
+                let locale = app::current_locale(cx);
+                if this.locale != locale {
+                    this.locale = locale;
+                    cx.notify();
+                }
+            }),
+        ];
+
+        Self {
+            dark_mode: cx.theme().mode.is_dark(),
+            locale: app::current_locale(cx),
+            _subscriptions,
+        }
     }
 }
 
 impl Render for SettingsPage {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let is_dark = cx.theme().mode.is_dark();
+    fn render(&mut self, _: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        let locale = self.locale.clone();
+        let is_dark = self.dark_mode;
 
         v_flex()
             .size_full()
             .p_6()
             .gap_6()
             .child(
-                div().text_xl().font_weight(FontWeight::BOLD).child("Settings"),
+                div()
+                    .text_xl()
+                    .font_weight(FontWeight::BOLD)
+                    .child(es_fluent::localize("settings_title", None)),
             )
             // Dark mode toggle
             .child(
@@ -33,56 +60,69 @@ impl Render for SettingsPage {
                     .flex()
                     .items_center()
                     .justify_between()
-                    .child(Label::new("Dark Mode"))
+                    .child(Label::new(es_fluent::localize("settings_dark_mode", None)))
                     .child(
                         Switch::new("dark-mode")
                             .checked(is_dark)
-                            .on_click(cx.listener(|_, _: &bool, _, cx| {
-                                let next = if cx.theme().mode.is_dark() {
-                                    gpui_component::ThemeMode::Light
-                                } else {
+                            .on_click(move |checked, _, cx| {
+                                let mode = if *checked {
                                     gpui_component::ThemeMode::Dark
+                                } else {
+                                    gpui_component::ThemeMode::Light
                                 };
-                                cx.dispatch_action(&SwitchThemeMode(next));
-                            })),
+                                app::set_theme_mode(mode, cx);
+                            }),
                     ),
             )
-            // Light / Dark buttons (mirrors the Appearance menu)
+            // Language selection
             .child(
                 div()
                     .flex()
                     .items_center()
                     .justify_between()
-                    .gap_2()
-                    .child(Label::new("Appearance"))
+                    .child(Label::new(es_fluent::localize("settings_language", None)))
                     .child(
-                        div().flex().gap_2().children(vec![
-                            Button::new("light-mode")
-                                .label("Light")
-                                .selected(!is_dark)
-                                .on_click(cx.listener(|_, _, _, cx| {
-                                    cx.dispatch_action(&SwitchThemeMode(gpui_component::ThemeMode::Light));
-                                })),
-                            Button::new("dark-mode-btn")
-                                .label("Dark")
-                                .selected(is_dark)
-                                .on_click(cx.listener(|_, _, _, cx| {
-                                    cx.dispatch_action(&SwitchThemeMode(gpui_component::ThemeMode::Dark));
-                                })),
-                        ]),
+                        div().flex().items_center().gap_2().child(
+                            Button::new("settings-language-en")
+                                .outline()
+                                .selected(locale.as_ref() == LOCALE_EN)
+                                .label(es_fluent::localize("settings_language_english", None))
+                                .on_click(|_, _, cx| {
+                                    app::set_locale(LOCALE_EN, cx);
+                                }),
+                        )
+                        .child(
+                            Button::new("settings-language-zh-cn")
+                                .outline()
+                                .selected(locale.as_ref() == LOCALE_ZH_CN)
+                                .label(es_fluent::localize(
+                                    "settings_language_simplified_chinese",
+                                    None,
+                                ))
+                                .on_click(|_, _, cx| {
+                                    app::set_locale(LOCALE_ZH_CN, cx);
+                                }),
+                        ),
                     ),
             )
+            // Push notification
             .child(
                 div()
                     .flex()
                     .items_center()
                     .justify_between()
-                    .child(Label::new("Push a Notification"))
+                    .child(Label::new(es_fluent::localize(
+                        "settings_push_notification",
+                        None,
+                    )))
                     .child(
                         Button::new("notify")
-                            .label("Notify")
+                            .label(es_fluent::localize("settings_notify", None))
                             .on_click(|_, window, cx| {
-                                window.push_notification("Hello from Settings!", cx);
+                                window.push_notification(
+                                    es_fluent::localize("settings_hello_notification", None),
+                                    cx,
+                                );
                             }),
                     ),
             )
