@@ -16,11 +16,15 @@ impl Render for AboutPage {
             .items_center()
             .justify_center()
             .gap_4()
-            .child(div().text_2xl().child("About"))
+            .child(
+                div()
+                    .text_2xl()
+                    .child(es_fluent::localize("about_title", None)),
+            )
             .child(
                 div()
                     .text_color(cx.theme().muted_foreground)
-                    .child("GPUI Starter v0.1.0"),
+                    .child(es_fluent::localize("about_version", None)),
             )
     }
 }

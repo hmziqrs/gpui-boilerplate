@@ -1,7 +1,6 @@
 use gpui::{prelude::*, *};
 use gpui_component::{
     ActiveTheme as _, Icon, IconName, Root,
-    input::{Input, InputEvent, InputState},
     resizable::{h_resizable, resizable_panel},
     sidebar::{Sidebar, SidebarGroup, SidebarHeader, SidebarMenu, SidebarMenuItem},
     v_flex, Sizable as _,
@@ -16,12 +15,10 @@ pub struct AppRoot {
     title_bar: Entity<AppTitleBar>,
     active_page: Page,
     collapsed: bool,
-    search_input: Entity<InputState>,
     home_page: Entity<HomePage>,
     form_page: Entity<FormPage>,
     settings_page: Entity<SettingsPage>,
     about_page: Entity<AboutPage>,
-    _subscriptions: Vec<Subscription>,
 }
 
 impl AppRoot {
@@ -35,23 +32,16 @@ impl AppRoot {
         let form_page = cx.new(|cx| FormPage::new(window, cx));
         let settings_page = cx.new(|cx| SettingsPage::new(window, cx));
         let about_page = cx.new(|_| AboutPage::new());
-        let search_input = cx.new(|cx| InputState::new(window, cx).placeholder("Search..."));
-
-        let _subscriptions = vec![cx.subscribe(&search_input, |_, _, _: &InputEvent, cx| {
-            cx.notify();
-        })];
 
         Self {
             focus_handle: cx.focus_handle(),
             title_bar,
             active_page: Page::Home,
             collapsed: false,
-            search_input,
             home_page,
             form_page,
             settings_page,
             about_page,
-            _subscriptions,
         }
     }
 

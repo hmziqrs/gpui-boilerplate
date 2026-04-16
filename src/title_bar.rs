@@ -37,6 +37,7 @@ impl AppTitleBar {
         }
     }
 
+    #[allow(dead_code)]
     pub fn child<F, E>(mut self, f: F) -> Self
     where
         E: IntoElement,

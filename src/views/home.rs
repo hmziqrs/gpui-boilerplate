@@ -23,19 +23,19 @@ impl Render for HomePage {
                 div()
                     .text_3xl()
                     .font_weight(FontWeight::BOLD)
-                    .child("Welcome to GPUI Starter"),
+                    .child(es_fluent::localize("home_title", None)),
             )
             .child(
                 div()
                     .text_color(cx.theme().muted_foreground)
-                    .child("A boilerplate for building desktop apps with GPUI"),
+                    .child(es_fluent::localize("home_subtitle", None)),
             )
             .child(
                 Button::new("get-started")
                     .primary()
-                    .label("Get Started")
+                    .label(es_fluent::localize("home_get_started", None))
                     .on_click(|_, _, _| {
-                        println!("Get Started clicked!");
+                        tracing::info!("Get Started clicked");
                     }),
             )
     }

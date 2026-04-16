@@ -37,20 +37,6 @@ pub struct SelectFont(pub usize);
 pub struct SelectRadius(pub usize);
 
 // ---------------------------------------------------------------------------
-// Global state
-// ---------------------------------------------------------------------------
-
-pub struct AppState;
-
-impl Global for AppState {}
-
-impl AppState {
-    fn init(cx: &mut App) {
-        cx.set_global::<AppState>(AppState);
-    }
-}
-
-// ---------------------------------------------------------------------------
 // Locale state (reactive global for settings page)
 // ---------------------------------------------------------------------------
 
@@ -66,14 +52,14 @@ pub fn current_locale(cx: &App) -> SharedString {
     cx.global::<LocaleState>().0.clone()
 }
 
-pub fn set_locale(locale: &'static str, cx: &mut App) {
+pub fn set_locale(locale: &str, cx: &mut App) {
     rust_i18n::set_locale(locale);
     es_fluent_manager_embedded::select_language(
         locale
             .parse()
             .unwrap_or_else(|_| es_fluent::unic_langid::langid!("en")),
     );
-    cx.set_global::<LocaleState>(LocaleState(SharedString::from(locale)));
+    cx.set_global::<LocaleState>(LocaleState(SharedString::from(locale.to_string())));
     cx.refresh_windows();
 }
 
@@ -103,7 +89,6 @@ pub fn init(cx: &mut App) {
     es_fluent_manager_embedded::init();
     es_fluent_manager_embedded::select_language(<_ as Into<es_fluent::unic_langid::LanguageIdentifier>>::into(Languages::default()));
 
-    AppState::init(cx);
     cx.set_global::<LocaleState>(LocaleState(SharedString::from(
         <_ as Into<es_fluent::unic_langid::LanguageIdentifier>>::into(Languages::default())
             .to_string(),
@@ -141,14 +126,20 @@ pub fn init(cx: &mut App) {
     }
     cx.refresh_windows();
 
-    // Persist theme on change
-    cx.observe_global::<gpui_component::Theme>(|cx| {
+    // Persist theme on change (only when actually different)
+    let last_persisted = persisted.clone();
+    cx.observe_global::<gpui_component::Theme>(move |cx| {
         let s = PersistedState {
             theme: cx.theme().theme_name().clone(),
             scrollbar_show: Some(cx.theme().scrollbar_show),
         };
-        if let Ok(json) = serde_json::to_string_pretty(&s) {
-            let _ = std::fs::write(format!("{}/target/state.json", env!("CARGO_MANIFEST_DIR")), json);
+        if Some(&s) != last_persisted.as_ref() {
+            if let Ok(json) = serde_json::to_string_pretty(&s) {
+                let _ = std::fs::write(
+                    format!("{}/target/state.json", env!("CARGO_MANIFEST_DIR")),
+                    &json,
+                );
+            }
         }
     })
     .detach();
@@ -169,11 +160,7 @@ pub fn init(cx: &mut App) {
         cx.refresh_windows();
     });
     cx.on_action(|locale: &SelectLocale, cx| {
-        rust_i18n::set_locale(&locale.0.as_str());
-        es_fluent_manager_embedded::select_language(
-            locale.0.as_str().parse().unwrap_or_else(|_| es_fluent::unic_langid::langid!("en")),
-        );
-        cx.refresh_windows();
+        set_locale(&locale.0, cx);
     });
 
     // Key bindings
@@ -270,7 +257,7 @@ pub fn create_new_window(title: &str, cx: &mut App) {
 // Persisted state
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct PersistedState {
     theme: SharedString,
     scrollbar_show: Option<ScrollbarShow>,
