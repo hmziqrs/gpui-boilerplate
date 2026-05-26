@@ -6,6 +6,8 @@ use crate::notifications::{
     NotificationRequest,
 };
 
+const LOG: &str = "gpui_starter::notifications::notify_rust";
+
 pub struct NotifyRustBackend;
 
 impl NotifyRustBackend {
@@ -39,6 +41,13 @@ impl NotificationBackend for NotifyRustBackend {
     }
 
     async fn send(&self, request: &NotificationRequest) -> anyhow::Result<()> {
+        tracing::info!(
+            target: LOG,
+            title = %request.title,
+            importance = %request.importance,
+            "sending notification through notify-rust"
+        );
+
         let mut notification = notify_rust::Notification::new();
         notification
             .appname("GPUI Starter")
@@ -49,7 +58,15 @@ impl NotificationBackend for NotifyRustBackend {
             notification.sound_name("default");
         }
 
-        notification.show().map(|_| ())?;
-        Ok(())
+        match notification.show() {
+            Ok(_) => {
+                tracing::info!(target: LOG, "notify-rust send succeeded");
+                Ok(())
+            }
+            Err(err) => {
+                tracing::warn!(target: LOG, error = %err, "notify-rust send failed");
+                Err(err.into())
+            }
+        }
     }
 }

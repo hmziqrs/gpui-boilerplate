@@ -84,7 +84,10 @@ pub fn init(cx: &mut App) {
                 // briefly after a window is removed — "window not found" at
                 // ERROR is benign teardown noise, so we silence the module.
                 .add_directive("gpui::window=off".parse().unwrap())
-                .add_directive(format!("{}=trace", env!("CARGO_PKG_NAME")).parse().unwrap()),
+                .add_directive(format!("{}=trace", env!("CARGO_PKG_NAME")).parse().unwrap())
+                .add_directive("gpui_starter=trace".parse().unwrap())
+                .add_directive("user_notify=debug".parse().unwrap())
+                .add_directive("notify_rust=debug".parse().unwrap()),
         )
         .try_init();
 

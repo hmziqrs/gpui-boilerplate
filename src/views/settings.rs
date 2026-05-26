@@ -236,6 +236,84 @@ impl Render for SettingsPage {
                     )
                     .child(
                         div()
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .child(
+                                Button::new("test-action-notification")
+                                    .outline()
+                                    .label(crate::i18n::localize(
+                                        "settings_test_action_notification",
+                                        None,
+                                    ))
+                                    .on_click(|_, window, cx| {
+                                        notifications::send_from_window(
+                                            NotificationRequest::action_buttons(
+                                                crate::i18n::localize(
+                                                    "settings_test_action_notification",
+                                                    None,
+                                                ),
+                                                crate::i18n::localize(
+                                                    "settings_action_notification_body",
+                                                    None,
+                                                ),
+                                            ),
+                                            window,
+                                            cx,
+                                        );
+                                    }),
+                            )
+                            .child(
+                                Button::new("test-reply-notification")
+                                    .outline()
+                                    .label(crate::i18n::localize(
+                                        "settings_test_reply_notification",
+                                        None,
+                                    ))
+                                    .on_click(|_, window, cx| {
+                                        notifications::send_from_window(
+                                            NotificationRequest::reply(
+                                                crate::i18n::localize(
+                                                    "settings_test_reply_notification",
+                                                    None,
+                                                ),
+                                                crate::i18n::localize(
+                                                    "settings_reply_notification_body",
+                                                    None,
+                                                ),
+                                            ),
+                                            window,
+                                            cx,
+                                        );
+                                    }),
+                            )
+                            .child(
+                                Button::new("test-background-worthy-notification")
+                                    .outline()
+                                    .label(crate::i18n::localize(
+                                        "settings_test_background_notification",
+                                        None,
+                                    ))
+                                    .on_click(|_, window, cx| {
+                                        notifications::send_from_window(
+                                            NotificationRequest::background_worthy(
+                                                crate::i18n::localize(
+                                                    "settings_test_background_notification",
+                                                    None,
+                                                ),
+                                                crate::i18n::localize(
+                                                    "settings_background_notification_body",
+                                                    None,
+                                                ),
+                                            ),
+                                            window,
+                                            cx,
+                                        );
+                                    }),
+                            ),
+                    )
+                    .child(
+                        div()
                             .text_sm()
                             .text_color(cx.theme().muted_foreground)
                             .child(crate::i18n::localize(

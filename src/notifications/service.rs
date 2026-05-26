@@ -5,6 +5,10 @@ use gpui_component::WindowExt as _;
 
 use super::backend::{NotificationBackend, NotifyRustBackend, UserNotifyBackend};
 
+const LOG: &str = "gpui_starter::notifications";
+pub const CATEGORY_ACTIONS: &str = "gpui-starter.actions";
+pub const CATEGORY_REPLY: &str = "gpui-starter.reply";
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NotificationBackendKind {
     UserNotify,
@@ -83,6 +87,30 @@ impl NotificationRequest {
             importance: NotificationImportance::ForegroundOnly,
         }
     }
+
+    pub fn action_buttons(title: impl Into<SharedString>, body: impl Into<SharedString>) -> Self {
+        let mut request = Self::foreground(title, body);
+        request.category = Some(CATEGORY_ACTIONS.to_string());
+        request.thread_id = Some("settings-actions".to_string());
+        request
+    }
+
+    pub fn reply(title: impl Into<SharedString>, body: impl Into<SharedString>) -> Self {
+        let mut request = Self::foreground(title, body);
+        request.category = Some(CATEGORY_REPLY.to_string());
+        request.thread_id = Some("settings-reply".to_string());
+        request
+    }
+
+    pub fn background_worthy(
+        title: impl Into<SharedString>,
+        body: impl Into<SharedString>,
+    ) -> Self {
+        let mut request = Self::foreground(title, body);
+        request.importance = NotificationImportance::BackgroundWorthy;
+        request.thread_id = Some("settings-background-worthy".to_string());
+        request
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -142,20 +170,41 @@ pub struct NotificationService {
 
 impl NotificationService {
     pub fn new() -> Self {
+        tracing::info!(target: LOG, "initializing native notification service");
+
         let mut initial_error = None;
         let primary = match UserNotifyBackend::new() {
-            Ok(backend) => Some(Arc::new(backend) as Arc<dyn NotificationBackend>),
+            Ok(backend) => {
+                tracing::info!(target: LOG, backend = %NotificationBackendKind::UserNotify, "primary notification backend selected");
+                Some(Arc::new(backend) as Arc<dyn NotificationBackend>)
+            }
             Err(err) => {
+                tracing::warn!(
+                    target: LOG,
+                    backend = %NotificationBackendKind::UserNotify,
+                    error = %err,
+                    "primary notification backend unavailable; falling back"
+                );
                 initial_error = Some(err.to_string());
                 None
             }
         };
 
-        Self {
+        let service = Self {
             primary,
             secondary: Arc::new(NotifyRustBackend::new()),
             initial_error,
-        }
+        };
+
+        tracing::info!(
+            target: LOG,
+            active_backend = %service.active_backend(),
+            capabilities = ?service.active_capabilities(),
+            degraded_reason = ?service.initial_error,
+            "native notification service initialized"
+        );
+
+        service
     }
 
     fn active_backend(&self) -> NotificationBackendKind {
@@ -173,29 +222,47 @@ impl NotificationService {
     }
 
     async fn refresh_permission_state(&self) -> NotificationPermissionState {
+        tracing::debug!(
+            target: LOG,
+            active_backend = %self.active_backend(),
+            "refreshing notification permission state"
+        );
+
         if let Some(primary) = &self.primary {
             primary.refresh_permission_state().await
         } else if cfg!(target_os = "macos") {
-            NotificationPermissionState::Unavailable(
+            let state = NotificationPermissionState::Unavailable(
                 self.initial_error
                     .clone()
                     .unwrap_or_else(|| "primary backend unavailable".to_string()),
-            )
+            );
+            tracing::info!(target: LOG, ?state, "permission state unavailable without primary backend");
+            state
         } else {
+            tracing::info!(target: LOG, "permission state unsupported on this platform");
             NotificationPermissionState::Unsupported
         }
     }
 
     async fn request_permission(&self) -> NotificationPermissionState {
+        tracing::info!(
+            target: LOG,
+            active_backend = %self.active_backend(),
+            "requesting notification permission"
+        );
+
         if let Some(primary) = &self.primary {
             primary.request_permission().await
         } else if cfg!(target_os = "macos") {
-            NotificationPermissionState::Unavailable(
+            let state = NotificationPermissionState::Unavailable(
                 self.initial_error
                     .clone()
                     .unwrap_or_else(|| "primary backend unavailable".to_string()),
-            )
+            );
+            tracing::warn!(target: LOG, ?state, "cannot request permission without primary backend");
+            state
         } else {
+            tracing::info!(target: LOG, "permission request unsupported on this platform");
             NotificationPermissionState::Unsupported
         }
     }
@@ -205,7 +272,24 @@ impl NotificationService {
         request: NotificationRequest,
         enabled_by_user: bool,
     ) -> NotificationSendResult {
+        tracing::info!(
+            target: LOG,
+            title = %request.title,
+            importance = %request.importance,
+            prefer_native = request.prefer_native,
+            enabled_by_user,
+            active_backend = %self.active_backend(),
+            "native notification send requested"
+        );
+
         if !enabled_by_user || !request.prefer_native {
+            tracing::warn!(
+                target: LOG,
+                enabled_by_user,
+                prefer_native = request.prefer_native,
+                importance = %request.importance,
+                "native send skipped; using in-app policy"
+            );
             return NotificationSendResult {
                 backend_used: NotificationBackendKind::UiOnly,
                 degraded: request.importance == NotificationImportance::BackgroundWorthy,
@@ -218,8 +302,10 @@ impl NotificationService {
         let mut errors = Vec::new();
 
         if let Some(primary) = &self.primary {
+            tracing::debug!(target: LOG, backend = %primary.kind(), "attempting primary notification send");
             match primary.send(&request).await {
                 Ok(()) => {
+                    tracing::info!(target: LOG, backend = %primary.kind(), "primary notification send succeeded");
                     return NotificationSendResult {
                         backend_used: primary.kind(),
                         degraded: false,
@@ -228,23 +314,50 @@ impl NotificationService {
                         importance: request.importance,
                     };
                 }
-                Err(err) => errors.push(format!("{}: {err:#}", primary.kind())),
+                Err(err) => {
+                    tracing::warn!(
+                        target: LOG,
+                        backend = %primary.kind(),
+                        error = %err,
+                        "primary notification send failed"
+                    );
+                    errors.push(format!("{}: {err:#}", primary.kind()));
+                }
             }
         }
 
+        tracing::debug!(
+            target: LOG,
+            backend = %self.secondary.kind(),
+            "attempting fallback notification send"
+        );
         match self.secondary.send(&request).await {
-            Ok(()) => NotificationSendResult {
-                backend_used: self.secondary.kind(),
-                degraded: self.primary.is_some(),
-                delivered_natively: true,
-                error_summary: if errors.is_empty() {
-                    None
-                } else {
-                    Some(errors.join("; ").into())
-                },
-                importance: request.importance,
-            },
+            Ok(()) => {
+                tracing::info!(
+                    target: LOG,
+                    backend = %self.secondary.kind(),
+                    degraded = self.primary.is_some(),
+                    "fallback notification send succeeded"
+                );
+                NotificationSendResult {
+                    backend_used: self.secondary.kind(),
+                    degraded: self.primary.is_some(),
+                    delivered_natively: true,
+                    error_summary: if errors.is_empty() {
+                        None
+                    } else {
+                        Some(errors.join("; ").into())
+                    },
+                    importance: request.importance,
+                }
+            }
             Err(err) => {
+                tracing::warn!(
+                    target: LOG,
+                    backend = %self.secondary.kind(),
+                    error = %err,
+                    "fallback notification send failed; using in-app policy"
+                );
                 errors.push(format!("{}: {err:#}", self.secondary.kind()));
                 NotificationSendResult {
                     backend_used: NotificationBackendKind::UiOnly,
@@ -261,6 +374,14 @@ impl NotificationService {
 pub fn initialize(cx: &mut App) {
     let service = Arc::new(NotificationService::new());
     let snapshot = NotificationRuntimeSnapshot::new(&service);
+    tracing::info!(
+        target: LOG,
+        active_backend = %snapshot.active_backend,
+        permission = ?snapshot.permission,
+        capabilities = ?snapshot.capabilities,
+        degraded_reason = ?snapshot.degraded_reason,
+        "installing native notification global state"
+    );
     cx.set_global(NativeNotificationState { service, snapshot });
     refresh_permission_state(cx);
 }
@@ -270,6 +391,7 @@ pub fn snapshot(cx: &App) -> NotificationRuntimeSnapshot {
 }
 
 pub fn set_native_notifications_enabled(enabled: bool, cx: &mut App) {
+    tracing::info!(target: LOG, enabled, "native notifications user setting changed");
     mutate_snapshot(cx, |snapshot| {
         snapshot.enabled_by_user = enabled;
         if !enabled {
@@ -282,8 +404,10 @@ pub fn set_native_notifications_enabled(enabled: bool, cx: &mut App) {
 
 pub fn refresh_permission_state(cx: &mut App) {
     let service = cx.global::<NativeNotificationState>().service.clone();
+    tracing::debug!(target: LOG, "scheduling async permission refresh");
     cx.spawn(async move |cx| {
         let permission = service.refresh_permission_state().await;
+        tracing::info!(target: LOG, ?permission, "permission refresh completed");
         cx.update(move |cx| {
             mutate_snapshot(cx, |snapshot| {
                 snapshot.permission = permission;
@@ -296,8 +420,10 @@ pub fn refresh_permission_state(cx: &mut App) {
 pub fn request_permission_from_window(window: &mut Window, cx: &mut App) {
     let window_handle = window.window_handle();
     let service = cx.global::<NativeNotificationState>().service.clone();
+    tracing::debug!(target: LOG, "scheduling async permission request");
     cx.spawn(async move |cx| {
         let permission = service.request_permission().await;
+        tracing::info!(target: LOG, ?permission, "permission request completed");
         let message = format!("Notification permission: {}", permission.label());
         cx.update(move |cx| {
             mutate_snapshot(cx, |snapshot| {
@@ -316,9 +442,23 @@ pub fn send_from_window(request: NotificationRequest, window: &mut Window, cx: &
     let enabled_by_user = state.snapshot.enabled_by_user
         && state.snapshot.permission != NotificationPermissionState::Denied;
     let fallback_message = request.body.clone();
+    tracing::debug!(
+        target: LOG,
+        permission = ?state.snapshot.permission,
+        enabled_by_user,
+        "scheduling async notification send"
+    );
 
     cx.spawn(async move |cx| {
         let result = service.send(request, enabled_by_user).await;
+        tracing::info!(
+            target: LOG,
+            backend = %result.backend_used,
+            degraded = result.degraded,
+            delivered_natively = result.delivered_natively,
+            error_summary = ?result.error_summary,
+            "notification send completed"
+        );
         let should_show_in_app = !result.delivered_natively
             && result.importance == NotificationImportance::ForegroundOnly;
         cx.update(move |cx| {
@@ -334,10 +474,12 @@ pub fn send_from_window(request: NotificationRequest, window: &mut Window, cx: &
 pub fn open_system_settings(cx: &mut App) {
     #[cfg(target_os = "macos")]
     {
+        tracing::info!(target: LOG, "opening macOS notification settings");
         if let Err(err) = std::process::Command::new("open")
             .arg("x-apple.systempreferences:com.apple.Notifications-Settings.extension")
             .spawn()
         {
+            tracing::warn!(target: LOG, error = %err, "failed to open macOS notification settings");
             mutate_snapshot(cx, |snapshot| {
                 snapshot.last_backend_error =
                     Some(format!("failed to open settings: {err}").into());
@@ -346,13 +488,24 @@ pub fn open_system_settings(cx: &mut App) {
     }
 
     #[cfg(not(target_os = "macos"))]
-    mutate_snapshot(cx, |snapshot| {
-        snapshot.last_backend_error =
-            Some("system notification settings are not supported on this platform".into());
-    });
+    {
+        tracing::warn!(target: LOG, "system notification settings unsupported on this platform");
+        mutate_snapshot(cx, |snapshot| {
+            snapshot.last_backend_error =
+                Some("system notification settings are not supported on this platform".into());
+        });
+    }
 }
 
 fn apply_send_result(result: &NotificationSendResult, cx: &mut App) {
+    tracing::debug!(
+        target: LOG,
+        backend = %result.backend_used,
+        degraded = result.degraded,
+        delivered_natively = result.delivered_natively,
+        error_summary = ?result.error_summary,
+        "applying notification send result"
+    );
     mutate_snapshot(cx, |snapshot| {
         snapshot.active_backend = result.backend_used;
         snapshot.last_backend_error = result.error_summary.clone();
@@ -380,6 +533,7 @@ fn push_in_app_feedback(
     cx: &mut App,
 ) {
     let message = message.into();
+    tracing::debug!(target: LOG, message = %message, "showing in-app notification feedback");
     if let Err(err) = cx.update_window(window_handle, |_, window, cx| {
         window.push_notification(message, cx);
     }) {

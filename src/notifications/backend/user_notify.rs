@@ -4,11 +4,12 @@ use async_trait::async_trait;
 
 use super::NotificationBackend;
 use crate::notifications::{
-    NotificationBackendKind, NotificationCapabilities, NotificationPermissionState,
-    NotificationRequest,
+    CATEGORY_ACTIONS, CATEGORY_REPLY, NotificationBackendKind, NotificationCapabilities,
+    NotificationPermissionState, NotificationRequest,
 };
 
 const APP_ID: &str = "com.gpui-starter.app";
+const LOG: &str = "gpui_starter::notifications::user_notify";
 
 pub struct UserNotifyBackend {
     manager: Arc<dyn user_notify::NotificationManager>,
@@ -16,20 +17,60 @@ pub struct UserNotifyBackend {
 
 impl UserNotifyBackend {
     pub fn new() -> anyhow::Result<Self> {
-        if !platform_can_use_primary_backend() {
-            anyhow::bail!("user-notify primary backend unavailable in this runtime");
+        tracing::info!(target: LOG, app_id = APP_ID, "initializing user-notify backend");
+
+        if let Err(reason) = platform_primary_runtime_status() {
+            tracing::warn!(target: LOG, reason, "user-notify backend unavailable");
+            anyhow::bail!("{reason}");
         }
 
         let manager = user_notify::get_notification_manager(APP_ID.to_string(), None);
-        manager.register(
+        if let Err(err) = manager.register(
             Box::new(|response| {
-                tracing::debug!(?response, "native notification response");
+                tracing::info!(
+                    target: LOG,
+                    action = ?response.action,
+                    user_text = ?response.user_text,
+                    user_info = ?response.user_info,
+                    "native notification response"
+                );
             }),
-            Vec::new(),
-        )?;
+            categories(),
+        ) {
+            tracing::warn!(target: LOG, error = %err, "failed to register user-notify manager");
+            return Err(err.into());
+        }
 
+        tracing::info!(target: LOG, "user-notify backend initialized");
         Ok(Self { manager })
     }
+}
+
+fn categories() -> Vec<user_notify::NotificationCategory> {
+    vec![
+        user_notify::NotificationCategory {
+            identifier: CATEGORY_ACTIONS.to_string(),
+            actions: vec![
+                user_notify::NotificationCategoryAction::Action {
+                    identifier: "settings.open".to_string(),
+                    title: "Open".to_string(),
+                },
+                user_notify::NotificationCategoryAction::Action {
+                    identifier: "settings.snooze".to_string(),
+                    title: "Snooze".to_string(),
+                },
+            ],
+        },
+        user_notify::NotificationCategory {
+            identifier: CATEGORY_REPLY.to_string(),
+            actions: vec![user_notify::NotificationCategoryAction::TextInputAction {
+                identifier: "settings.reply".to_string(),
+                title: "Reply".to_string(),
+                input_button_title: "Send".to_string(),
+                input_placeholder: "Type a reply".to_string(),
+            }],
+        },
+    ]
 }
 
 #[async_trait]
@@ -49,25 +90,45 @@ impl NotificationBackend for UserNotifyBackend {
     }
 
     async fn refresh_permission_state(&self) -> NotificationPermissionState {
-        platform_permission_state().await
+        tracing::debug!(target: LOG, "refreshing user-notify permission state");
+        let state = platform_permission_state().await;
+        tracing::info!(target: LOG, ?state, "refreshed user-notify permission state");
+        state
     }
 
     async fn request_permission(&self) -> NotificationPermissionState {
         if !cfg!(target_os = "macos") {
+            tracing::info!(target: LOG, "permission request unsupported on this platform");
             return NotificationPermissionState::Unsupported;
         }
 
+        tracing::info!(target: LOG, "requesting notification permission");
         match self
             .manager
             .first_time_ask_for_notification_permission()
             .await
         {
-            Ok(_) => platform_permission_state().await,
-            Err(err) => NotificationPermissionState::Unavailable(format!("{err:#}")),
+            Ok(accepted) => {
+                tracing::info!(target: LOG, accepted, "permission request completed");
+                platform_permission_state().await
+            }
+            Err(err) => {
+                tracing::warn!(target: LOG, error = %err, "permission request failed");
+                NotificationPermissionState::Unavailable(format!("{err:#}"))
+            }
         }
     }
 
     async fn send(&self, request: &NotificationRequest) -> anyhow::Result<()> {
+        tracing::info!(
+            target: LOG,
+            title = %request.title,
+            importance = %request.importance,
+            has_thread_id = request.thread_id.is_some(),
+            has_category = request.category.is_some(),
+            "sending notification through user-notify"
+        );
+
         let mut user_info = HashMap::new();
         user_info.insert("importance".to_string(), request.importance.to_string());
         user_info.insert("play_sound".to_string(), request.play_sound.to_string());
@@ -85,21 +146,43 @@ impl NotificationBackend for UserNotifyBackend {
             builder = builder.set_category_id(category);
         }
 
-        self.manager.send_notification(builder).await?;
-        Ok(())
+        match self.manager.send_notification(builder).await {
+            Ok(_) => {
+                tracing::info!(target: LOG, "user-notify send succeeded");
+                Ok(())
+            }
+            Err(err) => {
+                tracing::warn!(target: LOG, error = %err, "user-notify send failed");
+                Err(err.into())
+            }
+        }
     }
 }
 
 #[cfg(target_os = "macos")]
-fn platform_can_use_primary_backend() -> bool {
+fn platform_primary_runtime_status() -> Result<(), String> {
     use objc2_foundation::NSBundle;
 
-    NSBundle::mainBundle().bundleIdentifier().is_some()
+    match NSBundle::mainBundle().bundleIdentifier() {
+        Some(bundle_id) => {
+            tracing::info!(
+                target: LOG,
+                bundle_id = %bundle_id,
+                "macOS bundle identifier detected"
+            );
+            Ok(())
+        }
+        None => Err(
+            "macOS bundle identifier missing; launch the bundled app from scripts/macos-dev-app.sh instead of raw cargo run"
+                .to_string(),
+        ),
+    }
 }
 
 #[cfg(not(target_os = "macos"))]
-fn platform_can_use_primary_backend() -> bool {
-    true
+fn platform_primary_runtime_status() -> Result<(), String> {
+    tracing::debug!(target: LOG, "primary runtime accepted on this platform");
+    Ok(())
 }
 
 #[cfg(target_os = "macos")]
@@ -116,7 +199,9 @@ async fn platform_permission_state() -> NotificationPermissionState {
     unsafe {
         let tx = RefCell::new(Some(tx));
         let block = RcBlock::new(move |settings: NonNull<UNNotificationSettings>| {
-            let state = match settings.as_ref().authorizationStatus() {
+            let status = settings.as_ref().authorizationStatus();
+            tracing::debug!(target: LOG, ?status, "received macOS notification authorization status");
+            let state = match status {
                 UNAuthorizationStatus::Authorized
                 | UNAuthorizationStatus::Provisional
                 | UNAuthorizationStatus::Ephemeral => NotificationPermissionState::Authorized,
@@ -127,8 +212,10 @@ async fn platform_permission_state() -> NotificationPermissionState {
                 )),
             };
 
-            if let Some(tx) = tx.take() {
-                let _ = tx.send(state);
+            if let Some(tx) = tx.take()
+                && tx.send(state).is_err()
+            {
+                tracing::warn!(target: LOG, "permission state receiver dropped");
             }
         });
 
