@@ -59,6 +59,7 @@ gpui-form.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 tray-icon = { version = "0.24", default-features = false }
+global-hotkey = "0.8"
 
 [build-dependencies]
 es-fluent-build.workspace = true
