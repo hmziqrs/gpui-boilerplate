@@ -1,12 +1,3 @@
-/// macOS menu bar status icon + global hotkey.
-///
-/// Both are from the Tauri ecosystem, both integrate via NSApp (which GPUI
-/// owns), and both expose crossbeam channels polled from a foreground task.
-///
-///  Trigger sources:
-///    • Click the magnifying-glass icon in the macOS menu bar
-///    • Press ⌥Space (Option+Space) from anywhere in the OS
-///    • Press ⌘K while the app window is focused (GPUI key binding in app.rs)
 use std::time::Duration;
 
 use global_hotkey::{
@@ -15,6 +6,8 @@ use global_hotkey::{
 };
 use gpui::App;
 use tray_icon::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
+
+const LOG: &str = "gpui_starter::tray";
 
 // ---------------------------------------------------------------------------
 // Tray icon pixel data — 36×36 RGBA magnifying-glass template image
@@ -84,7 +77,8 @@ fn build_icon() -> tray_icon::Icon {
 // ---------------------------------------------------------------------------
 
 pub fn setup(cx: &mut App) {
-    // ── Menu bar icon ────────────────────────────────────────────────────────
+    tracing::info!(target: LOG, "Setting up tray icon and global hotkey");
+
     let icon = build_icon();
     let tray: TrayIcon = TrayIconBuilder::new()
         .with_icon(icon)
@@ -93,23 +87,21 @@ pub fn setup(cx: &mut App) {
         .with_menu_on_left_click(false)
         .build()
         .expect("failed to create tray icon");
-    Box::leak(Box::new(tray)); // keep NSStatusItem alive for process lifetime
+    Box::leak(Box::new(tray));
+    tracing::debug!(target: LOG, "Tray icon created");
 
-    // ── Global hotkey: ⌥Space (Option + Space) ──────────────────────────────
     let hotkey_manager = GlobalHotKeyManager::new()
         .expect("failed to create global hotkey manager");
     let hotkey = HotKey::new(Some(Modifiers::ALT), Code::Space);
     hotkey_manager
         .register(hotkey)
         .expect("failed to register global hotkey ⌥Space");
-    Box::leak(Box::new(hotkey_manager)); // keep manager alive (unregisters on drop)
+    Box::leak(Box::new(hotkey_manager));
+    tracing::info!(target: LOG, hotkey = "⌥Space", "Global hotkey registered");
 
-    // ── Poll both event channels on the foreground executor ──────────────────
-    // cx.spawn() runs on the main thread — no Send required, cx.update() is sync.
     cx.spawn(async move |cx| {
         let bg = cx.background_executor();
         loop {
-            // Tray icon click
             while let Ok(ev) = TrayIconEvent::receiver().try_recv() {
                 if let TrayIconEvent::Click {
                     button: MouseButton::Left,
@@ -117,12 +109,13 @@ pub fn setup(cx: &mut App) {
                     ..
                 } = ev
                 {
+                    tracing::info!(target: LOG, source = "tray_click", "Launcher trigger");
                     cx.update(|app| crate::launcher::open_launcher(app));
                 }
             }
 
-            // Global hotkey press
             while let Ok(_ev) = GlobalHotKeyEvent::receiver().try_recv() {
+                tracing::info!(target: LOG, source = "hotkey_alt_space", "Launcher trigger");
                 cx.update(|app| crate::launcher::open_launcher(app));
             }
 

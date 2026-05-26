@@ -78,6 +78,12 @@ pub fn init(cx: &mut App) {
         .with(tracing_subscriber::fmt::layer())
         .with(
             tracing_subscriber::EnvFilter::from_default_env()
+                // GPUI logs "window not found" at ERROR when platform display-link
+                // callbacks fire after a window is removed — harmless during teardown.
+                // GPUI platform callbacks (display link, resize, etc.) fire
+                // briefly after a window is removed — "window not found" at
+                // ERROR is benign teardown noise, so we silence the module.
+                .add_directive("gpui::window=off".parse().unwrap())
                 .add_directive(format!("{}=trace", env!("CARGO_PKG_NAME")).parse().unwrap()),
         )
         .try_init();
