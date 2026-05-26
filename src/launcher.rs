@@ -356,8 +356,16 @@ impl LauncherRoot {
 impl Render for LauncherRoot {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if self.should_close {
+            // Reset the flag first so this branch only fires once even if
+            // render is called again before the defer runs.
+            self.should_close = false;
             cx.set_global(LauncherOpen(false));
-            window.remove_window();
+            // Defer removal to after the current render cycle finishes;
+            // calling remove_window() during render causes GPUI to log
+            // "window not found" when it tries to commit the frame.
+            window.defer(cx, |window, _cx| {
+                window.remove_window();
+            });
         }
 
         let dialog_layer = Root::render_dialog_layer(window, cx);
