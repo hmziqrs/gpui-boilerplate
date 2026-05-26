@@ -20,6 +20,8 @@ tracing-subscriber = { version = "0.3", features = [
     "fmt",
     "registry",
 ], default-features = false }
+tokio = { version = "1", features = ["rt", "sync", "time"] }
+async-trait = "0.1"
 rust-i18n = "3"
 regex = "1"
 koruma = { version = "0.9", features = ["fluent"] }
@@ -47,6 +49,8 @@ serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+tokio.workspace = true
+async-trait.workspace = true
 rust-i18n.workspace = true
 regex.workspace = true
 koruma.workspace = true
@@ -56,10 +60,26 @@ es-fluent-lang.workspace = true
 es-fluent-manager-embedded.workspace = true
 strum.workspace = true
 gpui-form.workspace = true
+user-notify = "0.4.2"
+notify-rust = "4.17.0"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 tray-icon = { version = "0.24", default-features = false }
 global-hotkey = "0.8"
+block2 = "0.6"
+objc2 = { version = "0.6", features = ["exception"] }
+objc2-foundation = { version = "0.3.0", default-features = false, features = [
+    "std",
+    "NSBundle",
+    "NSError",
+    "NSString",
+] }
+objc2-user-notifications = { version = "0.3.0", default-features = false, features = [
+    "std",
+    "block2",
+    "UNNotificationSettings",
+    "UNUserNotificationCenter",
+] }
 
 [build-dependencies]
 es-fluent-build.workspace = true

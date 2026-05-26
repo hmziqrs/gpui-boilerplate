@@ -68,8 +68,7 @@ fn build_icon() -> tray_icon::Icon {
         }
     }
 
-    tray_icon::Icon::from_rgba(px, SIZE as u32, SIZE as u32)
-        .expect("tray icon pixel data is valid")
+    tray_icon::Icon::from_rgba(px, SIZE as u32, SIZE as u32).expect("tray icon pixel data is valid")
 }
 
 // ---------------------------------------------------------------------------
@@ -90,8 +89,8 @@ pub fn setup(cx: &mut App) {
     Box::leak(Box::new(tray));
     tracing::debug!(target: LOG, "Tray icon created");
 
-    let hotkey_manager = GlobalHotKeyManager::new()
-        .expect("failed to create global hotkey manager");
+    let hotkey_manager =
+        GlobalHotKeyManager::new().expect("failed to create global hotkey manager");
     let hotkey = HotKey::new(Some(Modifiers::ALT), Code::Space);
     hotkey_manager
         .register(hotkey)
@@ -110,13 +109,13 @@ pub fn setup(cx: &mut App) {
                 } = ev
                 {
                     tracing::info!(target: LOG, source = "tray_click", "Launcher trigger");
-                    cx.update(|app| crate::launcher::open_launcher(app));
+                    cx.update(crate::launcher::open_launcher);
                 }
             }
 
             while let Ok(_ev) = GlobalHotKeyEvent::receiver().try_recv() {
                 tracing::info!(target: LOG, source = "hotkey_alt_space", "Launcher trigger");
-                cx.update(|app| crate::launcher::open_launcher(app));
+                cx.update(crate::launcher::open_launcher);
             }
 
             bg.timer(Duration::from_millis(50)).await;

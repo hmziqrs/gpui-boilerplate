@@ -50,9 +50,16 @@ settings_dark_mode = 深色模式
 settings_language = 语言
 settings_language_english = English
 settings_language_simplified_chinese = 简体中文
-settings_push_notification = 推送通知
-settings_notify = 通知
 settings_hello_notification = 来自设置页面的问候！
+settings_native_notifications = 本地系统通知
+settings_native_backend = 后端
+settings_permission = 权限
+settings_degraded = 降级状态
+settings_test_native_notification = 测试本地通知
+settings_request_permission = 请求权限
+settings_open_notification_settings = 打开通知设置
+settings_in_app_notifications_note = 应用内通知仍然在 GPUI 窗口内单独处理。
+settings_push_notifications_note = 此本地通知功能不包含推送通知。
 
 ## FormPage
 

@@ -50,9 +50,16 @@ settings_dark_mode = Dark Mode
 settings_language = Language
 settings_language_english = English
 settings_language_simplified_chinese = 简体中文
-settings_push_notification = Push a Notification
-settings_notify = Notify
 settings_hello_notification = Hello from Settings!
+settings_native_notifications = Native Local Notifications
+settings_native_backend = Backend
+settings_permission = Permission
+settings_degraded = Degraded
+settings_test_native_notification = Test Native Notification
+settings_request_permission = Request Permission
+settings_open_notification_settings = Open Notification Settings
+settings_in_app_notifications_note = In-app notifications are still handled separately inside the GPUI window.
+settings_push_notifications_note = Push notifications are not implemented by this local notification feature.
 
 ## FormPage
 

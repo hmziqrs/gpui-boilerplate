@@ -92,9 +92,9 @@ pub fn init(cx: &mut App) {
     gpui_component::init(cx);
 
     // Initialize es-fluent i18n for app and form text
-    let _ = crate::i18n::init_i18n(<_ as Into<es_fluent::unic_langid::LanguageIdentifier>>::into(
-        Languages::default(),
-    ));
+    let _ = crate::i18n::init_i18n(
+        <_ as Into<es_fluent::unic_langid::LanguageIdentifier>>::into(Languages::default()),
+    );
 
     cx.set_global::<LocaleState>(LocaleState(SharedString::from(
         <_ as Into<es_fluent::unic_langid::LanguageIdentifier>>::into(Languages::default())
@@ -102,9 +102,10 @@ pub fn init(cx: &mut App) {
     )));
 
     // Restore persisted theme settings
-    let persisted = std::fs::read_to_string(format!("{}/target/state.json", env!("CARGO_MANIFEST_DIR")))
-        .ok()
-        .and_then(|json| serde_json::from_str::<PersistedState>(&json).ok());
+    let persisted =
+        std::fs::read_to_string(format!("{}/target/state.json", env!("CARGO_MANIFEST_DIR")))
+            .ok()
+            .and_then(|json| serde_json::from_str::<PersistedState>(&json).ok());
 
     // Load extra themes from the themes/ directory (with hot-reload)
     let persisted_for_closure = persisted.clone();
@@ -112,24 +113,23 @@ pub fn init(cx: &mut App) {
         std::path::PathBuf::from(format!("{}/themes", env!("CARGO_MANIFEST_DIR"))),
         cx,
         move |cx| {
-            if let Some(ref s) = persisted_for_closure {
-                if let Some(theme) = gpui_component::ThemeRegistry::global(cx)
+            if let Some(ref s) = persisted_for_closure
+                && let Some(theme) = gpui_component::ThemeRegistry::global(cx)
                     .themes()
                     .get(&s.theme)
                     .cloned()
-                {
-                    gpui_component::Theme::global_mut(cx).apply_config(&theme);
-                }
+            {
+                gpui_component::Theme::global_mut(cx).apply_config(&theme);
             }
         },
     ) {
         tracing::error!("Failed to watch themes directory: {}", err);
     }
 
-    if let Some(ref s) = persisted {
-        if let Some(show) = s.scrollbar_show {
-            gpui_component::Theme::global_mut(cx).scrollbar_show = show;
-        }
+    if let Some(ref s) = persisted
+        && let Some(show) = s.scrollbar_show
+    {
+        gpui_component::Theme::global_mut(cx).scrollbar_show = show;
     }
     cx.refresh_windows();
 
@@ -140,13 +140,13 @@ pub fn init(cx: &mut App) {
             theme: cx.theme().theme_name().clone(),
             scrollbar_show: Some(cx.theme().scrollbar_show),
         };
-        if Some(&s) != last_persisted.as_ref() {
-            if let Ok(json) = serde_json::to_string_pretty(&s) {
-                let _ = std::fs::write(
-                    format!("{}/target/state.json", env!("CARGO_MANIFEST_DIR")),
-                    &json,
-                );
-            }
+        if Some(&s) != last_persisted.as_ref()
+            && let Ok(json) = serde_json::to_string_pretty(&s)
+        {
+            let _ = std::fs::write(
+                format!("{}/target/state.json", env!("CARGO_MANIFEST_DIR")),
+                &json,
+            );
         }
     })
     .detach();
@@ -173,6 +173,7 @@ pub fn init(cx: &mut App) {
     crate::launcher::init(cx);
     cx.set_global(crate::launcher::PendingNavigation(None));
     cx.set_global(crate::launcher::LauncherOpen(false));
+    crate::notifications::initialize(cx);
 
     // Key bindings
     cx.bind_keys([
@@ -243,8 +244,7 @@ pub fn create_new_window(title: &str, cx: &mut App) {
 
         let window = cx
             .open_window(options, |window, cx| {
-                let root_view =
-                    cx.new(|cx| crate::root::AppRoot::new(title.clone(), window, cx));
+                let root_view = cx.new(|cx| crate::root::AppRoot::new(title.clone(), window, cx));
 
                 let focus_handle = root_view.focus_handle(cx);
                 window.defer(cx, move |window, cx| {

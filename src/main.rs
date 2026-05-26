@@ -2,6 +2,7 @@ mod app;
 mod i18n;
 mod launcher;
 mod menus;
+mod notifications;
 mod root;
 mod sidebar;
 mod title_bar;

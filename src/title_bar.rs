@@ -15,10 +15,12 @@ use gpui_component::{
 use crate::app::{SelectFont, SelectRadius};
 use crate::menus;
 
+type TitleBarChild = Rc<dyn Fn(&mut Window, &mut App) -> AnyElement>;
+
 pub struct AppTitleBar {
     app_menu_bar: Entity<AppMenuBar>,
     settings: Entity<SettingsDropdown>,
-    child: Rc<dyn Fn(&mut Window, &mut App) -> AnyElement>,
+    child: TitleBarChild,
 }
 
 impl AppTitleBar {

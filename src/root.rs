@@ -1,9 +1,9 @@
 use gpui::{prelude::*, *};
 use gpui_component::{
-    ActiveTheme as _, Icon, IconName, Root,
+    ActiveTheme as _, Icon, IconName, Root, Sizable as _,
     resizable::{h_resizable, resizable_panel},
     sidebar::{Sidebar, SidebarGroup, SidebarHeader, SidebarMenu, SidebarMenuItem},
-    v_flex, Sizable as _,
+    v_flex,
 };
 
 use crate::app::ToggleSearch;
@@ -102,19 +102,17 @@ impl Render for AppRoot {
                 ),
             )
             .child(
-                SidebarGroup::new("Navigation").child(
-                    SidebarMenu::new().children(
-                        Page::all().iter().map(|page| {
-                            SidebarMenuItem::new(page.title())
-                                .icon(Icon::new(page.icon()).small())
-                                .active(active_page == *page)
-                                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                                    this.active_page = *page;
-                                    cx.notify();
-                                }))
-                        }),
-                    ),
-                ),
+                SidebarGroup::new("Navigation").child(SidebarMenu::new().children(
+                    Page::all().iter().map(|page| {
+                        SidebarMenuItem::new(page.title())
+                            .icon(Icon::new(page.icon()).small())
+                            .active(active_page == *page)
+                            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                                this.active_page = *page;
+                                cx.notify();
+                            }))
+                    }),
+                )),
             );
 
         v_flex()

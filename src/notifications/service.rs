@@ -1,0 +1,388 @@
+use std::{fmt, sync::Arc};
+
+use gpui::{AnyWindowHandle, App, AppContext as _, Global, SharedString, Window};
+use gpui_component::WindowExt as _;
+
+use super::backend::{NotificationBackend, NotifyRustBackend, UserNotifyBackend};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NotificationBackendKind {
+    UserNotify,
+    NotifyRust,
+    UiOnly,
+}
+
+impl fmt::Display for NotificationBackendKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UserNotify => f.write_str("user-notify"),
+            Self::NotifyRust => f.write_str("notify-rust"),
+            Self::UiOnly => f.write_str("in-app only"),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum NotificationPermissionState {
+    Unknown,
+    Unsupported,
+    Unavailable(String),
+    NotDetermined,
+    Denied,
+    Authorized,
+}
+
+impl NotificationPermissionState {
+    pub fn label(&self) -> SharedString {
+        match self {
+            Self::Unknown => "Unknown".into(),
+            Self::Unsupported => "Unsupported on this platform".into(),
+            Self::Unavailable(reason) => format!("Unavailable: {reason}").into(),
+            Self::NotDetermined => "Not requested".into(),
+            Self::Denied => "Denied".into(),
+            Self::Authorized => "Authorized".into(),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NotificationImportance {
+    ForegroundOnly,
+    BackgroundWorthy,
+}
+
+impl fmt::Display for NotificationImportance {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::ForegroundOnly => f.write_str("foreground-only"),
+            Self::BackgroundWorthy => f.write_str("background-worthy"),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct NotificationRequest {
+    pub title: SharedString,
+    pub body: SharedString,
+    pub play_sound: bool,
+    pub thread_id: Option<String>,
+    pub category: Option<String>,
+    pub prefer_native: bool,
+    pub importance: NotificationImportance,
+}
+
+impl NotificationRequest {
+    pub fn foreground(title: impl Into<SharedString>, body: impl Into<SharedString>) -> Self {
+        Self {
+            title: title.into(),
+            body: body.into(),
+            play_sound: true,
+            thread_id: None,
+            category: None,
+            prefer_native: true,
+            importance: NotificationImportance::ForegroundOnly,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct NotificationCapabilities {
+    pub can_request_permission: bool,
+    pub can_read_permission_state: bool,
+    pub can_send_immediate_native: bool,
+    pub can_send_interactive: bool,
+    pub requires_packaged_runtime: bool,
+}
+
+#[derive(Clone, Debug)]
+pub struct NotificationSendResult {
+    pub backend_used: NotificationBackendKind,
+    pub degraded: bool,
+    pub delivered_natively: bool,
+    pub error_summary: Option<SharedString>,
+    pub importance: NotificationImportance,
+}
+
+#[derive(Clone, Debug)]
+pub struct NotificationRuntimeSnapshot {
+    pub enabled_by_user: bool,
+    pub permission: NotificationPermissionState,
+    pub active_backend: NotificationBackendKind,
+    pub capabilities: NotificationCapabilities,
+    pub last_backend_error: Option<SharedString>,
+    pub degraded_reason: Option<SharedString>,
+}
+
+impl NotificationRuntimeSnapshot {
+    fn new(service: &NotificationService) -> Self {
+        Self {
+            enabled_by_user: true,
+            permission: NotificationPermissionState::Unknown,
+            active_backend: service.active_backend(),
+            capabilities: service.active_capabilities(),
+            last_backend_error: service.initial_error.clone().map(Into::into),
+            degraded_reason: service.initial_error.clone().map(Into::into),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct NativeNotificationState {
+    pub service: Arc<NotificationService>,
+    pub snapshot: NotificationRuntimeSnapshot,
+}
+
+impl Global for NativeNotificationState {}
+
+pub struct NotificationService {
+    primary: Option<Arc<dyn NotificationBackend>>,
+    secondary: Arc<dyn NotificationBackend>,
+    initial_error: Option<String>,
+}
+
+impl NotificationService {
+    pub fn new() -> Self {
+        let mut initial_error = None;
+        let primary = match UserNotifyBackend::new() {
+            Ok(backend) => Some(Arc::new(backend) as Arc<dyn NotificationBackend>),
+            Err(err) => {
+                initial_error = Some(err.to_string());
+                None
+            }
+        };
+
+        Self {
+            primary,
+            secondary: Arc::new(NotifyRustBackend::new()),
+            initial_error,
+        }
+    }
+
+    fn active_backend(&self) -> NotificationBackendKind {
+        self.primary
+            .as_ref()
+            .map(|backend| backend.kind())
+            .unwrap_or(NotificationBackendKind::NotifyRust)
+    }
+
+    fn active_capabilities(&self) -> NotificationCapabilities {
+        self.primary
+            .as_ref()
+            .map(|backend| backend.capabilities())
+            .unwrap_or_else(|| self.secondary.capabilities())
+    }
+
+    async fn refresh_permission_state(&self) -> NotificationPermissionState {
+        if let Some(primary) = &self.primary {
+            primary.refresh_permission_state().await
+        } else if cfg!(target_os = "macos") {
+            NotificationPermissionState::Unavailable(
+                self.initial_error
+                    .clone()
+                    .unwrap_or_else(|| "primary backend unavailable".to_string()),
+            )
+        } else {
+            NotificationPermissionState::Unsupported
+        }
+    }
+
+    async fn request_permission(&self) -> NotificationPermissionState {
+        if let Some(primary) = &self.primary {
+            primary.request_permission().await
+        } else if cfg!(target_os = "macos") {
+            NotificationPermissionState::Unavailable(
+                self.initial_error
+                    .clone()
+                    .unwrap_or_else(|| "primary backend unavailable".to_string()),
+            )
+        } else {
+            NotificationPermissionState::Unsupported
+        }
+    }
+
+    async fn send(
+        &self,
+        request: NotificationRequest,
+        enabled_by_user: bool,
+    ) -> NotificationSendResult {
+        if !enabled_by_user || !request.prefer_native {
+            return NotificationSendResult {
+                backend_used: NotificationBackendKind::UiOnly,
+                degraded: request.importance == NotificationImportance::BackgroundWorthy,
+                delivered_natively: false,
+                error_summary: Some("native notifications are disabled".into()),
+                importance: request.importance,
+            };
+        }
+
+        let mut errors = Vec::new();
+
+        if let Some(primary) = &self.primary {
+            match primary.send(&request).await {
+                Ok(()) => {
+                    return NotificationSendResult {
+                        backend_used: primary.kind(),
+                        degraded: false,
+                        delivered_natively: true,
+                        error_summary: None,
+                        importance: request.importance,
+                    };
+                }
+                Err(err) => errors.push(format!("{}: {err:#}", primary.kind())),
+            }
+        }
+
+        match self.secondary.send(&request).await {
+            Ok(()) => NotificationSendResult {
+                backend_used: self.secondary.kind(),
+                degraded: self.primary.is_some(),
+                delivered_natively: true,
+                error_summary: if errors.is_empty() {
+                    None
+                } else {
+                    Some(errors.join("; ").into())
+                },
+                importance: request.importance,
+            },
+            Err(err) => {
+                errors.push(format!("{}: {err:#}", self.secondary.kind()));
+                NotificationSendResult {
+                    backend_used: NotificationBackendKind::UiOnly,
+                    degraded: true,
+                    delivered_natively: false,
+                    error_summary: Some(errors.join("; ").into()),
+                    importance: request.importance,
+                }
+            }
+        }
+    }
+}
+
+pub fn initialize(cx: &mut App) {
+    let service = Arc::new(NotificationService::new());
+    let snapshot = NotificationRuntimeSnapshot::new(&service);
+    cx.set_global(NativeNotificationState { service, snapshot });
+    refresh_permission_state(cx);
+}
+
+pub fn snapshot(cx: &App) -> NotificationRuntimeSnapshot {
+    cx.global::<NativeNotificationState>().snapshot.clone()
+}
+
+pub fn set_native_notifications_enabled(enabled: bool, cx: &mut App) {
+    mutate_snapshot(cx, |snapshot| {
+        snapshot.enabled_by_user = enabled;
+        if !enabled {
+            snapshot.degraded_reason = Some("native notifications disabled by user".into());
+        } else {
+            snapshot.degraded_reason = None;
+        }
+    });
+}
+
+pub fn refresh_permission_state(cx: &mut App) {
+    let service = cx.global::<NativeNotificationState>().service.clone();
+    cx.spawn(async move |cx| {
+        let permission = service.refresh_permission_state().await;
+        cx.update(move |cx| {
+            mutate_snapshot(cx, |snapshot| {
+                snapshot.permission = permission;
+            });
+        });
+    })
+    .detach();
+}
+
+pub fn request_permission_from_window(window: &mut Window, cx: &mut App) {
+    let window_handle = window.window_handle();
+    let service = cx.global::<NativeNotificationState>().service.clone();
+    cx.spawn(async move |cx| {
+        let permission = service.request_permission().await;
+        let message = format!("Notification permission: {}", permission.label());
+        cx.update(move |cx| {
+            mutate_snapshot(cx, |snapshot| {
+                snapshot.permission = permission;
+            });
+            push_in_app_feedback(window_handle, message, cx);
+        });
+    })
+    .detach();
+}
+
+pub fn send_from_window(request: NotificationRequest, window: &mut Window, cx: &mut App) {
+    let window_handle = window.window_handle();
+    let state = cx.global::<NativeNotificationState>();
+    let service = state.service.clone();
+    let enabled_by_user = state.snapshot.enabled_by_user
+        && state.snapshot.permission != NotificationPermissionState::Denied;
+    let fallback_message = request.body.clone();
+
+    cx.spawn(async move |cx| {
+        let result = service.send(request, enabled_by_user).await;
+        let should_show_in_app = !result.delivered_natively
+            && result.importance == NotificationImportance::ForegroundOnly;
+        cx.update(move |cx| {
+            apply_send_result(&result, cx);
+            if should_show_in_app {
+                push_in_app_feedback(window_handle, fallback_message, cx);
+            }
+        });
+    })
+    .detach();
+}
+
+pub fn open_system_settings(cx: &mut App) {
+    #[cfg(target_os = "macos")]
+    {
+        if let Err(err) = std::process::Command::new("open")
+            .arg("x-apple.systempreferences:com.apple.Notifications-Settings.extension")
+            .spawn()
+        {
+            mutate_snapshot(cx, |snapshot| {
+                snapshot.last_backend_error =
+                    Some(format!("failed to open settings: {err}").into());
+            });
+        }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    mutate_snapshot(cx, |snapshot| {
+        snapshot.last_backend_error =
+            Some("system notification settings are not supported on this platform".into());
+    });
+}
+
+fn apply_send_result(result: &NotificationSendResult, cx: &mut App) {
+    mutate_snapshot(cx, |snapshot| {
+        snapshot.active_backend = result.backend_used;
+        snapshot.last_backend_error = result.error_summary.clone();
+        snapshot.degraded_reason = if result.degraded {
+            result
+                .error_summary
+                .clone()
+                .or_else(|| Some("notification delivery is degraded".into()))
+        } else {
+            None
+        };
+    });
+}
+
+fn mutate_snapshot(cx: &mut App, f: impl FnOnce(&mut NotificationRuntimeSnapshot)) {
+    let mut state = cx.global::<NativeNotificationState>().clone();
+    f(&mut state.snapshot);
+    cx.set_global(state);
+    cx.refresh_windows();
+}
+
+fn push_in_app_feedback(
+    window_handle: AnyWindowHandle,
+    message: impl Into<SharedString>,
+    cx: &mut App,
+) {
+    let message = message.into();
+    if let Err(err) = cx.update_window(window_handle, |_, window, cx| {
+        window.push_notification(message, cx);
+    }) {
+        tracing::warn!(?err, "failed to show in-app notification fallback");
+    }
+}

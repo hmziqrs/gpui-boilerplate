@@ -85,10 +85,7 @@ fn build_menus(title: impl Into<SharedString>, cx: &App) -> Vec<Menu> {
         },
         Menu {
             name: "Window".into(),
-            items: vec![MenuItem::action(
-                "Toggle Search",
-                crate::app::ToggleSearch,
-            )],
+            items: vec![MenuItem::action("Toggle Search", crate::app::ToggleSearch)],
             disabled: false,
         },
     ]

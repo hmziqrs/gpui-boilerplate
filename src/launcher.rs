@@ -1,9 +1,9 @@
 use gpui::{prelude::*, *};
 use gpui_component::{
-    ActiveTheme as _, FocusTrapElement as _, Icon, IconName, Root, Sizable as _, h_flex, v_flex,
-    scroll::ScrollableElement as _,
+    ActiveTheme as _, FocusTrapElement as _, Icon, IconName, Root, Sizable as _, ThemeMode, h_flex,
     input::{Input, InputEvent, InputState},
-    ThemeMode,
+    scroll::ScrollableElement as _,
+    v_flex,
 };
 
 use crate::sidebar::Page;
@@ -78,9 +78,8 @@ impl Focusable for Launcher {
 
 impl Launcher {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let input = cx.new(|cx| {
-            InputState::new(window, cx).placeholder("Search pages and commands…")
-        });
+        let input =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Search pages and commands…"));
 
         cx.subscribe(&input, |this, _, ev: &InputEvent, cx| match ev {
             InputEvent::Change => this.refilter(cx),
@@ -402,7 +401,7 @@ impl Render for LauncherRoot {
 // ---------------------------------------------------------------------------
 
 pub fn open_launcher(cx: &mut App) {
-    if cx.try_global::<LauncherOpen>().map_or(false, |g| g.0) {
+    if cx.try_global::<LauncherOpen>().is_some_and(|g| g.0) {
         tracing::debug!(target: LOG, "Launcher already open — ignoring open request");
         return;
     }

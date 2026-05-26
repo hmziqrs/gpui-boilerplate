@@ -1,7 +1,8 @@
 use gpui::{prelude::*, *};
 use gpui_component::{
-    ActiveTheme as _, v_flex,
+    ActiveTheme as _,
     button::{Button, ButtonVariants as _},
+    v_flex,
 };
 
 pub struct HomePage;
