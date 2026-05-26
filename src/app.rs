@@ -164,8 +164,13 @@ pub fn init(cx: &mut App) {
         set_locale(&locale.0, cx);
     });
 
+    crate::launcher::init(cx);
+    cx.set_global(crate::launcher::PendingNavigation(None));
+    cx.set_global(crate::launcher::LauncherOpen(false));
+
     // Key bindings
     cx.bind_keys([
+        KeyBinding::new("cmd-k", ToggleSearch, None),
         KeyBinding::new("/", ToggleSearch, None),
         #[cfg(target_os = "macos")]
         KeyBinding::new("cmd-q", Quit, None),

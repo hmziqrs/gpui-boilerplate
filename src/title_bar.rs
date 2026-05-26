@@ -68,6 +68,16 @@ impl Render for AppTitleBar {
                     )
                     .child(self.settings.clone())
                     .child(
+                        Button::new("search")
+                            .small()
+                            .ghost()
+                            .compact()
+                            .icon(IconName::Search)
+                            .on_click(|_, _, cx| {
+                                crate::launcher::open_launcher(cx);
+                            }),
+                    )
+                    .child(
                         Button::new("bell")
                             .small()
                             .ghost()

@@ -6,6 +6,8 @@ use gpui_component::{
     v_flex, Sizable as _,
 };
 
+use crate::app::ToggleSearch;
+use crate::launcher::PendingNavigation;
 use crate::sidebar::Page;
 use crate::title_bar::AppTitleBar;
 use crate::views::{AboutPage, FormPage, HomePage, SettingsPage};
@@ -32,6 +34,16 @@ impl AppRoot {
         let form_page = cx.new(|cx| FormPage::new(window, cx));
         let settings_page = cx.new(|cx| SettingsPage::new(window, cx));
         let about_page = cx.new(|_| AboutPage::new());
+
+        // React to navigation requests coming from the launcher window
+        cx.observe_global::<PendingNavigation>(|this, cx| {
+            if let Some(page) = cx.global::<PendingNavigation>().0 {
+                this.active_page = page;
+                cx.set_global(PendingNavigation(None));
+                cx.notify();
+            }
+        })
+        .detach();
 
         Self {
             focus_handle: cx.focus_handle(),
@@ -111,6 +123,9 @@ impl Render for AppRoot {
             .child(
                 div()
                     .track_focus(&self.focus_handle)
+                    .on_action(cx.listener(|_, _: &ToggleSearch, _, cx| {
+                        crate::launcher::open_launcher(cx);
+                    }))
                     .flex_1()
                     .overflow_hidden()
                     .child(
