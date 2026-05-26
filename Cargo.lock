@@ -2753,7 +2753,7 @@ dependencies = [
 [[package]]
 name = "gpui-form"
 version = "0.5.1"
-source = "git+file:///Users/hmziq/os/gpui-app/vendor/gpui-form?rev=3bdfceda2dc468af73ac9e94c766deba0459bcc2#3bdfceda2dc468af73ac9e94c766deba0459bcc2"
+source = "git+file:///Users/hmziq/os/gpui-app/vendor/gpui-form?rev=02f7d09c4418740ca2dc022e9d7a56bbc257acf2#02f7d09c4418740ca2dc022e9d7a56bbc257acf2"
 dependencies = [
  "bon",
  "gpui-form-component",
@@ -2765,7 +2765,7 @@ dependencies = [
 [[package]]
 name = "gpui-form-codegen"
 version = "0.5.1"
-source = "git+file:///Users/hmziq/os/gpui-app/vendor/gpui-form?rev=3bdfceda2dc468af73ac9e94c766deba0459bcc2#3bdfceda2dc468af73ac9e94c766deba0459bcc2"
+source = "git+file:///Users/hmziq/os/gpui-app/vendor/gpui-form?rev=02f7d09c4418740ca2dc022e9d7a56bbc257acf2#02f7d09c4418740ca2dc022e9d7a56bbc257acf2"
 dependencies = [
  "darling",
  "derive_more",
@@ -2779,7 +2779,7 @@ dependencies = [
 [[package]]
 name = "gpui-form-component"
 version = "0.5.1"
-source = "git+file:///Users/hmziq/os/gpui-app/vendor/gpui-form?rev=3bdfceda2dc468af73ac9e94c766deba0459bcc2#3bdfceda2dc468af73ac9e94c766deba0459bcc2"
+source = "git+file:///Users/hmziq/os/gpui-app/vendor/gpui-form?rev=02f7d09c4418740ca2dc022e9d7a56bbc257acf2#02f7d09c4418740ca2dc022e9d7a56bbc257acf2"
 dependencies = [
  "chrono",
  "es-fluent",
@@ -2798,7 +2798,7 @@ dependencies = [
 [[package]]
 name = "gpui-form-component-derive"
 version = "0.5.1"
-source = "git+file:///Users/hmziq/os/gpui-app/vendor/gpui-form?rev=3bdfceda2dc468af73ac9e94c766deba0459bcc2#3bdfceda2dc468af73ac9e94c766deba0459bcc2"
+source = "git+file:///Users/hmziq/os/gpui-app/vendor/gpui-form?rev=02f7d09c4418740ca2dc022e9d7a56bbc257acf2#02f7d09c4418740ca2dc022e9d7a56bbc257acf2"
 dependencies = [
  "darling",
  "proc-macro-crate",
@@ -2811,12 +2811,12 @@ dependencies = [
 [[package]]
 name = "gpui-form-core"
 version = "0.5.1"
-source = "git+file:///Users/hmziq/os/gpui-app/vendor/gpui-form?rev=3bdfceda2dc468af73ac9e94c766deba0459bcc2#3bdfceda2dc468af73ac9e94c766deba0459bcc2"
+source = "git+file:///Users/hmziq/os/gpui-app/vendor/gpui-form?rev=02f7d09c4418740ca2dc022e9d7a56bbc257acf2#02f7d09c4418740ca2dc022e9d7a56bbc257acf2"
 
 [[package]]
 name = "gpui-form-derive"
 version = "0.5.1"
-source = "git+file:///Users/hmziq/os/gpui-app/vendor/gpui-form?rev=3bdfceda2dc468af73ac9e94c766deba0459bcc2#3bdfceda2dc468af73ac9e94c766deba0459bcc2"
+source = "git+file:///Users/hmziq/os/gpui-app/vendor/gpui-form?rev=02f7d09c4418740ca2dc022e9d7a56bbc257acf2#02f7d09c4418740ca2dc022e9d7a56bbc257acf2"
 dependencies = [
  "darling",
  "es-fluent",
@@ -2833,7 +2833,7 @@ dependencies = [
 [[package]]
 name = "gpui-form-schema"
 version = "0.5.1"
-source = "git+file:///Users/hmziq/os/gpui-app/vendor/gpui-form?rev=3bdfceda2dc468af73ac9e94c766deba0459bcc2#3bdfceda2dc468af73ac9e94c766deba0459bcc2"
+source = "git+file:///Users/hmziq/os/gpui-app/vendor/gpui-form?rev=02f7d09c4418740ca2dc022e9d7a56bbc257acf2#02f7d09c4418740ca2dc022e9d7a56bbc257acf2"
 dependencies = [
  "heck 0.5.0",
  "inventory",
@@ -4217,10 +4217,13 @@ checksum = "a99ca603b2f4d4e8b8bd4487d7bfcfd1b5684ae37c18224508fde52850ff1eca"
 dependencies = [
  "card-validate",
  "email_address",
+ "es-fluent",
  "es-fluent-build",
+ "es-fluent-manager-embedded",
  "koruma",
  "phonenumber",
  "regex",
+ "rust-embed",
  "rust_decimal",
  "smallvec",
  "url",

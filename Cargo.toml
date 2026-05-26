@@ -23,13 +23,13 @@ tracing-subscriber = { version = "0.3", features = [
 rust-i18n = "3"
 regex = "1"
 koruma = { version = "0.9", features = ["fluent"] }
-koruma-collection = { version = "0.9", features = ["full"] }
+koruma-collection = { version = "0.9", features = ["full-fluent"] }
 es-fluent = { version = "0.16", features = ["derive"] }
 es-fluent-build = "0.16"
 es-fluent-lang = "0.16"
 es-fluent-manager-embedded = "0.16"
 strum = { version = "0.28", features = ["derive"] }
-gpui-form = { git = "file:///Users/hmziq/os/gpui-app/vendor/gpui-form", rev = "3bdfceda2dc468af73ac9e94c766deba0459bcc2" }
+gpui-form = { git = "file:///Users/hmziq/os/gpui-app/vendor/gpui-form", rev = "02f7d09c4418740ca2dc022e9d7a56bbc257acf2" }
 
 [package]
 name = "gpui-starter"
