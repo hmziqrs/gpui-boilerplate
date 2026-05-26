@@ -19,12 +19,12 @@ impl Render for AboutPage {
             .child(
                 div()
                     .text_2xl()
-                    .child(es_fluent::localize("about_title", None)),
+                    .child(crate::i18n::localize("about_title", None)),
             )
             .child(
                 div()
                     .text_color(cx.theme().muted_foreground)
-                    .child(es_fluent::localize("about_version", None)),
+                    .child(crate::i18n::localize("about_version", None)),
             )
     }
 }

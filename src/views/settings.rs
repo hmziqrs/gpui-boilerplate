@@ -52,7 +52,7 @@ impl Render for SettingsPage {
                 div()
                     .text_xl()
                     .font_weight(FontWeight::BOLD)
-                    .child(es_fluent::localize("settings_title", None)),
+                    .child(crate::i18n::localize("settings_title", None)),
             )
             // Dark mode toggle
             .child(
@@ -60,7 +60,7 @@ impl Render for SettingsPage {
                     .flex()
                     .items_center()
                     .justify_between()
-                    .child(Label::new(es_fluent::localize("settings_dark_mode", None)))
+                    .child(Label::new(crate::i18n::localize("settings_dark_mode", None)))
                     .child(
                         Switch::new("dark-mode")
                             .checked(is_dark)
@@ -80,13 +80,13 @@ impl Render for SettingsPage {
                     .flex()
                     .items_center()
                     .justify_between()
-                    .child(Label::new(es_fluent::localize("settings_language", None)))
+                    .child(Label::new(crate::i18n::localize("settings_language", None)))
                     .child(
                         div().flex().items_center().gap_2().child(
                             Button::new("settings-language-en")
                                 .outline()
                                 .selected(locale.as_ref() == LOCALE_EN)
-                                .label(es_fluent::localize("settings_language_english", None))
+                                .label(crate::i18n::localize("settings_language_english", None))
                                 .on_click(|_, _, cx| {
                                     app::set_locale(LOCALE_EN, cx);
                                 }),
@@ -95,7 +95,7 @@ impl Render for SettingsPage {
                             Button::new("settings-language-zh-cn")
                                 .outline()
                                 .selected(locale.as_ref() == LOCALE_ZH_CN)
-                                .label(es_fluent::localize(
+                                .label(crate::i18n::localize(
                                     "settings_language_simplified_chinese",
                                     None,
                                 ))
@@ -111,16 +111,16 @@ impl Render for SettingsPage {
                     .flex()
                     .items_center()
                     .justify_between()
-                    .child(Label::new(es_fluent::localize(
+                    .child(Label::new(crate::i18n::localize(
                         "settings_push_notification",
                         None,
                     )))
                     .child(
                         Button::new("notify")
-                            .label(es_fluent::localize("settings_notify", None))
+                            .label(crate::i18n::localize("settings_notify", None))
                             .on_click(|_, window, cx| {
                                 window.push_notification(
-                                    es_fluent::localize("settings_hello_notification", None),
+                                    crate::i18n::localize("settings_hello_notification", None),
                                     cx,
                                 );
                             }),

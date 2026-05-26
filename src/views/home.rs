@@ -23,17 +23,17 @@ impl Render for HomePage {
                 div()
                     .text_3xl()
                     .font_weight(FontWeight::BOLD)
-                    .child(es_fluent::localize("home_title", None)),
+                    .child(crate::i18n::localize("home_title", None)),
             )
             .child(
                 div()
                     .text_color(cx.theme().muted_foreground)
-                    .child(es_fluent::localize("home_subtitle", None)),
+                    .child(crate::i18n::localize("home_subtitle", None)),
             )
             .child(
                 Button::new("get-started")
                     .primary()
-                    .label(es_fluent::localize("home_get_started", None))
+                    .label(crate::i18n::localize("home_get_started", None))
                     .on_click(|_, _, _| {
                         tracing::info!("Get Started clicked");
                     }),

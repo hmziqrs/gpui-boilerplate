@@ -54,7 +54,7 @@ pub fn current_locale(cx: &App) -> SharedString {
 
 pub fn set_locale(locale: &str, cx: &mut App) {
     rust_i18n::set_locale(locale);
-    es_fluent_manager_embedded::select_language(
+    let _ = crate::i18n::i18n().select_language(
         locale
             .parse()
             .unwrap_or_else(|_| es_fluent::unic_langid::langid!("en")),
@@ -86,8 +86,9 @@ pub fn init(cx: &mut App) {
     gpui_component::init(cx);
 
     // Initialize es-fluent i18n for app and form text
-    es_fluent_manager_embedded::init();
-    es_fluent_manager_embedded::select_language(<_ as Into<es_fluent::unic_langid::LanguageIdentifier>>::into(Languages::default()));
+    let _ = crate::i18n::init_i18n(<_ as Into<es_fluent::unic_langid::LanguageIdentifier>>::into(
+        Languages::default(),
+    ));
 
     cx.set_global::<LocaleState>(LocaleState(SharedString::from(
         <_ as Into<es_fluent::unic_langid::LanguageIdentifier>>::into(Languages::default())
