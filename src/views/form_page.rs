@@ -25,23 +25,23 @@ use koruma_collection::{
 #[gpui_form(koruma(fluent))]
 pub struct RegistrationForm {
     #[gpui_form(component(input))]
-    #[koruma(NonEmptyValidation::<_>)]
+    #[koruma(NonEmptyValidation::<_>::builder())]
     pub name: String,
 
     #[gpui_form(component(input))]
-    #[koruma(EmailValidation::<_>)]
+    #[koruma(EmailValidation::<_>::builder())]
     pub email: String,
 
     #[gpui_form(component(input))]
-    #[koruma(NonEmptyValidation::<_>)]
+    #[koruma(NonEmptyValidation::<_>::builder())]
     pub password: String,
 
     #[gpui_form(component(input))]
-    #[koruma(NonEmptyValidation::<_>)]
+    #[koruma(NonEmptyValidation::<_>::builder())]
     pub phone: String,
 
     #[gpui_form(component(input))]
-    #[koruma(UrlValidation::<_>)]
+    #[koruma(UrlValidation::<_>::builder())]
     pub website: String,
 }
 
