@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, App, AppContext as _, Context, Corner, Entity, FocusHandle,
+    Anchor, AnyElement, App, AppContext as _, Context, Entity, FocusHandle,
     InteractiveElement as _, IntoElement, MouseButton, ParentElement as _, Render, SharedString,
     Styled as _, Window, div, px,
 };
@@ -159,7 +159,7 @@ impl Render for SettingsDropdown {
                             .menu_with_check("4px", radius == 4, Box::new(SelectRadius(4)))
                             .menu_with_check("0px", radius == 0, Box::new(SelectRadius(0)))
                     })
-                    .anchor(Corner::TopRight),
+                    .anchor(Anchor::TopRight),
             )
     }
 }

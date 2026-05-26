@@ -22,13 +22,12 @@ tracing-subscriber = { version = "0.3", features = [
 ], default-features = false }
 rust-i18n = "3"
 regex = "1"
-gpui-form = { git = "https://github.com/stayhydated/gpui-form", branch = "component-story", package = "gpui-form" }
-koruma = { version = "0.7", features = ["fluent"] }
-koruma-collection = { version = "0.7", features = ["email", "url", "fluent"] }
-es-fluent = { version = "0.14", features = ["derive"] }
-es-fluent-lang = "0.14"
-es-fluent-manager-embedded = "0.14"
-strum = "0.28"
+koruma = { version = "0.9", features = ["fluent"] }
+koruma-collection = { version = "0.9", features = ["email", "url", "fluent"] }
+es-fluent = { version = "0.15", features = ["derive"] }
+es-fluent-lang = "0.15"
+es-fluent-manager-embedded = "0.15"
+strum = { version = "0.28", features = ["derive"] }
 
 [package]
 name = "gpui-starter"
@@ -48,7 +47,6 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 rust-i18n.workspace = true
 regex.workspace = true
-gpui-form.workspace = true
 koruma.workspace = true
 koruma-collection.workspace = true
 es-fluent.workspace = true
