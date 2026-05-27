@@ -1,4 +1,6 @@
 use gpui::{App, Global};
+#[cfg(target_os = "macos")]
+use std::sync::{Mutex, OnceLock};
 
 #[derive(Clone, Debug, Default)]
 pub struct ShortcutState {
@@ -11,41 +13,70 @@ pub struct ShortcutState {
 impl Global for ShortcutState {}
 
 #[cfg(target_os = "macos")]
-pub fn initialize(cx: &mut App) {
-    use global_hotkey::{
-        GlobalHotKeyManager,
-        hotkey::{Code, HotKey, Modifiers},
-    };
+static HOTKEY_MANAGER: OnceLock<Mutex<Option<global_hotkey::GlobalHotKeyManager>>> =
+    OnceLock::new();
 
+#[cfg(target_os = "macos")]
+pub fn initialize(cx: &mut App) {
     let enabled = crate::app_state::config(cx).global_shortcut_enabled;
-    let mut state = ShortcutState {
+    let state = ShortcutState {
         enabled,
         registered: false,
         accelerator: "Alt+Space".to_string(),
         last_error: None,
     };
+    cx.set_global(state);
+    apply_enabled(enabled, cx);
+}
 
-    if enabled {
-        let manager = GlobalHotKeyManager::new();
-        match manager {
-            Ok(manager) => {
-                let hotkey = HotKey::new(Some(Modifiers::ALT), Code::Space);
-                match manager.register(hotkey) {
-                    Ok(()) => {
-                        Box::leak(Box::new(manager));
-                        state.registered = true;
-                    }
-                    Err(err) => {
-                        state.last_error = Some(err.to_string());
+#[cfg(target_os = "macos")]
+pub fn apply_enabled(enabled: bool, cx: &mut App) {
+    use global_hotkey::{
+        GlobalHotKeyManager,
+        hotkey::{Code, HotKey, Modifiers},
+    };
+
+    let mut state = snapshot(cx);
+    state.enabled = enabled;
+    state.registered = false;
+    state.last_error = None;
+
+    let slot = HOTKEY_MANAGER.get_or_init(|| Mutex::new(None));
+    if let Ok(mut manager_slot) = slot.lock() {
+        *manager_slot = None;
+        if enabled {
+            match GlobalHotKeyManager::new() {
+                Ok(manager) => {
+                    let hotkey = HotKey::new(Some(Modifiers::ALT), Code::Space);
+                    match manager.register(hotkey) {
+                        Ok(()) => {
+                            *manager_slot = Some(manager);
+                            state.registered = true;
+                        }
+                        Err(err) => state.last_error = Some(err.to_string()),
                     }
                 }
-            }
-            Err(err) => {
-                state.last_error = Some(err.to_string());
+                Err(err) => state.last_error = Some(err.to_string()),
             }
         }
+    } else {
+        state.last_error = Some("failed to lock hotkey manager".to_string());
     }
 
+    set_capability(&state, cx);
+    cx.set_global(state);
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn apply_enabled(enabled: bool, cx: &mut App) {
+    let mut state = snapshot(cx);
+    state.enabled = enabled;
+    state.registered = false;
+    state.last_error = if enabled {
+        Some("global shortcut service currently configured for macOS".to_string())
+    } else {
+        None
+    };
     set_capability(&state, cx);
     cx.set_global(state);
 }

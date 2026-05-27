@@ -359,30 +359,7 @@ impl Render for SettingsPage {
                                         crate::app_state::update_config(cx, |config| {
                                             config.global_shortcut_enabled = *checked;
                                         });
-                                        let mut snapshot = crate::shortcuts::snapshot(cx);
-                                        snapshot.enabled = *checked;
-                                        snapshot.last_error = Some(
-                                            "restart app to apply global shortcut change"
-                                                .to_string(),
-                                        );
-                                        cx.set_global(snapshot);
-                                        crate::capabilities::set(
-                                            "global_shortcuts",
-                                            crate::capabilities::CapabilityStatus {
-                                                supported: cfg!(target_os = "macos"),
-                                                enabled: false,
-                                                degraded: true,
-                                                reason: Some(
-                                                    "restart app to apply global shortcut change"
-                                                        .into(),
-                                                ),
-                                                last_error: Some(
-                                                    "restart app to apply global shortcut change"
-                                                        .into(),
-                                                ),
-                                            },
-                                            cx,
-                                        );
+                                        crate::shortcuts::apply_enabled(*checked, cx);
                                     }),
                             ),
                     ),

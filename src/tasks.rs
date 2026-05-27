@@ -1,6 +1,6 @@
 use gpui::{App, Global};
 use serde::{Deserialize, Serialize};
-use tokio::time::{Duration, sleep};
+use std::time::Duration;
 
 use crate::{
     events::{self, AppEventKind},
@@ -68,8 +68,9 @@ pub fn start_demo_task(cx: &mut App) {
     );
 
     cx.spawn(async move |cx| {
+        let background = cx.background_executor();
         for step in [20_u8, 40, 60, 80, 100] {
-            sleep(Duration::from_millis(350)).await;
+            background.timer(Duration::from_millis(350)).await;
             cx.update(move |cx| {
                 update_progress(id, TaskProgress::Percent(step), cx);
             });

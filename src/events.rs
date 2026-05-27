@@ -86,4 +86,17 @@ mod tests {
         assert!(!event.id.to_string().is_empty());
         assert!(!event.emitted_at.to_rfc3339().is_empty());
     }
+
+    #[test]
+    fn queue_preserves_event_order() {
+        let first = AppEvent::new(AppEventKind::DiagnosticsChanged);
+        let second = AppEvent::new(AppEventKind::AppError("oops".to_string()));
+        let third = AppEvent::new(AppEventKind::DeepLinkReceived(
+            "gpui-starter://settings".to_string(),
+        ));
+        let queue = AppEventQueue(vec![first.clone(), second.clone(), third.clone()]);
+        assert!(matches!(queue.0[0].kind, AppEventKind::DiagnosticsChanged));
+        assert!(matches!(queue.0[1].kind, AppEventKind::AppError(_)));
+        assert!(matches!(queue.0[2].kind, AppEventKind::DeepLinkReceived(_)));
+    }
 }

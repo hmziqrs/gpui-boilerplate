@@ -74,7 +74,6 @@ fn build_icon() -> tray_icon::Icon {
 
 pub fn setup(cx: &mut App) {
     tracing::info!(target: LOG, "Setting up tray icon");
-    let shortcuts_registered = crate::shortcuts::snapshot(cx).registered;
 
     let icon = build_icon();
     let tray: TrayIcon = TrayIconBuilder::new()
@@ -102,11 +101,9 @@ pub fn setup(cx: &mut App) {
                 }
             }
 
-            if shortcuts_registered {
-                while GlobalHotKeyEvent::receiver().try_recv().is_ok() {
-                    tracing::info!(target: LOG, source = "hotkey_alt_space", "Launcher trigger");
-                    cx.update(crate::launcher::open_launcher);
-                }
+            while GlobalHotKeyEvent::receiver().try_recv().is_ok() {
+                tracing::info!(target: LOG, source = "hotkey_alt_space", "Launcher trigger");
+                cx.update(crate::launcher::open_launcher);
             }
 
             bg.timer(Duration::from_millis(50)).await;

@@ -3,7 +3,7 @@ use std::{fs, io::Write, path::PathBuf};
 use directories::ProjectDirs;
 use gpui::{App, Global};
 use single_instance::SingleInstance;
-use tokio::time::{Duration, sleep};
+use std::time::Duration;
 
 use crate::events::{self, AppEventKind};
 
@@ -90,9 +90,10 @@ fn start_forwarded_link_poller(cx: &mut App) {
     };
 
     tracing::info!(target: LOG, queue = %queue_file.display(), "starting deep-link forwarder poller");
+    let bg = cx.background_executor().clone();
     cx.spawn(async move |cx| {
         loop {
-            sleep(Duration::from_millis(450)).await;
+            bg.timer(Duration::from_millis(450)).await;
             let links = drain_forwarded_links(&queue_file);
             if links.is_empty() {
                 continue;
@@ -145,4 +146,30 @@ fn queue_file_path() -> PathBuf {
         return dir.join("forwarded-deep-links.queue");
     }
     std::env::temp_dir().join("gpui-starter-forwarded-deep-links.queue")
+}
+
+#[cfg(test)]
+mod tests {
+    use tempfile::tempdir;
+
+    use super::{append_forwarded_link, drain_forwarded_links};
+
+    #[test]
+    fn forwarded_links_roundtrip_in_order() {
+        let dir = tempdir().expect("tempdir");
+        let queue = dir.path().join("forward.queue");
+
+        append_forwarded_link(&queue, "gpui-starter://settings");
+        append_forwarded_link(&queue, "gpui-starter://notifications");
+
+        let links = drain_forwarded_links(&queue);
+        assert_eq!(
+            links,
+            vec![
+                "gpui-starter://settings".to_string(),
+                "gpui-starter://notifications".to_string()
+            ]
+        );
+        assert!(drain_forwarded_links(&queue).is_empty());
+    }
 }
