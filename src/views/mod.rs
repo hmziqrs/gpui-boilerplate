@@ -1,9 +1,13 @@
-mod home;
 mod about;
-mod settings;
+mod diagnostics;
 mod form_page;
+mod home;
+mod notifications;
+mod settings;
 
-pub use home::HomePage;
 pub use about::AboutPage;
-pub use settings::SettingsPage;
+pub use diagnostics::DiagnosticsPage;
 pub use form_page::FormPage;
+pub use home::HomePage;
+pub use notifications::NotificationsPage;
+pub use settings::SettingsPage;

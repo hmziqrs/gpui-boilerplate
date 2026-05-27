@@ -50,9 +50,22 @@ settings_dark_mode = Dark Mode
 settings_language = Language
 settings_language_english = English
 settings_language_simplified_chinese = 简体中文
-settings_push_notification = Push a Notification
-settings_notify = Notify
 settings_hello_notification = Hello from Settings!
+settings_native_notifications = Native Local Notifications
+settings_native_backend = Backend
+settings_permission = Permission
+settings_degraded = Degraded
+settings_test_native_notification = Test Native Notification
+settings_test_action_notification = Test Action Buttons
+settings_test_reply_notification = Test Reply
+settings_test_background_notification = Test Background Policy
+settings_action_notification_body = Choose an action from the notification. The selected action is logged.
+settings_reply_notification_body = Reply from the notification. The typed text is logged.
+settings_background_notification_body = This tests background-worthy delivery and degraded fallback behavior.
+settings_request_permission = Request Permission
+settings_open_notification_settings = Open Notification Settings
+settings_in_app_notifications_note = In-app notifications are still handled separately inside the GPUI window.
+settings_push_notifications_note = Push notifications are not implemented by this local notification feature.
 
 ## FormPage
 

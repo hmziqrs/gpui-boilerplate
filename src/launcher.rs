@@ -1,12 +1,14 @@
 use gpui::{prelude::*, *};
 use gpui_component::{
-    ActiveTheme as _, FocusTrapElement as _, Icon, IconName, Root, Sizable as _, h_flex, v_flex,
-    scroll::ScrollableElement as _,
+    ActiveTheme as _, FocusTrapElement as _, Icon, IconName, Root, Sizable as _, h_flex,
     input::{Input, InputEvent, InputState},
-    ThemeMode,
+    scroll::ScrollableElement as _,
+    v_flex,
 };
 
-use crate::sidebar::Page;
+use crate::commands::{self, CommandId};
+
+const LOG: &str = "gpui_starter::launcher";
 
 const CONTEXT: &str = "Launcher";
 
@@ -20,14 +22,6 @@ pub fn init(cx: &mut App) {
     ]);
 }
 
-// ---------------------------------------------------------------------------
-// Inter-window communication via a global
-// ---------------------------------------------------------------------------
-
-#[derive(Clone, Debug)]
-pub struct PendingNavigation(pub Option<Page>);
-impl Global for PendingNavigation {}
-
 // Prevents double-opening the launcher
 pub struct LauncherOpen(pub bool);
 impl Global for LauncherOpen {}
@@ -36,10 +30,9 @@ impl Global for LauncherOpen {}
 // Item model
 // ---------------------------------------------------------------------------
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum LauncherActionKind {
-    NavigatePage(Page),
-    SwitchThemeMode(ThemeMode),
+    Execute(CommandId),
 }
 
 pub struct LauncherItem {
@@ -76,9 +69,8 @@ impl Focusable for Launcher {
 
 impl Launcher {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let input = cx.new(|cx| {
-            InputState::new(window, cx).placeholder("Search pages and commands…")
-        });
+        let input =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Search pages and commands…"));
 
         cx.subscribe(&input, |this, _, ev: &InputEvent, cx| match ev {
             InputEvent::Change => this.refilter(cx),
@@ -100,29 +92,15 @@ impl Launcher {
     }
 
     fn make_items() -> Vec<LauncherItem> {
-        let mut items: Vec<LauncherItem> = Page::all()
-            .iter()
-            .map(|page| LauncherItem {
-                title: page.title().into(),
-                subtitle: format!("Open the {} page", page.title()).into(),
-                icon: page.icon(),
-                action: LauncherActionKind::NavigatePage(*page),
+        commands::registry()
+            .into_iter()
+            .map(|command| LauncherItem {
+                title: command.title,
+                subtitle: command.subtitle,
+                icon: command.icon,
+                action: LauncherActionKind::Execute(command.id),
             })
-            .collect();
-
-        items.push(LauncherItem {
-            title: "Light Mode".into(),
-            subtitle: "Switch to light theme".into(),
-            icon: IconName::Sun,
-            action: LauncherActionKind::SwitchThemeMode(ThemeMode::Light),
-        });
-        items.push(LauncherItem {
-            title: "Dark Mode".into(),
-            subtitle: "Switch to dark theme".into(),
-            icon: IconName::Moon,
-            action: LauncherActionKind::SwitchThemeMode(ThemeMode::Dark),
-        });
-        items
+            .collect()
     }
 
     fn refilter(&mut self, cx: &mut Context<Self>) {
@@ -141,12 +119,27 @@ impl Launcher {
                 .collect()
         };
         self.selected_index = 0;
+        tracing::debug!(
+            target: LOG,
+            query = %q,
+            results = self.filtered.len(),
+            "Launcher filtered"
+        );
         cx.notify();
     }
 
     fn act(&mut self, cx: &mut Context<Self>) {
         if let Some(&ix) = self.filtered.get(self.selected_index) {
-            cx.emit(LauncherEvent::Act(self.items[ix].action));
+            let action = self.items[ix].action;
+            tracing::info!(
+                target: LOG,
+                action = ?action,
+                item = %self.items[ix].title,
+                "Launcher action triggered"
+            );
+            cx.emit(LauncherEvent::Act(action));
+        } else {
+            tracing::debug!(target: LOG, "Launcher dismissed with no selection");
         }
         cx.emit(LauncherEvent::Dismiss);
     }
@@ -161,6 +154,10 @@ impl Render for Launcher {
 
         v_flex()
             .size_full()
+            .bg(theme.background.opacity(0.25))
+            .border_1()
+            .border_color(theme.border.opacity(0.5))
+            .rounded(theme.radius_lg)
             .key_context(CONTEXT)
             .track_focus(&self.focus_handle)
             .focus_trap("launcher", &self.focus_handle)
@@ -330,17 +327,24 @@ impl LauncherRoot {
 
         cx.subscribe(&launcher, |this, _, ev: &LauncherEvent, cx| {
             match ev {
-                LauncherEvent::Act(action) => match action {
-                    LauncherActionKind::NavigatePage(page) => {
-                        cx.set_global(PendingNavigation(Some(*page)));
-                        cx.refresh_windows();
+                LauncherEvent::Act(action) => {
+                    tracing::info!(target: LOG, action = ?action, "LauncherRoot handling action");
+                    match action {
+                        LauncherActionKind::Execute(command_id) => {
+                            tracing::info!(
+                                target: LOG,
+                                command = ?command_id,
+                                "Executing command"
+                            );
+                            commands::execute(*command_id, cx);
+                        }
                     }
-                    LauncherActionKind::SwitchThemeMode(mode) => {
-                        crate::app::set_theme_mode(*mode, cx);
-                    }
-                },
-                LauncherEvent::Dismiss => {}
+                }
+                LauncherEvent::Dismiss => {
+                    tracing::debug!(target: LOG, "LauncherRoot received Dismiss event");
+                }
             }
+            tracing::debug!(target: LOG, "Scheduling launcher window close");
             this.should_close = true;
             cx.notify();
         })
@@ -356,8 +360,12 @@ impl LauncherRoot {
 impl Render for LauncherRoot {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if self.should_close {
+            self.should_close = false;
             cx.set_global(LauncherOpen(false));
-            window.remove_window();
+            tracing::info!(target: LOG, "Removing launcher window (deferred)");
+            window.defer(cx, |window, _cx| {
+                window.remove_window();
+            });
         }
 
         let dialog_layer = Root::render_dialog_layer(window, cx);
@@ -374,10 +382,11 @@ impl Render for LauncherRoot {
 // ---------------------------------------------------------------------------
 
 pub fn open_launcher(cx: &mut App) {
-    // Guard against double-open
-    if cx.try_global::<LauncherOpen>().map_or(false, |g| g.0) {
+    if cx.try_global::<LauncherOpen>().is_some_and(|g| g.0) {
+        tracing::debug!(target: LOG, "Launcher already open — ignoring open request");
         return;
     }
+    tracing::info!(target: LOG, "Opening launcher window");
     cx.set_global(LauncherOpen(true));
 
     let window_w = px(620.);
@@ -407,6 +416,7 @@ pub fn open_launcher(cx: &mut App) {
             kind: WindowKind::PopUp,
             is_movable: true,
             is_resizable: false,
+            window_background: WindowBackgroundAppearance::Blurred,
             window_min_size: Some(gpui::Size {
                 width: window_w,
                 height: window_h,
@@ -417,7 +427,7 @@ pub fn open_launcher(cx: &mut App) {
         let window = cx
             .open_window(options, |window, cx| {
                 let launcher_root = cx.new(|cx| LauncherRoot::new(window, cx));
-                cx.new(|cx| Root::new(launcher_root, window, cx))
+                cx.new(|cx| Root::new(launcher_root, window, cx).bg(transparent_black()))
             })
             .expect("failed to open launcher window");
 

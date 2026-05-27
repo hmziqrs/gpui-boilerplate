@@ -20,6 +20,8 @@ tracing-subscriber = { version = "0.3", features = [
     "fmt",
     "registry",
 ], default-features = false }
+tokio = { version = "1", features = ["rt", "sync", "time"] }
+async-trait = "0.1"
 rust-i18n = "3"
 regex = "1"
 koruma = { version = "0.9", features = ["fluent"] }
@@ -47,6 +49,9 @@ serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+tracing-appender = "0.2"
+tokio.workspace = true
+async-trait.workspace = true
 rust-i18n.workspace = true
 regex.workspace = true
 koruma.workspace = true
@@ -56,9 +61,48 @@ es-fluent-lang.workspace = true
 es-fluent-manager-embedded.workspace = true
 strum.workspace = true
 gpui-form.workspace = true
+user-notify = "0.4.2"
+notify-rust = "4.17.0"
+thiserror = "2.0.18"
+uuid = { version = "1.23.1", features = ["v4", "serde"] }
+chrono = { version = "0.4.44", features = ["serde"] }
+url = "2.5.8"
+directories = "6.0.0"
+atomic-write-file = "0.3.0"
+semver = "1.0.28"
+tempfile = "3.27.0"
+single-instance = "0.3.3"
+interprocess = "2.4.2"
+reqwest = { version = "0.12.24", default-features = false, features = ["rustls-tls"] }
+network-interface = "2.0.3"
+keyring = "3.6.3"
+rusqlite = { version = "0.32.1", features = ["bundled"] }
+opentelemetry = "0.24.0"
+tracing-opentelemetry = "0.25.0"
+open = "5.3.2"
+arboard = "3.6.1"
+rfd = "0.15.4"
+notify = "8.2.0"
+undo = "0.52.0"
+accesskit = "0.21.1"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 tray-icon = { version = "0.24", default-features = false }
+global-hotkey = "0.8"
+block2 = "0.6"
+objc2 = { version = "0.6", features = ["exception"] }
+objc2-foundation = { version = "0.3.0", default-features = false, features = [
+    "std",
+    "NSBundle",
+    "NSError",
+    "NSString",
+] }
+objc2-user-notifications = { version = "0.3.0", default-features = false, features = [
+    "std",
+    "block2",
+    "UNNotificationSettings",
+    "UNUserNotificationCenter",
+] }
 
 [build-dependencies]
 es-fluent-build.workspace = true
