@@ -125,6 +125,8 @@ pub fn install(runtime: SingleInstanceRuntime, cx: &mut App) {
 pub fn shutdown(cx: &mut App) {
     if let Some(runtime) = cx.try_global::<SingleInstanceRuntime>() {
         runtime.ipc_running.store(false, Ordering::SeqCst);
+        // Nudge the blocking listener accept loop so it can observe `ipc_running = false`.
+        let _ = send_forwarded_link_via_ipc(&runtime.ipc_name, "__shutdown__");
     }
 }
 
