@@ -450,32 +450,52 @@ const canonical = new URL(Astro.url.pathname, SITE).toString();
             const d = 1.5;
             const items = [];
 
+            let mouseX = 0, mouseY = 0, smoothMX = 0, smoothMY = 0;
+            let clickPulse = 0;
+            heroHost.addEventListener('mousemove', (e) => {
+              const r = heroHost.getBoundingClientRect();
+              mouseX = ((e.clientX - r.left) / r.width - 0.5) * 2;
+              mouseY = ((e.clientY - r.top) / r.height - 0.5) * 2;
+            });
+            heroHost.addEventListener('mouseleave', () => { mouseX = 0; mouseY = 0; });
+            heroHost.addEventListener('click', () => { clickPulse = 1.0; });
+
             function track(mat, target, start, dur) {
               mat.opacity = 0;
               items.push({ mat, target, start, dur });
             }
 
             function dot(pos, color, size, target, start, dur) {
-              const geo = new ctx.THREE.BufferGeometry();
-              geo.setAttribute('position', new ctx.THREE.Float32BufferAttribute(pos, 3));
-              const mat = new ctx.THREE.PointsMaterial({
-                color, transparent: true, opacity: 0,
-                size, sizeAttenuation: true
-              });
-              ctx.group.add(new ctx.THREE.Points(geo, mat));
+              const geo = new ctx.THREE.IcosahedronGeometry(size, 2);
+              const mat = new ctx.THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0 });
+              const mesh = new ctx.THREE.Mesh(geo, mat);
+              mesh.position.set(...pos);
+              ctx.group.add(mesh);
               track(mat, target, start, dur);
+
+              const glowGeo = new ctx.THREE.IcosahedronGeometry(size * 2.5, 1);
+              const glowMat = new ctx.THREE.MeshBasicMaterial({
+                color, transparent: true, opacity: 0,
+                blending: ctx.THREE.AdditiveBlending, depthWrite: false
+              });
+              const glow = new ctx.THREE.Mesh(glowGeo, glowMat);
+              glow.position.set(...pos);
+              ctx.group.add(glow);
+              track(glowMat, target * 0.25, start + 0.1, dur);
             }
 
             function line(a, b, color, target, start, dur) {
               const verts = [...a, ...b];
               const geo = new ctx.THREE.BufferGeometry();
               geo.setAttribute('position', new ctx.THREE.Float32BufferAttribute(verts, 3));
-              const mat = new ctx.THREE.LineBasicMaterial({ color, transparent: true, opacity: 0 });
+              const mat = new ctx.THREE.LineBasicMaterial({
+                color, transparent: true, opacity: 0,
+                blending: ctx.THREE.AdditiveBlending
+              });
               ctx.group.add(new ctx.THREE.LineSegments(geo, mat));
               track(mat, target, start, dur);
             }
 
-            // Vertex dots (8 corners) — 0.0s to 0.8s
             const c = [];
             for (let x = -1; x <= 1; x += 2)
               for (let y = -1; y <= 1; y += 2)
@@ -483,63 +503,100 @@ const canonical = new URL(Astro.url.pathname, SITE).toString();
                   c.push([x * d, y * d, z * d]);
 
             c.forEach((pos, i) => {
-              dot(pos, GOLD_C, 0.1, 1.0, i * 0.3, 0.9);
+              dot(pos, GOLD_C, 0.07, 1.0, i * 0.3, 0.9);
             });
 
-            // Cube edges (12) — 1.8s to 5.4s
             const edgeIdx = [
               [0,4],[4,5],[5,1],[1,0],
               [2,6],[6,7],[7,3],[3,2],
               [0,2],[4,6],[5,7],[1,3],
             ];
             edgeIdx.forEach(([a, b], i) => {
-              line(c[a], c[b], AMBER_C, 0.3, 1.8 + i * 0.3, 0.9);
+              line(c[a], c[b], AMBER_C, 0.4, 1.8 + i * 0.3, 0.9);
             });
 
-            // Mid-edge dots — 3.6s to 5.4s
             const mids = [];
             for (let a = -d; a <= d; a += 2 * d)
               for (let b = -d; b <= d; b += 2 * d) {
                 mids.push([0, a, b], [a, 0, b], [a, b, 0]);
               }
             mids.forEach((pos, i) => {
-              dot(pos, AMBER_C, 0.05, 0.6, 3.6 + i * 0.075, 0.75);
+              dot(pos, AMBER_C, 0.04, 0.7, 3.6 + i * 0.075, 0.75);
             });
 
-            // Diagonal cross-braces — 4.8s to 6.6s
             const braces = [
               [[-d,-d,-d],[d,d,d]], [[-d,-d,d],[d,d,-d]],
               [[-d,d,-d],[d,-d,d]], [[-d,d,d],[d,-d,-d]],
             ];
             braces.forEach(([a, b], i) => {
-              line(a, b, AMBER_C, 0.1, 4.8 + i * 0.45, 1.2);
+              line(a, b, DEEP_C, 0.15, 4.8 + i * 0.45, 1.2);
             });
 
-            // Inner wireframe box — 6.6s
             const innerMat = new ctx.THREE.MeshBasicMaterial({
-              color: GOLD_C, wireframe: true, transparent: true, opacity: 0
+              color: GOLD_C, wireframe: true, transparent: true, opacity: 0,
+              blending: ctx.THREE.AdditiveBlending
             });
-            ctx.group.add(new ctx.THREE.Mesh(new ctx.THREE.BoxGeometry(1.8, 1.8, 1.8), innerMat));
-            track(innerMat, 0.15, 6.6, 2.4);
+            ctx.group.add(new ctx.THREE.Mesh(new ctx.THREE.IcosahedronGeometry(1.0, 0), innerMat));
+            track(innerMat, 0.12, 6.6, 2.4);
 
-            // Outer wireframe box — 7.8s
             const outerMat = new ctx.THREE.MeshBasicMaterial({
-              color: AMBER_C, wireframe: true, transparent: true, opacity: 0
+              color: AMBER_C, wireframe: true, transparent: true, opacity: 0,
+              blending: ctx.THREE.AdditiveBlending
             });
             ctx.group.add(new ctx.THREE.Mesh(new ctx.THREE.BoxGeometry(3, 3, 3), outerMat));
-            track(outerMat, 0.2, 7.8, 2.4);
+            track(outerMat, 0.15, 7.8, 2.4);
+
+            const pCount = 50;
+            const pPos = new Float32Array(pCount * 3);
+            const pVel = new Float32Array(pCount * 3);
+            for (let i = 0; i < pCount * 3; i++) {
+              pPos[i] = (Math.random() - 0.5) * 5;
+              pVel[i] = (Math.random() - 0.5) * 0.003;
+            }
+            const pGeo = new ctx.THREE.BufferGeometry();
+            pGeo.setAttribute('position', new ctx.THREE.BufferAttribute(pPos, 3));
+            const pMat = new ctx.THREE.PointsMaterial({
+              color: GOLD_C, transparent: true, opacity: 0,
+              size: 0.025, sizeAttenuation: true,
+              blending: ctx.THREE.AdditiveBlending, depthWrite: false
+            });
+            ctx.group.add(new ctx.THREE.Points(pGeo, pMat));
+            track(pMat, 0.5, 4.0, 2.0);
 
             const BUILD_END = 10.2;
             ctx.onTick((t, group) => {
+              smoothMX += (mouseX - smoothMX) * 0.05;
+              smoothMY += (mouseY - smoothMY) * 0.05;
+              clickPulse *= 0.93;
+              if (clickPulse < 0.005) clickPulse = 0;
+
               for (const item of items) {
                 const p = Math.max(0, Math.min(1, (t - item.start) / item.dur));
-                item.mat.opacity = item.target * (1 - Math.pow(1 - p, 3));
+                const base = item.target * (1 - Math.pow(1 - p, 3));
+                item.mat.opacity = Math.min(1, base + clickPulse * item.target * 0.6);
               }
+
+              const arr = pGeo.attributes.position.array;
+              for (let i = 0; i < pCount; i++) {
+                for (let j = 0; j < 3; j++) {
+                  arr[i * 3 + j] += pVel[i * 3 + j];
+                  if (arr[i * 3 + j] > 2.5) arr[i * 3 + j] = -2.5;
+                  if (arr[i * 3 + j] < -2.5) arr[i * 3 + j] = 2.5;
+                }
+              }
+              pGeo.attributes.position.needsUpdate = true;
+
+              const scale = 1 + clickPulse * 0.08;
+              group.scale.set(scale, scale, scale);
+
               if (t > BUILD_END) {
                 const rt = t - BUILD_END;
-                const ease = Math.min(1, rt / 1.0);
-                group.rotation.y = rt * 0.1 * ease;
-                group.rotation.x = Math.sin(rt * 0.06) * 0.12 * ease;
+                const ease = Math.min(1, rt / 1.5);
+                group.rotation.y = rt * 0.1 * ease + smoothMX * 0.4 * ease;
+                group.rotation.x = Math.sin(rt * 0.06) * 0.12 * ease + smoothMY * 0.25 * ease;
+              } else {
+                group.rotation.y = smoothMX * 0.2;
+                group.rotation.x = smoothMY * 0.15;
               }
             });
           });
