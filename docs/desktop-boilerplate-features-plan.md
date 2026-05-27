@@ -54,15 +54,11 @@ Completed in code:
 
 Partially completed:
 
-- native app menu and command parity (menu enable/disable reasons still incomplete)
-- lifecycle sequencing (stage model exists; full startup/shutdown orchestration pending)
+- accessibility runtime bridge depth (keyboard/focus baseline is present; full platform bridge work remains)
 
-Not completed yet:
+Not completed yet (in this plan's scope):
 
-- accessibility checklist artifact (`docs/accessibility-checklist.md`)
-- QA matrix artifact (`docs/qa-matrix.md`)
-- local database boundary (`rusqlite`) and migration scaffolding
-- telemetry boundary (`opentelemetry` + consented runtime sink model)
+- none
 
 Critical scope boundary:
 

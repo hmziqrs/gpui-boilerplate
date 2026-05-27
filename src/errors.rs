@@ -2,9 +2,10 @@
 
 use std::{io, path::PathBuf};
 
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AppErrorSeverity {
     Info,
     Warning,

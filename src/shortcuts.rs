@@ -99,6 +99,24 @@ pub fn snapshot(cx: &App) -> ShortcutState {
         .unwrap_or_default()
 }
 
+#[cfg(target_os = "macos")]
+pub fn shutdown(cx: &mut App) {
+    let slot = HOTKEY_MANAGER.get_or_init(|| Mutex::new(None));
+    if let Ok(mut manager_slot) = slot.lock() {
+        *manager_slot = None;
+    }
+    let mut state = snapshot(cx);
+    state.registered = false;
+    if state.enabled {
+        state.last_error = Some("global shortcuts unregistered during shutdown".to_string());
+    }
+    set_capability(&state, cx);
+    cx.set_global(state);
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn shutdown(_cx: &mut App) {}
+
 fn set_capability(state: &ShortcutState, cx: &mut App) {
     crate::capabilities::set(
         "global_shortcuts",

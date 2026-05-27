@@ -40,6 +40,15 @@ pub struct AppConfig {
     pub global_shortcut_enabled: bool,
     pub first_run_completed: bool,
     pub notification_inbox: Vec<NotificationInboxItem>,
+    pub window_bounds: Option<PersistedWindowBounds>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct PersistedWindowBounds {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
 }
 
 impl Default for AppConfig {
@@ -55,6 +64,7 @@ impl Default for AppConfig {
             global_shortcut_enabled: true,
             first_run_completed: false,
             notification_inbox: Vec::new(),
+            window_bounds: None,
         }
     }
 }

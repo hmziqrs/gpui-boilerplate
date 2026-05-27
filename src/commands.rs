@@ -42,6 +42,7 @@ pub struct CommandSpec {
 }
 
 pub fn availability(id: CommandId, cx: &App) -> CommandAvailability {
+    let desktop = crate::desktop_actions::snapshot(cx);
     match id {
         CommandId::OpenHome
         | CommandId::OpenForm
@@ -51,13 +52,23 @@ pub fn availability(id: CommandId, cx: &App) -> CommandAvailability {
         | CommandId::OpenAbout
         | CommandId::ThemeLight
         | CommandId::ThemeDark
-        | CommandId::StartDemoTask
-        | CommandId::CheckConnectivity
-        | CommandId::CopyDiagnostics
-        | CommandId::OpenLogsFolder
-        | CommandId::OpenConfigFolder => CommandAvailability {
+        | CommandId::StartDemoTask => CommandAvailability {
             enabled: true,
             disabled_reason: None,
+        },
+        CommandId::CheckConnectivity => CommandAvailability {
+            enabled: true,
+            disabled_reason: None,
+        },
+        CommandId::CopyDiagnostics => CommandAvailability {
+            enabled: desktop.clipboard_available,
+            disabled_reason: (!desktop.clipboard_available)
+                .then_some("Clipboard backend unavailable".into()),
+        },
+        CommandId::OpenLogsFolder | CommandId::OpenConfigFolder => CommandAvailability {
+            enabled: desktop.opener_available,
+            disabled_reason: (!desktop.opener_available)
+                .then_some("System opener backend unavailable".into()),
         },
         CommandId::Undo => CommandAvailability {
             enabled: crate::undo_stack::can_undo(cx).is_some(),
@@ -184,16 +195,43 @@ pub fn execute(id: CommandId, cx: &mut App) {
         CommandId::CopyDiagnostics => {
             if let Err(error) = crate::desktop_actions::copy_diagnostics(cx) {
                 tracing::warn!(target: "gpui_starter::commands", %error, "copy diagnostics failed");
+                crate::error_surface::report(
+                    format!("Copy diagnostics failed: {error}"),
+                    crate::errors::AppErrorSeverity::Error,
+                    vec![
+                        crate::error_surface::ErrorAction::Retry,
+                        crate::error_surface::ErrorAction::Dismiss,
+                    ],
+                    cx,
+                );
             }
         }
         CommandId::OpenLogsFolder => {
             if let Err(error) = crate::desktop_actions::open_logs_folder(cx) {
                 tracing::warn!(target: "gpui_starter::commands", %error, "open logs folder failed");
+                crate::error_surface::report(
+                    format!("Open logs folder failed: {error}"),
+                    crate::errors::AppErrorSeverity::Error,
+                    vec![
+                        crate::error_surface::ErrorAction::OpenSettings,
+                        crate::error_surface::ErrorAction::Dismiss,
+                    ],
+                    cx,
+                );
             }
         }
         CommandId::OpenConfigFolder => {
             if let Err(error) = crate::desktop_actions::open_config_folder(cx) {
                 tracing::warn!(target: "gpui_starter::commands", %error, "open config folder failed");
+                crate::error_surface::report(
+                    format!("Open config folder failed: {error}"),
+                    crate::errors::AppErrorSeverity::Error,
+                    vec![
+                        crate::error_surface::ErrorAction::OpenSettings,
+                        crate::error_surface::ErrorAction::Dismiss,
+                    ],
+                    cx,
+                );
             }
         }
         CommandId::Undo => {

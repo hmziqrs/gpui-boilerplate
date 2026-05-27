@@ -2,7 +2,7 @@ use gpui::{prelude::*, *};
 use gpui_component::{button::Button, v_flex};
 
 use crate::{
-    app_state, capabilities, commands, connectivity, desktop_actions,
+    accessibility, app_state, capabilities, commands, connectivity, desktop_actions, error_surface,
     lifecycle::{LifecycleStage, LifecycleState},
     logging, notifications, secure_storage, session, shortcuts, storage, telemetry, undo_stack,
 };
@@ -59,6 +59,17 @@ impl DiagnosticsPage {
                 cx.notify();
             }),
         );
+        subscriptions.push(
+            cx.observe_global_in::<accessibility::AccessibilitySnapshot>(window, |_, _, cx| {
+                cx.notify();
+            }),
+        );
+        subscriptions.push(cx.observe_global_in::<error_surface::ErrorSurfaceState>(
+            window,
+            |_, _, cx| {
+                cx.notify();
+            },
+        ));
         Self {
             _subscriptions: subscriptions,
         }
@@ -79,10 +90,12 @@ impl Render for DiagnosticsPage {
         let logging = logging::snapshot(cx);
         let storage = storage::snapshot(cx);
         let telemetry = telemetry::snapshot(cx);
+        let accessibility = accessibility::snapshot(cx);
         let capabilities = capabilities::snapshot(cx);
         let shortcuts = shortcuts::snapshot(cx);
         let desktop_actions = desktop_actions::snapshot(cx);
         let undo = undo_stack::snapshot(cx);
+        let latest_error = error_surface::latest(cx);
         let command_registry = commands::registry();
         let command_titles = command_registry
             .iter()
@@ -254,6 +267,23 @@ impl Render for DiagnosticsPage {
                 &telemetry.events_recorded.to_string(),
             ),
             row(
+                "Accessibility AccessKit Linked",
+                if accessibility.accesskit_linked {
+                    "Yes"
+                } else {
+                    "No"
+                },
+            ),
+            row(
+                "Accessibility Bridge Enabled",
+                if accessibility.bridge_enabled {
+                    "Yes"
+                } else {
+                    "No"
+                },
+            ),
+            row("Accessibility Status", &accessibility.status),
+            row(
                 "Desktop Clipboard Available",
                 if desktop_actions.clipboard_available {
                     "Yes"
@@ -305,6 +335,17 @@ impl Render for DiagnosticsPage {
             row(
                 "Shortcut Error",
                 shortcuts.last_error.as_deref().unwrap_or("None"),
+            ),
+            row(
+                "Error Surface Count",
+                &error_surface::snapshot(cx).len().to_string(),
+            ),
+            row(
+                "Latest Error",
+                latest_error
+                    .as_ref()
+                    .map(|error| error.message.as_str())
+                    .unwrap_or("None"),
             ),
         ];
 
@@ -384,6 +425,32 @@ impl Render for DiagnosticsPage {
                     .label("Reset First-Run")
                     .on_click(|_, _, cx| {
                         crate::first_run::reset(cx);
+                    }),
+            )
+            .child(
+                Button::new("diagnostics-copy")
+                    .outline()
+                    .label("Copy Diagnostics")
+                    .on_click(|_, _, cx| {
+                        let _ = crate::desktop_actions::copy_diagnostics(cx);
+                    }),
+            )
+            .child(
+                Button::new("diagnostics-open-logs")
+                    .outline()
+                    .label("Open Logs Folder")
+                    .on_click(|_, _, cx| {
+                        let _ = crate::desktop_actions::open_logs_folder(cx);
+                    }),
+            )
+            .child(
+                Button::new("diagnostics-dismiss-latest-error")
+                    .outline()
+                    .label("Dismiss Latest Error")
+                    .on_click(|_, _, cx| {
+                        if let Some(error) = crate::error_surface::latest(cx) {
+                            crate::error_surface::dismiss(error.id, cx);
+                        }
                     }),
             )
             .when(cfg!(debug_assertions), |this| {

@@ -13,7 +13,10 @@ pub enum AppEventKind {
     Navigate(AppRoute),
     DeepLinkReceived(String),
     BackgroundTaskChanged(TaskId),
-    AppError(String),
+    AppError {
+        message: String,
+        severity: crate::errors::AppErrorSeverity,
+    },
     DiagnosticsChanged,
 }
 
@@ -56,13 +59,15 @@ pub fn emit(kind: AppEventKind, cx: &mut App) {
 }
 
 pub fn emit_error(error: AppError, cx: &mut App) {
+    let severity = error.severity();
+    let message = error.to_string();
     tracing::warn!(
         target: "gpui_starter::events",
-        severity = ?error.severity(),
-        error = %error,
+        severity = ?severity,
+        error = %message,
         "emitting app error"
     );
-    emit(AppEventKind::AppError(error.to_string()), cx);
+    emit(AppEventKind::AppError { message, severity }, cx);
 }
 
 pub fn drain(cx: &mut App) -> Vec<AppEvent> {
@@ -90,13 +95,16 @@ mod tests {
     #[test]
     fn queue_preserves_event_order() {
         let first = AppEvent::new(AppEventKind::DiagnosticsChanged);
-        let second = AppEvent::new(AppEventKind::AppError("oops".to_string()));
+        let second = AppEvent::new(AppEventKind::AppError {
+            message: "oops".to_string(),
+            severity: crate::errors::AppErrorSeverity::Error,
+        });
         let third = AppEvent::new(AppEventKind::DeepLinkReceived(
             "gpui-starter://settings".to_string(),
         ));
         let queue = AppEventQueue(vec![first.clone(), second.clone(), third.clone()]);
         assert!(matches!(queue.0[0].kind, AppEventKind::DiagnosticsChanged));
-        assert!(matches!(queue.0[1].kind, AppEventKind::AppError(_)));
+        assert!(matches!(queue.0[1].kind, AppEventKind::AppError { .. }));
         assert!(matches!(queue.0[2].kind, AppEventKind::DeepLinkReceived(_)));
     }
 }

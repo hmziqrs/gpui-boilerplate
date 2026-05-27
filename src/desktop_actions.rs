@@ -260,6 +260,15 @@ fn update_result(action: &str, error: Option<String>, cx: &mut App) {
             error = %error,
             "desktop action failed"
         );
+        crate::error_surface::report(
+            format!("Desktop action `{action}` failed: {error}"),
+            crate::errors::AppErrorSeverity::Warning,
+            vec![
+                crate::error_surface::ErrorAction::Retry,
+                crate::error_surface::ErrorAction::Dismiss,
+            ],
+            cx,
+        );
     } else {
         tracing::debug!(
             target: "gpui_starter::desktop_actions",

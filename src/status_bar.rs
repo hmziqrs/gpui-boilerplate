@@ -16,6 +16,9 @@ pub fn render(route: &AppRoute, cx: &App) -> impl gpui::IntoElement {
         .degraded_reason
         .as_deref()
         .unwrap_or("No");
+    let latest_error = crate::error_surface::latest(cx)
+        .map(|record| record.message)
+        .unwrap_or_else(|| "None".to_string());
     let session_label = match &session_state.state {
         session::SessionState::SignedOut => "SignedOut".to_string(),
         session::SessionState::SigningIn => "SigningIn".to_string(),
@@ -43,5 +46,6 @@ pub fn render(route: &AppRoute, cx: &App) -> impl gpui::IntoElement {
                 notifications_state.active_backend
             )),
             div().child(format!("Degraded: {degraded}")),
+            div().child(format!("LastError: {latest_error}")),
         ]))
 }

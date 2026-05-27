@@ -53,8 +53,15 @@ impl AppRoot {
                         Ok(route) => this.set_route(route, cx),
                         Err(err) => events::emit_error(err, cx),
                     },
-                    AppEventKind::AppError(error) => {
-                        tracing::warn!(target: "gpui_starter::root", error, "app error event received");
+                    AppEventKind::AppError { message, severity } => {
+                        tracing::warn!(target: "gpui_starter::root", error = %message, ?severity, "app error event received");
+                        crate::error_surface::report(
+                            message,
+                            severity,
+                            vec![crate::error_surface::ErrorAction::Dismiss],
+                            cx,
+                        );
+                        cx.notify();
                     }
                     AppEventKind::BackgroundTaskChanged(_) | AppEventKind::DiagnosticsChanged => {}
                 }
@@ -79,6 +86,19 @@ impl AppRoot {
         .detach();
         cx.observe_global::<crate::session::SessionSnapshot>(|_, cx| {
             cx.notify();
+        })
+        .detach();
+        cx.observe_window_bounds(window, |_, window, cx| {
+            let bounds = window.window_bounds().get_bounds();
+            let persisted = crate::app_state::PersistedWindowBounds {
+                x: bounds.origin.x.into(),
+                y: bounds.origin.y.into(),
+                width: bounds.size.width.into(),
+                height: bounds.size.height.into(),
+            };
+            crate::app_state::update_config(cx, |config| {
+                config.window_bounds = Some(persisted);
+            });
         })
         .detach();
 

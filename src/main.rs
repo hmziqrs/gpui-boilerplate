@@ -1,3 +1,4 @@
+mod accessibility;
 mod app;
 mod app_menu;
 mod app_state;
@@ -6,6 +7,7 @@ mod commands;
 mod config_migrations;
 mod connectivity;
 mod desktop_actions;
+mod error_surface;
 mod errors;
 mod events;
 mod first_run;

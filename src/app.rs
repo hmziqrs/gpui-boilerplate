@@ -160,17 +160,6 @@ pub fn init(cx: &mut App) {
         crate::capabilities::CapabilityStatus::supported_enabled(),
         cx,
     );
-    crate::capabilities::set(
-        "accessibility",
-        crate::capabilities::CapabilityStatus {
-            supported: true,
-            enabled: true,
-            degraded: false,
-            reason: Some("baseline keyboard/focus navigation available".into()),
-            last_error: None,
-        },
-        cx,
-    );
 
     // Initialize es-fluent i18n for app and form text
     let _ = crate::i18n::init_i18n(
@@ -237,10 +226,12 @@ pub fn init(cx: &mut App) {
     cx.set_global(crate::launcher::LauncherOpen(false));
     crate::lifecycle::set_startup_step("runtime_services_init", cx);
     crate::tasks::initialize(cx);
+    crate::error_surface::initialize(cx);
     crate::undo_stack::initialize(cx);
     crate::shortcuts::initialize(cx);
     crate::connectivity::initialize(cx);
     crate::desktop_actions::initialize(cx);
+    crate::accessibility::initialize(cx);
     crate::secure_storage::initialize(cx);
     crate::session::initialize(cx);
     crate::storage::initialize(cx);
@@ -268,8 +259,12 @@ pub fn init(cx: &mut App) {
         crate::lifecycle::set_stage(crate::lifecycle::LifecycleStage::ShuttingDown, cx);
         crate::lifecycle::set_shutdown_step("drain_tasks", cx);
         crate::tasks::shutdown(cx);
+        crate::lifecycle::set_shutdown_step("stop_ipc", cx);
+        crate::single_instance::shutdown(cx);
         crate::lifecycle::set_shutdown_step("stop_watchers", cx);
         crate::desktop_actions::shutdown(cx);
+        crate::lifecycle::set_shutdown_step("unregister_shortcuts", cx);
+        crate::shortcuts::shutdown(cx);
         crate::lifecycle::set_shutdown_step("flush_storage", cx);
         crate::storage::shutdown(cx);
         crate::lifecycle::set_shutdown_step("flush_telemetry", cx);
@@ -346,7 +341,15 @@ pub fn create_new_window(title: &str, cx: &mut App) {
         window_size.width = window_size.width.min(display_size.width * 0.85);
         window_size.height = window_size.height.min(display_size.height * 0.85);
     }
-    let window_bounds = Bounds::centered(None, window_size, cx);
+    let persisted_bounds = crate::app_state::config(cx).window_bounds;
+    let window_bounds = if let Some(bounds) = persisted_bounds {
+        Bounds {
+            origin: gpui::point(px(bounds.x), px(bounds.y)),
+            size: gpui::size(px(bounds.width), px(bounds.height)),
+        }
+    } else {
+        Bounds::centered(None, window_size, cx)
+    };
     let title = SharedString::from(title.to_string());
 
     cx.spawn(async move |cx| {
