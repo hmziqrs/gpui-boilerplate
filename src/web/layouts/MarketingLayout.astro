@@ -483,53 +483,53 @@ const canonical = new URL(Astro.url.pathname, SITE).toString();
                   c.push([x * d, y * d, z * d]);
 
             c.forEach((pos, i) => {
-              dot(pos, GOLD_C, 0.1, 1.0, i * 0.1, 0.3);
+              dot(pos, GOLD_C, 0.1, 1.0, i * 0.3, 0.9);
             });
 
-            // Cube edges (12) — 0.6s to 1.8s
+            // Cube edges (12) — 1.8s to 5.4s
             const edgeIdx = [
               [0,4],[4,5],[5,1],[1,0],
               [2,6],[6,7],[7,3],[3,2],
               [0,2],[4,6],[5,7],[1,3],
             ];
             edgeIdx.forEach(([a, b], i) => {
-              line(c[a], c[b], AMBER_C, 0.3, 0.6 + i * 0.1, 0.3);
+              line(c[a], c[b], AMBER_C, 0.3, 1.8 + i * 0.3, 0.9);
             });
 
-            // Mid-edge dots — 1.2s to 1.8s
+            // Mid-edge dots — 3.6s to 5.4s
             const mids = [];
             for (let a = -d; a <= d; a += 2 * d)
               for (let b = -d; b <= d; b += 2 * d) {
                 mids.push([0, a, b], [a, 0, b], [a, b, 0]);
               }
             mids.forEach((pos, i) => {
-              dot(pos, AMBER_C, 0.05, 0.6, 1.2 + i * 0.025, 0.25);
+              dot(pos, AMBER_C, 0.05, 0.6, 3.6 + i * 0.075, 0.75);
             });
 
-            // Diagonal cross-braces — 1.6s to 2.2s
+            // Diagonal cross-braces — 4.8s to 6.6s
             const braces = [
               [[-d,-d,-d],[d,d,d]], [[-d,-d,d],[d,d,-d]],
               [[-d,d,-d],[d,-d,d]], [[-d,d,d],[d,-d,-d]],
             ];
             braces.forEach(([a, b], i) => {
-              line(a, b, AMBER_C, 0.1, 1.6 + i * 0.15, 0.4);
+              line(a, b, AMBER_C, 0.1, 4.8 + i * 0.45, 1.2);
             });
 
-            // Inner wireframe box — 2.2s
+            // Inner wireframe box — 6.6s
             const innerMat = new ctx.THREE.MeshBasicMaterial({
               color: GOLD_C, wireframe: true, transparent: true, opacity: 0
             });
             ctx.group.add(new ctx.THREE.Mesh(new ctx.THREE.BoxGeometry(1.8, 1.8, 1.8), innerMat));
-            track(innerMat, 0.15, 2.2, 0.8);
+            track(innerMat, 0.15, 6.6, 2.4);
 
-            // Outer wireframe box — 2.6s
+            // Outer wireframe box — 7.8s
             const outerMat = new ctx.THREE.MeshBasicMaterial({
               color: AMBER_C, wireframe: true, transparent: true, opacity: 0
             });
             ctx.group.add(new ctx.THREE.Mesh(new ctx.THREE.BoxGeometry(3, 3, 3), outerMat));
-            track(outerMat, 0.2, 2.6, 0.8);
+            track(outerMat, 0.2, 7.8, 2.4);
 
-            const BUILD_END = 3.4;
+            const BUILD_END = 10.2;
             ctx.onTick((t, group) => {
               for (const item of items) {
                 const p = Math.max(0, Math.min(1, (t - item.start) / item.dur));
