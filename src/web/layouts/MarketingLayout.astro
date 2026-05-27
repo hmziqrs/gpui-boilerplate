@@ -466,15 +466,17 @@ const canonical = new URL(Astro.url.pathname, SITE).toString();
             }
 
             function dot(pos, color, size, target, start, dur) {
-              // Create glow texture
+              // Create glow texture with strong white shine
               const canvas = document.createElement('canvas');
               canvas.width = 64;
               canvas.height = 64;
               const ctx2d = canvas.getContext('2d');
               const gradient = ctx2d.createRadialGradient(32, 32, 0, 32, 32, 32);
               gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
-              gradient.addColorStop(0.2, 'rgba(255, 255, 255, 0.8)');
-              gradient.addColorStop(0.4, `rgba(${(color >> 16) & 255}, ${(color >> 8) & 255}, ${color & 255}, 0.6)`);
+              gradient.addColorStop(0.15, 'rgba(255, 255, 255, 1)');
+              gradient.addColorStop(0.3, 'rgba(255, 255, 255, 0.9)');
+              gradient.addColorStop(0.5, `rgba(${(color >> 16) & 255}, ${(color >> 8) & 255}, ${color & 255}, 0.5)`);
+              gradient.addColorStop(0.75, `rgba(${(color >> 16) & 255}, ${(color >> 8) & 255}, ${color & 255}, 0.2)`);
               gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
               ctx2d.fillStyle = gradient;
               ctx2d.fillRect(0, 0, 64, 64);
@@ -482,11 +484,11 @@ const canonical = new URL(Astro.url.pathname, SITE).toString();
 
               // Shiny glow sprite
               const mat = new ctx.THREE.PointsMaterial({
-                color,
+                color: 0xffffff,
                 map: texture,
                 transparent: true,
                 opacity: 0,
-                size: size * 8,
+                size: size * 6,
                 sizeAttenuation: true,
                 blending: ctx.THREE.AdditiveBlending,
                 depthWrite: false,
