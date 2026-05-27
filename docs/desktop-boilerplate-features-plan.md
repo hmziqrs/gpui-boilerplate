@@ -14,6 +14,15 @@ This plan focuses on reusable app behavior:
 - status/activity surface
 - diagnostics
 - first-run state
+- file logging
+- runtime capabilities registry
+- global shortcut settings
+- connectivity state
+- secure storage boundary
+- accessibility checklist
+- local app database boundary
+- undoable app commands
+- telemetry boundary
 
 Out of scope:
 
@@ -23,6 +32,63 @@ Out of scope:
 - document/file-editor workflows
 - arbitrary file/folder picker demos unless a feature needs them
 - remote push notifications
+
+## Crate Research
+
+Recommended candidates:
+
+- `url`
+  - Use for parsing custom deep-link URLs into structured data.
+  - Prefer this over ad hoc string splitting once routes have query parameters.
+- `directories`
+  - Use `ProjectDirs` for config, data, cache, and log paths.
+  - Prefer this over `dirs` for app-specific paths.
+- `single-instance`
+  - Simple process-level single-instance guard.
+  - Good for lock detection, but it does not solve payload forwarding by itself.
+- `interprocess`
+  - Use local sockets for second-instance-to-first-instance forwarding.
+  - Better fit for deep-link forwarding than lock-only crates.
+- `tracing-appender`
+  - Use rolling file appenders and non-blocking writers for persistent logs.
+  - Keep the `WorkerGuard` alive for the whole app lifetime.
+- `keyring`
+  - Use as the secure storage boundary for tokens/API keys later.
+  - Requires platform feature choices, especially for Linux secret service behavior.
+- `global-hotkey`
+  - Already in use for macOS global hotkey support.
+  - Extend existing usage rather than replacing it.
+- `reqwest`
+  - Use only if we add a real network client or connectivity probe.
+  - Do not add it only to ping a URL unless network features are coming.
+- `network-interface`
+  - Useful for diagnostics about local interfaces, not enough by itself for internet reachability.
+- `accesskit`
+  - Useful if GPUI does not already expose the accessibility tree we need.
+  - First step should be auditing GPUI accessibility support before adding it directly.
+- `rusqlite`
+  - Use if we want a conventional local SQLite database for app data, inbox history, sync metadata, or cached records.
+  - Best fit when data is relational, inspectable, and likely to need migrations.
+- `redb`
+  - Use if we want a pure-Rust embedded key-value store.
+  - Better fit for simple local records and indexes when SQL is unnecessary.
+- `undo` / `undoredo`
+  - Optional helpers for undo/redo stacks.
+  - Prefer app-local command types first so UI labels, persistence, permissions, and side effects stay explicit.
+- `opentelemetry` / `tracing-opentelemetry`
+  - Use only behind an explicit telemetry feature flag.
+  - The boilerplate should define a telemetry boundary, not send events by default.
+
+App-local features with no crate required:
+
+- capabilities registry
+- central error surface
+- notification inbox model
+- background task registry
+- first-run state
+- diagnostics view
+- telemetry no-op sink
+- undo command registry
 
 ## Current Architecture Audit
 
@@ -47,6 +113,9 @@ Out of scope:
 - Background work has no shared model for progress, cancellation, and errors.
 - There is no status bar or activity area for ambient app state.
 - Diagnostics are spread across logs and Settings text, not exposed as a coherent view.
+- There is no local database boundary for apps that outgrow JSON state.
+- There is no undo/redo command model for user-facing state changes.
+- There is no telemetry boundary that makes analytics/diagnostics export explicitly opt-in.
 
 ## Implementation Order
 
@@ -424,6 +493,423 @@ Acceptance criteria:
 - It does not show repeatedly.
 - It can be reset from diagnostics/settings in development.
 
+### Phase 11: File Logging
+
+Purpose:
+
+- Make logs available after the app exits and expose them through Diagnostics.
+
+Files:
+
+- `Cargo.toml`
+- `src/logging.rs`
+- `src/app.rs`
+- `src/views/diagnostics.rs`
+
+Recommended dependencies:
+
+- `tracing-appender`
+- `directories`
+
+Work:
+
+- Create app log directory under the user data directory.
+- Add rolling file appender.
+- Keep terminal logging in development.
+- Keep the `tracing_appender::non_blocking::WorkerGuard` alive in app-global state.
+- Add diagnostics fields:
+  - log directory
+  - current log file prefix
+  - logging enabled
+- Add a future "Open logs folder" action.
+
+Policy:
+
+- Logs must not contain secrets.
+- Use structured fields for subsystem/backend/error details.
+- Keep file logging enabled by default in dev and configurable in release.
+
+Acceptance criteria:
+
+- App writes logs to a user data directory.
+- Logs include notification/deep-link/single-instance events.
+- Logs flush on normal app quit.
+- Diagnostics can show the log path.
+
+### Phase 12: Runtime Capabilities Registry
+
+Purpose:
+
+- Centralize platform/runtime capability reporting.
+
+Files:
+
+- `src/capabilities.rs`
+- `src/app.rs`
+- `src/views/settings.rs`
+- `src/views/diagnostics.rs`
+- `src/notifications/service.rs`
+- `src/tray.rs`
+
+Work:
+
+- Add `CapabilityRegistry` global.
+- Track capabilities:
+  - native local notifications
+  - notification permission management
+  - notification actions/reply
+  - tray icon
+  - global hotkey
+  - deep links
+  - single-instance lock
+  - second-instance forwarding
+  - file logging
+  - secure storage
+  - accessibility status
+- Each capability should have:
+  - `supported`
+  - `enabled`
+  - `degraded`
+  - `reason`
+  - `last_error`
+
+Acceptance criteria:
+
+- Settings and Diagnostics read from one registry instead of duplicating backend state.
+- Notification, tray, and global-hotkey initialization report capability status.
+- Unsupported features are explicit, not inferred from missing UI.
+
+### Phase 13: Global Shortcut Settings
+
+Purpose:
+
+- Make the existing global hotkey observable and configurable.
+
+Files:
+
+- `src/shortcuts.rs`
+- `src/tray.rs`
+- `src/views/settings.rs`
+- `src/app_state.rs`
+- `src/capabilities.rs`
+
+Current dependency:
+
+- `global-hotkey`
+
+Work:
+
+- Move hotkey registration out of `tray.rs` into a shortcut service.
+- Persist enabled/disabled state.
+- Show registration result in Settings and Diagnostics.
+- Add conflict/error reporting.
+- Keep `Alt+Space` as the default launcher shortcut.
+
+Future work:
+
+- User-configurable shortcut capture UI.
+- Per-command shortcut registry.
+
+Acceptance criteria:
+
+- User can disable global shortcut.
+- Failed registration is visible in Settings/Diagnostics.
+- Tray setup no longer owns shortcut state.
+
+### Phase 14: Connectivity State
+
+Purpose:
+
+- Provide a reusable state model for network-aware desktop apps.
+
+Files:
+
+- `src/connectivity.rs`
+- `src/tasks.rs`
+- `src/status_bar.rs`
+- `src/views/diagnostics.rs`
+
+Candidate dependencies:
+
+- `reqwest` if the app adds real HTTP/network features.
+- `network-interface` for diagnostics about local interfaces.
+
+Recommended v1:
+
+- Define the state model without adding a network crate yet.
+- Add manual/demo transitions for `Unknown`, `Online`, and `Offline`.
+- Wire the state to status bar and diagnostics.
+
+Reason:
+
+- A boilerplate should not make external network calls by default unless the app has a real network feature.
+
+Acceptance criteria:
+
+- Connectivity state is represented centrally.
+- Status bar and diagnostics can show it.
+- Future HTTP clients/background sync can update it.
+
+### Phase 15: Secure Storage Boundary
+
+Purpose:
+
+- Give future auth/account features a safe place to store secrets without designing auth now.
+
+Files:
+
+- `Cargo.toml`
+- `src/secure_storage.rs`
+- `src/capabilities.rs`
+- `src/views/diagnostics.rs`
+
+Recommended dependency:
+
+- `keyring`
+
+Work:
+
+- Define app-local trait:
+  - `set_secret`
+  - `get_secret`
+  - `delete_secret`
+  - `is_available`
+- Implement a `keyring` backend behind feature/platform guards.
+- Add a no-op unavailable backend for unsupported/dev environments.
+- Report capability status in Diagnostics.
+
+Policy:
+
+- Never store secrets in JSON app state.
+- Never log secret values.
+- Secret keys should be namespaced by app id and environment.
+
+Acceptance criteria:
+
+- Secure storage availability is visible.
+- Basic set/get/delete integration test can run behind an opt-in flag or mock backend.
+- App state and logs do not contain secret material.
+
+### Phase 16: Account / Session Placeholder
+
+Purpose:
+
+- Prepare for apps that need auth without implementing auth in the boilerplate.
+
+Files:
+
+- `src/session.rs`
+- `src/events.rs`
+- `src/status_bar.rs`
+- `src/views/settings.rs`
+
+Work:
+
+- Add `SessionState`:
+  - `SignedOut`
+  - `SigningIn`
+  - `SignedIn`
+  - `Error`
+- Add event hooks for deep-link auth callback later.
+- Store non-secret account metadata only.
+
+Acceptance criteria:
+
+- Session state exists and can be displayed.
+- No credentials are persisted outside secure storage.
+- Deep-link plan has a place to route future auth callbacks.
+
+### Phase 17: Accessibility Checklist
+
+Purpose:
+
+- Make accessibility a required review surface for every UI feature.
+
+Files:
+
+- `docs/accessibility-checklist.md`
+- `src/views/diagnostics.rs`
+
+Candidate dependency:
+
+- `accesskit`, only after auditing GPUI's current accessibility support.
+
+Work:
+
+- Document keyboard navigation expectations.
+- Audit icon-only buttons for labels/tooltips.
+- Check focus order for:
+  - sidebar
+  - launcher
+  - settings
+  - notification inbox
+  - diagnostics
+- Add reduced-motion setting only if motion is introduced.
+- Add diagnostics entry for accessibility support status.
+
+Acceptance criteria:
+
+- Every new interactive control has a keyboard path.
+- Icon-only controls have accessible naming strategy or tooltip at minimum.
+- Accessibility limitations are documented rather than hidden.
+
+### Phase 18: Local App Database Boundary
+
+Purpose:
+
+- Give future app features a durable data layer without forcing every boilerplate app to use a database immediately.
+
+Files:
+
+- `Cargo.toml`
+- `src/storage.rs`
+- `src/app_state.rs`
+- `src/views/diagnostics.rs`
+
+Candidate dependencies:
+
+- `rusqlite` for SQLite-backed relational local data.
+- `redb` for pure-Rust embedded key-value data.
+
+Recommended v1:
+
+- Do not migrate current small app settings from JSON yet.
+- Define a storage boundary and diagnostics first.
+- Add a concrete database backend only when notification inbox history, task history, sync cache, or app records need it.
+
+Work:
+
+- Define app-local storage traits for:
+  - schema/version reporting
+  - migrations
+  - health check
+  - compact/vacuum or maintenance
+- Keep app preferences in config JSON unless there is a clear query/migration need.
+- If choosing SQLite:
+  - use `rusqlite`
+  - store database under the app data directory
+  - include migration version in diagnostics
+- If choosing embedded KV:
+  - use `redb`
+  - define typed table/key namespaces
+  - avoid ad hoc serialized blobs without versioning
+
+Acceptance criteria:
+
+- Diagnostics can show whether a database backend exists, where it lives, and which schema version is active.
+- App startup does not require a database unless a feature actually uses it.
+- Corrupted or incompatible local data fails visibly through the central error surface.
+
+### Phase 19: Undoable App Commands
+
+Purpose:
+
+- Give desktop-style user actions a reusable undo/redo model.
+
+Files:
+
+- `src/commands.rs`
+- `src/events.rs`
+- `src/launcher.rs`
+- `src/status_bar.rs`
+- `src/views/settings.rs`
+
+Candidate dependencies:
+
+- `undo`
+- `undoredo`
+
+Recommended v1:
+
+- Start with app-local command structs and an in-memory undo stack.
+- Add a crate only if the command stack becomes repetitive or needs snapshot/delta helpers.
+
+Work:
+
+- Define `AppCommand` metadata:
+  - id
+  - label
+  - undo label
+  - redo label
+  - source route
+  - timestamp
+- Define command execution result:
+  - applied
+  - rejected with reason
+  - requires confirmation
+- Add command stack operations:
+  - execute
+  - undo
+  - redo
+  - clear scope
+- Wire launcher actions and selected settings changes through the command system where it makes sense.
+
+Policy:
+
+- Do not put irreversible side effects into undo unless the inverse operation is reliable.
+- File/network/notification side effects should create visible history, not fake undo.
+- Command labels must be user-facing because menu items and launcher entries will reuse them.
+
+Acceptance criteria:
+
+- At least one low-risk setting change can be undone/redone.
+- Undo/redo availability is visible in launcher or status area.
+- Rejected commands route to the central error surface.
+
+### Phase 20: Telemetry Boundary
+
+Purpose:
+
+- Make product analytics and remote diagnostics an explicit opt-in layer instead of accidental logging creep.
+
+Files:
+
+- `src/telemetry.rs`
+- `src/app.rs`
+- `src/app_state.rs`
+- `src/views/settings.rs`
+- `src/views/diagnostics.rs`
+
+Candidate dependencies:
+
+- `opentelemetry`
+- `tracing-opentelemetry`
+
+Recommended v1:
+
+- Implement a no-op telemetry sink.
+- Keep local tracing/file logs separate from telemetry export.
+- Add remote telemetry crates only behind a feature flag and user-visible setting.
+
+Work:
+
+- Define `TelemetrySink`:
+  - `record_event`
+  - `record_error`
+  - `set_user_properties`
+  - `flush`
+- Add telemetry consent state:
+  - disabled
+  - local-only diagnostics
+  - remote opt-in
+- Add diagnostics fields:
+  - telemetry compiled
+  - telemetry enabled
+  - telemetry endpoint redacted
+  - last export error
+
+Policy:
+
+- Default must be disabled.
+- Never send notification contents, secrets, file paths, or raw deep-link payloads without product-specific review.
+- Keep correlation IDs allowed, but avoid stable user identity until an app explicitly opts in.
+
+Acceptance criteria:
+
+- Boilerplate builds with telemetry disabled.
+- Settings and Diagnostics clearly show telemetry state.
+- Enabling any remote exporter requires a deliberate feature/config change.
+
 ## Cross-Cutting Design Rules
 
 - Prefer typed app routes over raw strings after parsing.
@@ -473,6 +959,43 @@ Reason:
 
 - Native local notifications already exist, but the app still needs internal notification history.
 
+## Recommended Fourth Implementation Batch
+
+Implement:
+
+1. file logging
+2. capabilities registry
+3. diagnostics page
+
+Reason:
+
+- These make every platform feature easier to debug and give the boilerplate a professional support surface.
+
+## Recommended Fifth Implementation Batch
+
+Implement:
+
+1. global shortcut settings
+2. connectivity state model
+3. secure storage boundary
+4. accessibility checklist
+
+Reason:
+
+- These are valuable desktop foundations, but they should build on the route/event/state/capability layers.
+
+## Recommended Sixth Implementation Batch
+
+Implement:
+
+1. local app database boundary
+2. undoable app command model
+3. telemetry no-op boundary
+
+Reason:
+
+- These are important production-grade foundations, but they should not block deep links, diagnostics, notifications, or state persistence. They also need clear product decisions before concrete backends are enabled.
+
 ## Verification Strategy
 
 For every batch:
@@ -506,6 +1029,28 @@ Feature-specific checks:
   - progress updates render
   - cancellation and failure states render
   - errors route to central error surface
+- File logging:
+  - log directory is created
+  - logs include startup and backend diagnostics
+  - log guard flushes on exit
+- Capabilities:
+  - capabilities page/status matches actual runtime
+  - degraded features include reasons
+- Secure storage:
+  - unavailable backend is handled without panic
+  - no secret values appear in logs or app state
+- Local database:
+  - database backend is optional at startup
+  - schema/version diagnostics are visible when enabled
+  - migration failure routes to the central error surface
+- Undo/redo:
+  - undoable commands expose labels
+  - irreversible operations are not added to the undo stack
+  - rejected commands surface structured errors
+- Telemetry:
+  - disabled by default
+  - remote exporter code is feature-gated
+  - diagnostics distinguish local logs from telemetry export
 
 ## Open Questions
 
@@ -514,3 +1059,29 @@ Feature-specific checks:
 - Which crate should we use for single-instance IPC?
 - Do we want the custom URL scheme to be `gpui-starter://` or a product-neutral placeholder?
 - Should first-run be enabled in the boilerplate by default, or only as an optional example?
+- Should file logging be enabled in release by default?
+- Should secure storage be compiled by default or behind a feature flag?
+- Should connectivity ever make a real network request in boilerplate mode?
+- Does GPUI already provide enough accessibility support, or do we need direct AccessKit integration?
+- Should the first database backend be SQLite via `rusqlite`, embedded KV via `redb`, or no backend until a feature requires it?
+- Should undo/redo be limited to settings/demo state, or should it become a general app command system immediately?
+- Should telemetry remain a no-op boundary forever in the boilerplate, with real exporters only in downstream apps?
+
+## References
+
+- `url`: <https://docs.rs/url/latest/>
+- `directories` / `dirs` family: <https://docs.rs/crate/dirs/latest/source/README.md>
+- `single-instance`: <https://docs.rs/single-instance/latest/single_instance/struct.SingleInstance.html>
+- `interprocess`: <https://docs.rs/interprocess/latest/interprocess/>
+- `tracing-appender`: <https://docs.rs/tracing-appender/latest/tracing_appender/>
+- `keyring`: <https://docs.rs/keyring/latest/keyring/>
+- `global-hotkey`: <https://docs.rs/global-hotkey/latest/global_hotkey/>
+- `reqwest`: <https://docs.rs/reqwest/latest/reqwest/>
+- `network-interface`: <https://docs.rs/network-interface>
+- `accesskit`: <https://docs.rs/accesskit/latest/accesskit/>
+- `rusqlite`: <https://docs.rs/rusqlite/latest/>
+- `redb`: <https://docs.rs/redb/latest/redb/>
+- `undo`: <https://docs.rs/undo/latest/undo/>
+- `undoredo`: <https://docs.rs/undoredo/latest/undoredo/>
+- `opentelemetry`: <https://docs.rs/opentelemetry/latest/opentelemetry/>
+- `tracing-opentelemetry`: <https://docs.rs/tracing-opentelemetry/latest/tracing_opentelemetry/>
