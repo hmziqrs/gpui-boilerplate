@@ -375,6 +375,13 @@ const canonical = new URL(Astro.url.pathname, SITE).toString();
           const ctx = { THREE, scene, camera, renderer, group };
           let tickFn = null;
           ctx.onTick = (fn) => { tickFn = fn; };
+          
+          // Reveal animation tracking
+          const trackedMaterials = [];
+          ctx.trackMaterial = (mat, targetOpacity) => {
+            trackedMaterials.push({ mat, target: targetOpacity, startTime: -1 });
+          };
+          
           builder(ctx);
           let lastW = 0, lastH = 0;
           function resize() {
@@ -395,12 +402,36 @@ const canonical = new URL(Astro.url.pathname, SITE).toString();
           ro.observe(host);
           setTimeout(() => ro.disconnect(), 600);
           let visible = true;
-          new IntersectionObserver(([e]) => { visible = e.isIntersecting; }, { threshold: 0.05 }).observe(host);
+          let revealed = false;
+          let revealTime = 0;
+          const revealObserver = new IntersectionObserver(([e]) => {
+            visible = e.isIntersecting;
+            if (e.isIntersecting && !revealed) {
+              revealed = true;
+              revealTime = t;
+            }
+          }, { threshold: 0.1 });
+          revealObserver.observe(host);
           let t = 0;
           (function loop() {
             requestAnimationFrame(loop);
             if (!visible) return;
             t += 0.016;
+            
+            // Animate tracked materials with staggered reveal
+            if (revealed && trackedMaterials.length > 0) {
+              const elapsed = t - revealTime;
+              trackedMaterials.forEach((item, i) => {
+                const delay = i * 0.08; // 80ms stagger
+                const matElapsed = Math.max(0, elapsed - delay);
+                const duration = 0.6;
+                const progress = Math.min(1, matElapsed / duration);
+                // Ease out cubic
+                const eased = 1 - Math.pow(1 - progress, 3);
+                item.mat.opacity = item.target * eased;
+              });
+            }
+            
             if (tickFn) {
               tickFn(t, group);
             } else {
@@ -413,33 +444,39 @@ const canonical = new URL(Astro.url.pathname, SITE).toString();
 
         // Helper: add a wireframe mesh with amber lines
         function addWire(ctx, geometry, color, opacity) {
+          const targetOpacity = opacity || 0.35;
           const mat = new ctx.THREE.MeshBasicMaterial({
-            color, wireframe: true, transparent: true, opacity: opacity || 0.35
+            color, wireframe: true, transparent: true, opacity: 0
           });
           const mesh = new ctx.THREE.Mesh(geometry, mat);
           ctx.group.add(mesh);
+          if (ctx.trackMaterial) ctx.trackMaterial(mat, targetOpacity);
           return mesh;
         }
 
         // Helper: add a LineSegments from pairs of [x,y,z]
         function addLines(ctx, pairs, color, opacity) {
+          const targetOpacity = opacity || 0.4;
           const verts = [];
           pairs.forEach(([a, b]) => { verts.push(...a, ...b); });
           const geo = new ctx.THREE.BufferGeometry();
           geo.setAttribute('position', new ctx.THREE.Float32BufferAttribute(verts, 3));
-          const mat = new ctx.THREE.LineBasicMaterial({ color, transparent: true, opacity: opacity || 0.4 });
+          const mat = new ctx.THREE.LineBasicMaterial({ color, transparent: true, opacity: 0 });
           ctx.group.add(new ctx.THREE.LineSegments(geo, mat));
+          if (ctx.trackMaterial) ctx.trackMaterial(mat, targetOpacity);
         }
 
         // Helper: add small dots at positions
         function addDots(ctx, positions, color, opacity, size) {
+          const targetOpacity = opacity || 0.8;
           const geo = new ctx.THREE.BufferGeometry();
           geo.setAttribute('position', new ctx.THREE.Float32BufferAttribute(positions, 3));
           const mat = new ctx.THREE.PointsMaterial({
-            color, transparent: true, opacity: opacity || 0.8,
+            color, transparent: true, opacity: 0,
             size: size || 0.06, sizeAttenuation: true
           });
           ctx.group.add(new ctx.THREE.Points(geo, mat));
+          if (ctx.trackMaterial) ctx.trackMaterial(mat, targetOpacity);
         }
 
         // ===== 1. HERO — Lattice cube with build animation =====
@@ -622,7 +659,7 @@ const canonical = new URL(Astro.url.pathname, SITE).toString();
             });
           });
 
-        // ===== 2. BENTO — DNA double helix with line segments =====
+        // ===== 2. BENTO — DNA double helix with build animation =====
         const bentoHost = document.querySelector('[data-three="bento-orb"]');
         if (bentoHost)
           makeScene(bentoHost, (ctx) => {
@@ -631,6 +668,14 @@ const canonical = new URL(Astro.url.pathname, SITE).toString();
             const steps = 80;
             const radius = 1.0;
             const height = 4.0;
+            const items = [];
+            let revealed = false;
+            let buildStart = 0;
+
+            function track(mat, target, start, dur) {
+              mat.opacity = 0;
+              items.push({ mat, target, start, dur });
+            }
 
             // Build strand paths
             const strandA = [], strandB = [];
@@ -641,35 +686,97 @@ const canonical = new URL(Astro.url.pathname, SITE).toString();
               strandA.push([radius * Math.cos(angle), y, radius * Math.sin(angle)]);
               strandB.push([radius * Math.cos(angle + Math.PI), y, radius * Math.sin(angle + Math.PI)]);
             }
+
             // Draw strands as connected line segments
             const pairsA = [], pairsB = [];
             for (let i = 0; i < steps; i++) {
               pairsA.push([strandA[i], strandA[i+1]]);
               pairsB.push([strandB[i], strandB[i+1]]);
             }
-            addLines(ctx, pairsA, AMBER_C, 0.7);
-            addLines(ctx, pairsB, GOLD_C, 0.5);
+
+            // Track strand A lines
+            const vertsA = [];
+            pairsA.forEach(([a, b]) => { vertsA.push(...a, ...b); });
+            const geoA = new ctx.THREE.BufferGeometry();
+            geoA.setAttribute('position', new ctx.THREE.Float32BufferAttribute(vertsA, 3));
+            const matA = new ctx.THREE.LineBasicMaterial({ color: AMBER_C, transparent: true, opacity: 0, blending: ctx.THREE.AdditiveBlending });
+            ctx.group.add(new ctx.THREE.LineSegments(geoA, matA));
+            track(matA, 0.7, 0, 2.0);
+
+            // Track strand B lines
+            const vertsB = [];
+            pairsB.forEach(([a, b]) => { vertsB.push(...a, ...b); });
+            const geoB = new ctx.THREE.BufferGeometry();
+            geoB.setAttribute('position', new ctx.THREE.Float32BufferAttribute(vertsB, 3));
+            const matB = new ctx.THREE.LineBasicMaterial({ color: GOLD_C, transparent: true, opacity: 0, blending: ctx.THREE.AdditiveBlending });
+            ctx.group.add(new ctx.THREE.LineSegments(geoB, matB));
+            track(matB, 0.5, 0.5, 2.0);
 
             // Rungs connecting the two strands
             const rungs = [];
             for (let i = 0; i < steps; i += 6) {
               rungs.push([strandA[i], strandB[i]]);
             }
-            addLines(ctx, rungs, DEEP_C, 0.3);
+            const vertsR = [];
+            rungs.forEach(([a, b]) => { vertsR.push(...a, ...b); });
+            const geoR = new ctx.THREE.BufferGeometry();
+            geoR.setAttribute('position', new ctx.THREE.Float32BufferAttribute(vertsR, 3));
+            const matR = new ctx.THREE.LineBasicMaterial({ color: DEEP_C, transparent: true, opacity: 0, blending: ctx.THREE.AdditiveBlending });
+            ctx.group.add(new ctx.THREE.LineSegments(geoR, matR));
+            track(matR, 0.3, 1.5, 1.5);
 
             // Dots at strand vertices
-            const dots = [];
-            strandA.forEach(p => dots.push(...p));
-            addDots(ctx, dots, AMBER_C, 0.9, 0.06);
+            const dotsA = [];
+            strandA.forEach(p => dotsA.push(...p));
+            const geoDotsA = new ctx.THREE.BufferGeometry();
+            geoDotsA.setAttribute('position', new ctx.THREE.Float32BufferAttribute(dotsA, 3));
+            const matDotsA = new ctx.THREE.PointsMaterial({ color: AMBER_C, transparent: true, opacity: 0, size: 0.06, sizeAttenuation: true, blending: ctx.THREE.AdditiveBlending, depthWrite: false });
+            ctx.group.add(new ctx.THREE.Points(geoDotsA, matDotsA));
+            track(matDotsA, 0.9, 1.0, 1.5);
+
             const dotsB = [];
             strandB.forEach(p => dotsB.push(...p));
-            addDots(ctx, dotsB, GOLD_C, 0.7, 0.05);
+            const geoDotsB = new ctx.THREE.BufferGeometry();
+            geoDotsB.setAttribute('position', new ctx.THREE.Float32BufferAttribute(dotsB, 3));
+            const matDotsB = new ctx.THREE.PointsMaterial({ color: GOLD_C, transparent: true, opacity: 0, size: 0.05, sizeAttenuation: true, blending: ctx.THREE.AdditiveBlending, depthWrite: false });
+            ctx.group.add(new ctx.THREE.Points(geoDotsB, matDotsB));
+            track(matDotsB, 0.7, 1.5, 1.5);
+
+            const BUILD_END = 3.5;
+            ctx.onTick((t, group) => {
+              if (!revealed) {
+                revealed = true;
+                buildStart = t;
+              }
+              const elapsed = t - buildStart;
+
+              for (const item of items) {
+                const p = Math.max(0, Math.min(1, (elapsed - item.start) / item.dur));
+                item.mat.opacity = item.target * (1 - Math.pow(1 - p, 3));
+              }
+
+              if (elapsed > BUILD_END) {
+                const rt = elapsed - BUILD_END;
+                const ease = Math.min(1, rt / 1.5);
+                group.rotation.y = rt * 0.15 * ease;
+                group.rotation.x = Math.sin(rt * 0.08) * 0.15 * ease;
+              }
+            });
           });
 
-        // ===== 3. FEATURE CARDS — 5 distinct wireframe structures =====
+        // ===== 3. FEATURE CARDS — 5 distinct wireframe structures with build animations =====
         const structures = {
           // Brick/block wall — rectangles stacked in brick pattern
           dodec(ctx) {
+            const items = [];
+            let revealed = false;
+            let buildStart = 0;
+
+            function track(mat, target, start, dur) {
+              mat.opacity = 0;
+              items.push({ mat, target, start, dur });
+            }
+
             const lines = [];
             const rows = 5, cols = 4;
             const bw = 0.4, bh = 0.3, gap = 0.05;
@@ -678,14 +785,20 @@ const canonical = new URL(Astro.url.pathname, SITE).toString();
               for (let c = 0; c < cols; c++) {
                 const x = c * (bw + gap) + off - cols * (bw + gap) * 0.5;
                 const y = r * (bh + gap) - rows * (bh + gap) * 0.5;
-                // Rectangle edges
                 const tl = [x, y + bh, 0], tr = [x + bw, y + bh, 0];
                 const bl = [x, y, 0], br = [x + bw, y, 0];
                 lines.push([tl,tr],[tr,br],[br,bl],[bl,tl]);
               }
             }
-            addLines(ctx, lines, AMBER_C, 0.5);
-            // Corner dots
+
+            const verts = [];
+            lines.forEach(([a, b]) => { verts.push(...a, ...b); });
+            const geo = new ctx.THREE.BufferGeometry();
+            geo.setAttribute('position', new ctx.THREE.Float32BufferAttribute(verts, 3));
+            const mat = new ctx.THREE.LineBasicMaterial({ color: AMBER_C, transparent: true, opacity: 0, blending: ctx.THREE.AdditiveBlending });
+            ctx.group.add(new ctx.THREE.LineSegments(geo, mat));
+            track(mat, 0.5, 0, 1.5);
+
             const dots = [];
             for (let r = 0; r < rows; r++) {
               const off = (r % 2) * (bw + gap) * 0.5;
@@ -695,11 +808,40 @@ const canonical = new URL(Astro.url.pathname, SITE).toString();
                 dots.push(x, y+bh, 0, x+bw, y+bh, 0, x+bw, y, 0, x, y, 0);
               }
             }
-            addDots(ctx, dots, GOLD_C, 0.9, 0.05);
+            const dotsGeo = new ctx.THREE.BufferGeometry();
+            dotsGeo.setAttribute('position', new ctx.THREE.Float32BufferAttribute(dots, 3));
+            const dotsMat = new ctx.THREE.PointsMaterial({ color: GOLD_C, transparent: true, opacity: 0, size: 0.05, sizeAttenuation: true, blending: ctx.THREE.AdditiveBlending, depthWrite: false });
+            ctx.group.add(new ctx.THREE.Points(dotsGeo, dotsMat));
+            track(dotsMat, 0.9, 0.8, 1.2);
+
+            const BUILD_END = 2.5;
+            ctx.onTick((t, group) => {
+              if (!revealed) { revealed = true; buildStart = t; }
+              const elapsed = t - buildStart;
+              for (const item of items) {
+                const p = Math.max(0, Math.min(1, (elapsed - item.start) / item.dur));
+                item.mat.opacity = item.target * (1 - Math.pow(1 - p, 3));
+              }
+              if (elapsed > BUILD_END) {
+                const rt = elapsed - BUILD_END;
+                const ease = Math.min(1, rt / 1.5);
+                group.rotation.y = rt * 0.1 * ease;
+                group.rotation.x = Math.sin(rt * 0.06) * 0.12 * ease;
+              }
+            });
           },
 
           // Pyramid — stacked square rings
           octa(ctx) {
+            const items = [];
+            let revealed = false;
+            let buildStart = 0;
+
+            function track(mat, target, start, dur) {
+              mat.opacity = 0;
+              items.push({ mat, target, start, dur });
+            }
+
             const lines = [];
             const layers = 7;
             const base = 1.4;
@@ -710,7 +852,6 @@ const canonical = new URL(Astro.url.pathname, SITE).toString();
               const h = s / 2;
               const c = [[-h,y,-h],[h,y,-h],[h,y,h],[-h,y,h]];
               for (let j = 0; j < 4; j++) lines.push([c[j], c[(j+1)%4]]);
-              // Verticals to next layer
               if (i < layers - 1) {
                 const ns = base * (1 - (frac + 1/(layers-1)) * 0.85);
                 const ny = ((frac + 1/(layers-1)) - 0.5) * 2.8;
@@ -719,14 +860,49 @@ const canonical = new URL(Astro.url.pathname, SITE).toString();
                 for (let j = 0; j < 4; j++) lines.push([c[j], nc[j]]);
               }
             }
-            addLines(ctx, lines, AMBER_C, 0.5);
-            // Apex dot
-            addDots(ctx, [0, 1.2, 0], GOLD_C, 1.0, 0.08);
+
+            const verts = [];
+            lines.forEach(([a, b]) => { verts.push(...a, ...b); });
+            const geo = new ctx.THREE.BufferGeometry();
+            geo.setAttribute('position', new ctx.THREE.Float32BufferAttribute(verts, 3));
+            const mat = new ctx.THREE.LineBasicMaterial({ color: AMBER_C, transparent: true, opacity: 0, blending: ctx.THREE.AdditiveBlending });
+            ctx.group.add(new ctx.THREE.LineSegments(geo, mat));
+            track(mat, 0.5, 0, 2.0);
+
+            const apexGeo = new ctx.THREE.BufferGeometry();
+            apexGeo.setAttribute('position', new ctx.THREE.Float32BufferAttribute([0, 1.2, 0], 3));
+            const apexMat = new ctx.THREE.PointsMaterial({ color: GOLD_C, transparent: true, opacity: 0, size: 0.08, sizeAttenuation: true, blending: ctx.THREE.AdditiveBlending, depthWrite: false });
+            ctx.group.add(new ctx.THREE.Points(apexGeo, apexMat));
+            track(apexMat, 1.0, 1.5, 1.0);
+
+            const BUILD_END = 3.0;
+            ctx.onTick((t, group) => {
+              if (!revealed) { revealed = true; buildStart = t; }
+              const elapsed = t - buildStart;
+              for (const item of items) {
+                const p = Math.max(0, Math.min(1, (elapsed - item.start) / item.dur));
+                item.mat.opacity = item.target * (1 - Math.pow(1 - p, 3));
+              }
+              if (elapsed > BUILD_END) {
+                const rt = elapsed - BUILD_END;
+                const ease = Math.min(1, rt / 1.5);
+                group.rotation.y = rt * 0.1 * ease;
+                group.rotation.x = Math.sin(rt * 0.06) * 0.12 * ease;
+              }
+            });
           },
 
           // Atom — nucleus + 3 tilted orbital rings
           ico(ctx) {
-            // 3 orbital rings using Line with circular points
+            const items = [];
+            let revealed = false;
+            let buildStart = 0;
+
+            function track(mat, target, start, dur) {
+              mat.opacity = 0;
+              items.push({ mat, target, start, dur });
+            }
+
             const ringLines = [];
             for (let ri = 0; ri < 3; ri++) {
               const r = 0.7 + ri * 0.25;
@@ -738,7 +914,6 @@ const canonical = new URL(Astro.url.pathname, SITE).toString();
                 const a2 = ((i+1) / steps) * Math.PI * 2;
                 let p1 = [r*Math.cos(a1), 0, r*Math.sin(a1)];
                 let p2 = [r*Math.cos(a2), 0, r*Math.sin(a2)];
-                // Apply tilts
                 [p1, p2].forEach(p => {
                   let [x,y,z] = p;
                   let ny = y*Math.cos(tiltX) - z*Math.sin(tiltX);
@@ -751,14 +926,54 @@ const canonical = new URL(Astro.url.pathname, SITE).toString();
                 ringLines.push([p1, p2]);
               }
             }
-            addLines(ctx, ringLines, AMBER_C, 0.4);
-            // Nucleus
-            addWire(ctx, new ctx.THREE.OctahedronGeometry(0.12), GOLD_C, 0.8);
-            addDots(ctx, [0,0,0], GOLD_C, 1.0, 0.08);
+
+            const verts = [];
+            ringLines.forEach(([a, b]) => { verts.push(...a, ...b); });
+            const geo = new ctx.THREE.BufferGeometry();
+            geo.setAttribute('position', new ctx.THREE.Float32BufferAttribute(verts, 3));
+            const mat = new ctx.THREE.LineBasicMaterial({ color: AMBER_C, transparent: true, opacity: 0, blending: ctx.THREE.AdditiveBlending });
+            ctx.group.add(new ctx.THREE.LineSegments(geo, mat));
+            track(mat, 0.4, 0, 2.0);
+
+            const nucGeo = new ctx.THREE.OctahedronGeometry(0.12);
+            const nucMat = new ctx.THREE.MeshBasicMaterial({ color: GOLD_C, wireframe: true, transparent: true, opacity: 0 });
+            ctx.group.add(new ctx.THREE.Mesh(nucGeo, nucMat));
+            track(nucMat, 0.8, 1.0, 1.0);
+
+            const centerGeo = new ctx.THREE.BufferGeometry();
+            centerGeo.setAttribute('position', new ctx.THREE.Float32BufferAttribute([0,0,0], 3));
+            const centerMat = new ctx.THREE.PointsMaterial({ color: GOLD_C, transparent: true, opacity: 0, size: 0.08, sizeAttenuation: true, blending: ctx.THREE.AdditiveBlending, depthWrite: false });
+            ctx.group.add(new ctx.THREE.Points(centerGeo, centerMat));
+            track(centerMat, 1.0, 1.5, 1.0);
+
+            const BUILD_END = 3.0;
+            ctx.onTick((t, group) => {
+              if (!revealed) { revealed = true; buildStart = t; }
+              const elapsed = t - buildStart;
+              for (const item of items) {
+                const p = Math.max(0, Math.min(1, (elapsed - item.start) / item.dur));
+                item.mat.opacity = item.target * (1 - Math.pow(1 - p, 3));
+              }
+              if (elapsed > BUILD_END) {
+                const rt = elapsed - BUILD_END;
+                const ease = Math.min(1, rt / 1.5);
+                group.rotation.y = rt * 0.1 * ease;
+                group.rotation.x = Math.sin(rt * 0.06) * 0.12 * ease;
+              }
+            });
           },
 
           // Crystal — octahedron with visible edges
           tetra(ctx) {
+            const items = [];
+            let revealed = false;
+            let buildStart = 0;
+
+            function track(mat, target, start, dur) {
+              mat.opacity = 0;
+              items.push({ mat, target, start, dur });
+            }
+
             const v = [
               [0,1.2,0],[0,-1.2,0],[1.2,0,0],[-1.2,0,0],[0,0,1.2],[0,0,-1.2]
             ];
@@ -768,15 +983,51 @@ const canonical = new URL(Astro.url.pathname, SITE).toString();
               [2,4],[4,3],[3,5],[5,2]
             ];
             const lines = edges.map(([a,b]) => [v[a], v[b]]);
-            addLines(ctx, lines, AMBER_C, 0.6);
-            // Vertex dots
+
+            const verts = [];
+            lines.forEach(([a, b]) => { verts.push(...a, ...b); });
+            const geo = new ctx.THREE.BufferGeometry();
+            geo.setAttribute('position', new ctx.THREE.Float32BufferAttribute(verts, 3));
+            const mat = new ctx.THREE.LineBasicMaterial({ color: AMBER_C, transparent: true, opacity: 0, blending: ctx.THREE.AdditiveBlending });
+            ctx.group.add(new ctx.THREE.LineSegments(geo, mat));
+            track(mat, 0.6, 0, 1.5);
+
             const dots = [];
             v.forEach(p => dots.push(...p));
-            addDots(ctx, dots, GOLD_C, 1.0, 0.07);
+            const dotsGeo = new ctx.THREE.BufferGeometry();
+            dotsGeo.setAttribute('position', new ctx.THREE.Float32BufferAttribute(dots, 3));
+            const dotsMat = new ctx.THREE.PointsMaterial({ color: GOLD_C, transparent: true, opacity: 0, size: 0.07, sizeAttenuation: true, blending: ctx.THREE.AdditiveBlending, depthWrite: false });
+            ctx.group.add(new ctx.THREE.Points(dotsGeo, dotsMat));
+            track(dotsMat, 1.0, 0.8, 1.2);
+
+            const BUILD_END = 2.5;
+            ctx.onTick((t, group) => {
+              if (!revealed) { revealed = true; buildStart = t; }
+              const elapsed = t - buildStart;
+              for (const item of items) {
+                const p = Math.max(0, Math.min(1, (elapsed - item.start) / item.dur));
+                item.mat.opacity = item.target * (1 - Math.pow(1 - p, 3));
+              }
+              if (elapsed > BUILD_END) {
+                const rt = elapsed - BUILD_END;
+                const ease = Math.min(1, rt / 1.5);
+                group.rotation.y = rt * 0.1 * ease;
+                group.rotation.x = Math.sin(rt * 0.06) * 0.12 * ease;
+              }
+            });
           },
 
           // Tower — vertical scaffold with cross-bracing
           box(ctx) {
+            const items = [];
+            let revealed = false;
+            let buildStart = 0;
+
+            function track(mat, target, start, dur) {
+              mat.opacity = 0;
+              items.push({ mat, target, start, dur });
+            }
+
             const lines = [];
             const floors = 6;
             const w = 0.5, fh = 0.35;
@@ -784,29 +1035,53 @@ const canonical = new URL(Astro.url.pathname, SITE).toString();
               const y = (f - floors/2 + 0.5) * fh;
               const hw = w/2 * (1 - f * 0.02);
               const c = [[-hw,y,-hw],[hw,y,-hw],[hw,y,hw],[-hw,y,hw]];
-              // Floor ring
               for (let j = 0; j < 4; j++) lines.push([c[j], c[(j+1)%4]]);
-              // Verticals
               if (f < floors - 1) {
                 const ny = y + fh;
                 const nhw = w/2 * (1 - (f+1) * 0.02);
                 const nc = [[-nhw,ny,-nhw],[nhw,ny,-nhw],[nhw,ny,nhw],[-nhw,ny,nhw]];
                 for (let j = 0; j < 4; j++) lines.push([c[j], nc[j]]);
-                // Cross bracing on each face
                 for (let j = 0; j < 4; j++) {
                   lines.push([c[j], nc[(j+1)%4]]);
                 }
               }
             }
-            addLines(ctx, lines, AMBER_C, 0.5);
-            // Corner dots
+
+            const verts = [];
+            lines.forEach(([a, b]) => { verts.push(...a, ...b); });
+            const geo = new ctx.THREE.BufferGeometry();
+            geo.setAttribute('position', new ctx.THREE.Float32BufferAttribute(verts, 3));
+            const mat = new ctx.THREE.LineBasicMaterial({ color: AMBER_C, transparent: true, opacity: 0, blending: ctx.THREE.AdditiveBlending });
+            ctx.group.add(new ctx.THREE.LineSegments(geo, mat));
+            track(mat, 0.5, 0, 2.0);
+
             const dots = [];
             for (let f = 0; f < floors; f++) {
               const y = (f - floors/2 + 0.5) * fh;
               const hw = w/2 * (1 - f * 0.02);
               dots.push(-hw,y,-hw, hw,y,-hw, hw,y,hw, -hw,y,hw);
             }
-            addDots(ctx, dots, GOLD_C, 0.8, 0.04);
+            const dotsGeo = new ctx.THREE.BufferGeometry();
+            dotsGeo.setAttribute('position', new ctx.THREE.Float32BufferAttribute(dots, 3));
+            const dotsMat = new ctx.THREE.PointsMaterial({ color: GOLD_C, transparent: true, opacity: 0, size: 0.04, sizeAttenuation: true, blending: ctx.THREE.AdditiveBlending, depthWrite: false });
+            ctx.group.add(new ctx.THREE.Points(dotsGeo, dotsMat));
+            track(dotsMat, 0.8, 1.0, 1.5);
+
+            const BUILD_END = 3.0;
+            ctx.onTick((t, group) => {
+              if (!revealed) { revealed = true; buildStart = t; }
+              const elapsed = t - buildStart;
+              for (const item of items) {
+                const p = Math.max(0, Math.min(1, (elapsed - item.start) / item.dur));
+                item.mat.opacity = item.target * (1 - Math.pow(1 - p, 3));
+              }
+              if (elapsed > BUILD_END) {
+                const rt = elapsed - BUILD_END;
+                const ease = Math.min(1, rt / 1.5);
+                group.rotation.y = rt * 0.1 * ease;
+                group.rotation.x = Math.sin(rt * 0.06) * 0.12 * ease;
+              }
+            });
           },
         };
 
@@ -818,18 +1093,69 @@ const canonical = new URL(Astro.url.pathname, SITE).toString();
           });
         });
 
-        // ===== 4. CTA — Icosahedron wireframe with inner sphere =====
+        // ===== 4. CTA — Icosahedron wireframe with build animation =====
         const ctaHost = document.querySelector('[data-three="cta-shape"]');
         if (ctaHost)
           makeScene(ctaHost, (ctx) => {
             ctx.camera.position.z = 5.5;
+            const items = [];
+            let revealed = false;
+            let buildStart = 0;
+
+            function track(mat, target, start, dur) {
+              mat.opacity = 0;
+              items.push({ mat, target, start, dur });
+            }
+
             // Outer icosahedron wireframe
-            addWire(ctx, new ctx.THREE.IcosahedronGeometry(2.0, 0), AMBER_C, 0.25);
+            const outerGeo = new ctx.THREE.IcosahedronGeometry(2.0, 0);
+            const outerMat = new ctx.THREE.MeshBasicMaterial({
+              color: AMBER_C, wireframe: true, transparent: true, opacity: 0,
+              blending: ctx.THREE.AdditiveBlending
+            });
+            ctx.group.add(new ctx.THREE.Mesh(outerGeo, outerMat));
+            track(outerMat, 0.25, 0, 1.5);
+
             // Inner dodecahedron
-            addWire(ctx, new ctx.THREE.DodecahedronGeometry(1.0, 0), GOLD_C, 0.15);
+            const innerGeo = new ctx.THREE.DodecahedronGeometry(1.0, 0);
+            const innerMat = new ctx.THREE.MeshBasicMaterial({
+              color: GOLD_C, wireframe: true, transparent: true, opacity: 0,
+              blending: ctx.THREE.AdditiveBlending
+            });
+            ctx.group.add(new ctx.THREE.Mesh(innerGeo, innerMat));
+            track(innerMat, 0.15, 0.8, 1.5);
+
             // Vertex dots on outer
-            const icoGeo = new ctx.THREE.IcosahedronGeometry(2.0, 0);
-            addDots(ctx, icoGeo.attributes.position.array, GOLD_C, 0.9, 0.08);
+            const dotsGeo = new ctx.THREE.BufferGeometry();
+            dotsGeo.setAttribute('position', outerGeo.attributes.position);
+            const dotsMat = new ctx.THREE.PointsMaterial({
+              color: GOLD_C, transparent: true, opacity: 0,
+              size: 0.08, sizeAttenuation: true,
+              blending: ctx.THREE.AdditiveBlending, depthWrite: false
+            });
+            ctx.group.add(new ctx.THREE.Points(dotsGeo, dotsMat));
+            track(dotsMat, 0.9, 1.5, 1.0);
+
+            const BUILD_END = 3.0;
+            ctx.onTick((t, group) => {
+              if (!revealed) {
+                revealed = true;
+                buildStart = t;
+              }
+              const elapsed = t - buildStart;
+
+              for (const item of items) {
+                const p = Math.max(0, Math.min(1, (elapsed - item.start) / item.dur));
+                item.mat.opacity = item.target * (1 - Math.pow(1 - p, 3));
+              }
+
+              if (elapsed > BUILD_END) {
+                const rt = elapsed - BUILD_END;
+                const ease = Math.min(1, rt / 1.5);
+                group.rotation.y = rt * 0.12 * ease;
+                group.rotation.x = Math.sin(rt * 0.07) * 0.1 * ease;
+              }
+            });
           });
       }
       initThree();
