@@ -541,14 +541,6 @@ const canonical = new URL(Astro.url.pathname, SITE).toString();
               dot(pos, AMBER_C, 0.04, 0.7, 3.6 + i * 0.075, 0.75);
             });
 
-            const braces = [
-              [[-d,-d,-d],[d,d,d]], [[-d,-d,d],[d,d,-d]],
-              [[-d,d,-d],[d,-d,d]], [[-d,d,d],[d,-d,-d]],
-            ];
-            braces.forEach(([a, b], i) => {
-              line(a, b, AMBER_C, 0.25, 4.8 + i * 0.45, 1.2);
-            });
-
             const faceCross = [
               [[-d,-d,d],[d,d,d]], [[-d,d,d],[d,-d,d]],       // front
               [[-d,-d,-d],[d,d,-d]], [[-d,d,-d],[d,-d,-d]],   // back
