@@ -100,15 +100,9 @@ Chosen crates:
 - `rusqlite`
   - Selected local database backend.
   - Use SQLite for app data, inbox history, sync metadata, cached records, and inspectable migrations.
-- `redb`
-  - Not selected for this boilerplate.
-  - Keep it out unless a downstream product explicitly wants embedded key-value storage instead of SQLite.
 - `undo`
   - Selected helper crate for undo/redo stack mechanics.
   - Keep app-local command types for labels, persistence, permissions, and side effects.
-- `undoredo`
-  - Not selected for this boilerplate.
-  - Snapshot/delta undo is less explicit than command-based undo for desktop application actions.
 - `opentelemetry` / `tracing-opentelemetry`
   - Selected telemetry stack.
   - Remote export remains controlled by runtime consent/settings, but the integration path is not deferred.
@@ -164,8 +158,26 @@ App-local features with no crate required:
 - There is no native application menu/command registry for standard desktop actions.
 - There is no explicit startup/shutdown lifecycle coordinator.
 - Config writes are not specified as atomic or recoverable.
-- Panic/crash diagnostics are not specified.
-- The plan does not yet define a repeatable QA matrix for platform-sensitive behavior.
+- Panic/crash diagnostics are not implemented.
+- There is no repeatable QA matrix for platform-sensitive behavior.
+
+## Audit Result
+
+The current plan now covers the main desktop boilerplate surfaces:
+
+- routing and deep links
+- single-instance forwarding
+- persistent state and atomic config writes
+- native local notifications and in-app notification history
+- background tasks and status area
+- central errors, diagnostics, logs, and crash reporting
+- runtime capabilities and platform degradation
+- native menu, command registry, shortcuts, and undo/redo
+- desktop utility actions, clipboard, file dialogs, and file watchers
+- connectivity, secure storage, account/session boundary, and accessibility
+- local SQLite storage, telemetry boundary, test harness, and QA matrix
+
+Remaining implementation risk is not missing feature categories; it is platform behavior in GPUI/macOS/Windows/Linux integrations. That risk is handled through capabilities, diagnostics, file logs, fake backends, and manual QA entries.
 
 ## Dependency-Ordered Roadmap
 
@@ -279,8 +291,8 @@ Reason:
 - Connectivity: use `reqwest` for reachability checks and `network-interface` for local interface diagnostics.
 - Accessibility: use `accesskit` as the selected accessibility integration crate after the GPUI audit identifies the exact bridge point.
 - Desktop actions: use `open`, `rfd`, `arboard`, and `notify`.
-- Local database: use `rusqlite`; do not use `redb` in this boilerplate.
-- Undo/redo: use `undo`; do not use `undoredo` in this boilerplate.
+- Local database: use `rusqlite`.
+- Undo/redo: use `undo`.
 - Telemetry: use `opentelemetry` and `tracing-opentelemetry`; remote export is runtime-consent controlled, not feature-deferred.
 - Serialization/errors/IDs/time: use `serde`, `serde_json`, `thiserror`, `uuid`, and `chrono`.
 - Atomic persistence: use `atomic-write-file`.
@@ -1694,9 +1706,7 @@ Feature-specific checks:
 - `arboard`: <https://docs.rs/arboard/latest/arboard/>
 - `notify`: <https://docs.rs/notify/latest/notify/>
 - `rusqlite`: <https://docs.rs/rusqlite/latest/>
-- `redb`: <https://docs.rs/redb/latest/redb/>
 - `undo`: <https://docs.rs/undo/latest/undo/>
-- `undoredo`: <https://docs.rs/undoredo/latest/undoredo/>
 - `opentelemetry`: <https://docs.rs/opentelemetry/latest/opentelemetry/>
 - `tracing-opentelemetry`: <https://docs.rs/tracing-opentelemetry/latest/tracing_opentelemetry/>
 - `atomic-write-file`: <https://docs.rs/crate/atomic-write-file/latest>
