@@ -466,22 +466,37 @@ const canonical = new URL(Astro.url.pathname, SITE).toString();
             }
 
             function dot(pos, color, size, target, start, dur) {
-              const geo = new ctx.THREE.IcosahedronGeometry(size, 2);
-              const mat = new ctx.THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0 });
-              const mesh = new ctx.THREE.Mesh(geo, mat);
-              mesh.position.set(...pos);
-              ctx.group.add(mesh);
-              track(mat, target, start, dur);
+              // Create glow texture
+              const canvas = document.createElement('canvas');
+              canvas.width = 64;
+              canvas.height = 64;
+              const ctx2d = canvas.getContext('2d');
+              const gradient = ctx2d.createRadialGradient(32, 32, 0, 32, 32, 32);
+              gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+              gradient.addColorStop(0.2, 'rgba(255, 255, 255, 0.8)');
+              gradient.addColorStop(0.4, `rgba(${(color >> 16) & 255}, ${(color >> 8) & 255}, ${color & 255}, 0.6)`);
+              gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+              ctx2d.fillStyle = gradient;
+              ctx2d.fillRect(0, 0, 64, 64);
+              const texture = new ctx.THREE.CanvasTexture(canvas);
 
-              const glowGeo = new ctx.THREE.IcosahedronGeometry(size * 2.5, 1);
-              const glowMat = new ctx.THREE.MeshBasicMaterial({
-                color, transparent: true, opacity: 0,
-                blending: ctx.THREE.AdditiveBlending, depthWrite: false
+              // Shiny glow sprite
+              const mat = new ctx.THREE.PointsMaterial({
+                color,
+                map: texture,
+                transparent: true,
+                opacity: 0,
+                size: size * 8,
+                sizeAttenuation: true,
+                blending: ctx.THREE.AdditiveBlending,
+                depthWrite: false,
+                alphaTest: 0.01
               });
-              const glow = new ctx.THREE.Mesh(glowGeo, glowMat);
-              glow.position.set(...pos);
-              ctx.group.add(glow);
-              track(glowMat, target * 0.25, start + 0.1, dur);
+              const geo = new ctx.THREE.BufferGeometry();
+              geo.setAttribute('position', new ctx.THREE.Float32BufferAttribute(pos, 3));
+              const points = new ctx.THREE.Points(geo, mat);
+              ctx.group.add(points);
+              track(mat, target, start, dur);
             }
 
             function line(a, b, color, target, start, dur) {
@@ -530,6 +545,19 @@ const canonical = new URL(Astro.url.pathname, SITE).toString();
             ];
             braces.forEach(([a, b], i) => {
               line(a, b, DEEP_C, 0.15, 4.8 + i * 0.45, 1.2);
+            });
+
+            // Face diagonal crosses (6 faces × 2 = 12 lines)
+            const faceCross = [
+              [[-d,-d,d],[d,d,d]], [[-d,d,d],[d,-d,d]],       // front
+              [[-d,-d,-d],[d,d,-d]], [[-d,d,-d],[d,-d,-d]],   // back
+              [[-d,-d,-d],[-d,d,d]], [[-d,-d,d],[-d,d,-d]],   // left
+              [[d,-d,-d],[d,d,d]], [[d,-d,d],[d,d,-d]],       // right
+              [[-d,d,-d],[d,d,d]], [[-d,d,d],[d,d,-d]],       // top
+              [[-d,-d,-d],[d,-d,d]], [[-d,-d,d],[d,-d,-d]],   // bottom
+            ];
+            faceCross.forEach(([a, b], i) => {
+              line(a, b, DEEP_C, 0.08, 5.5 + i * 0.12, 0.8);
             });
 
             const innerMat = new ctx.THREE.MeshBasicMaterial({
