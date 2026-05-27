@@ -24,6 +24,10 @@ This plan focuses on reusable app behavior:
 - local app database boundary
 - undoable app commands
 - telemetry boundary
+- native app menu and command registry
+- lifecycle, shutdown, and crash diagnostics
+- atomic config writes, migrations, and recovery
+- test harness and QA matrix
 
 Out of scope:
 
@@ -108,6 +112,13 @@ Chosen crates:
 - `opentelemetry` / `tracing-opentelemetry`
   - Selected telemetry stack.
   - Remote export remains controlled by runtime consent/settings, but the integration path is not deferred.
+- `atomic-write-file`
+  - Use for atomic JSON config/state writes.
+  - Prevents partially written state when the app quits or crashes during persistence.
+- `tempfile`
+  - Use for filesystem-heavy tests around config paths, database initialization, IPC sockets, logs, and migrations.
+- `semver`
+  - Use for app/version parsing in diagnostics and migration compatibility checks.
 
 App-local features with no crate required:
 
@@ -120,6 +131,8 @@ App-local features with no crate required:
 - telemetry disabled/local/remote sinks
 - undo command registry
 - native utility service wrappers
+- native menu/action registry
+- panic hook and shutdown coordinator
 
 ## Current Architecture Audit
 
@@ -148,6 +161,11 @@ App-local features with no crate required:
 - There is no local database boundary for apps that outgrow JSON state.
 - There is no undo/redo command model for user-facing state changes.
 - There is no telemetry boundary that makes analytics/diagnostics export explicitly opt-in.
+- There is no native application menu/command registry for standard desktop actions.
+- There is no explicit startup/shutdown lifecycle coordinator.
+- Config writes are not specified as atomic or recoverable.
+- Panic/crash diagnostics are not specified.
+- The plan does not yet define a repeatable QA matrix for platform-sensitive behavior.
 
 ## Dependency-Ordered Roadmap
 
@@ -161,7 +179,9 @@ Implement first:
 2. `src/time.rs`
 3. `src/errors.rs`
 4. `src/paths.rs`
-5. common serialization helpers
+5. `src/lifecycle.rs`
+6. common serialization helpers
+7. atomic config write helpers
 
 Crates:
 
@@ -171,10 +191,12 @@ Crates:
 - `uuid`
 - `chrono`
 - `directories`
+- `atomic-write-file`
+- `semver`
 
 Reason:
 
-- Routes, events, notifications, tasks, diagnostics, and persistence all need stable IDs, timestamps, typed errors, and OS-correct paths.
+- Routes, events, notifications, tasks, diagnostics, persistence, startup, and shutdown all need stable IDs, timestamps, typed errors, OS-correct paths, and safe writes.
 
 ### Layer 1: Routing, Events, And State
 
@@ -184,6 +206,7 @@ Implement next:
 2. Phase 2: central app event bus
 3. Phase 3: persistent app state in user config directory
 4. Phase 10: first-run/setup state
+5. Phase 24: atomic config writes, migrations, and recovery
 
 Reason:
 
@@ -198,6 +221,8 @@ Implement before advanced features:
 3. Phase 8: central error surface
 4. Phase 9: diagnostics view
 5. Phase 18: native desktop utility actions
+6. Phase 23: lifecycle, shutdown, and crash diagnostics
+7. Phase 25: test harness and QA matrix
 
 Reason:
 
@@ -209,6 +234,7 @@ Implement after observability:
 
 1. Phase 4: single-instance and deep-link forwarding
 2. Phase 13: global shortcut settings
+3. Phase 22: native app menu and command registry
 
 Reason:
 
@@ -257,6 +283,12 @@ Reason:
 - Undo/redo: use `undo`; do not use `undoredo` in this boilerplate.
 - Telemetry: use `opentelemetry` and `tracing-opentelemetry`; remote export is runtime-consent controlled, not feature-deferred.
 - Serialization/errors/IDs/time: use `serde`, `serde_json`, `thiserror`, `uuid`, and `chrono`.
+- Atomic persistence: use `atomic-write-file`.
+- Migration/version checks: use `semver`.
+- Filesystem tests: use `tempfile`.
+- Native app menu: use GPUI/native app APIs directly, backed by the app command registry.
+- Lifecycle/shutdown: app-local coordinator; no extra crate.
+- Panic diagnostics: app-local panic hook that writes through tracing/file logging and redacts sensitive fields.
 
 ## Detailed Implementation Phases
 
@@ -273,6 +305,7 @@ Files:
 - `src/time.rs`
 - `src/errors.rs`
 - `src/paths.rs`
+- `src/lifecycle.rs`
 
 Recommended dependencies:
 
@@ -282,6 +315,8 @@ Recommended dependencies:
 - `uuid`
 - `chrono`
 - `directories`
+- `atomic-write-file`
+- `semver`
 
 Work:
 
@@ -290,12 +325,21 @@ Work:
 - Add typed app error categories.
 - Add app path helpers for config, data, cache, logs, and runtime IPC.
 - Add serialization helpers for versioned state structs.
+- Add atomic write helpers for JSON state.
+- Add version parsing helpers for app/database/config migrations.
+- Add lifecycle states:
+  - starting
+  - running
+  - shutting down
+  - crashed
 
 Acceptance criteria:
 
 - Later modules do not use raw `String` IDs where typed IDs exist.
 - App paths never point at `target/` except test/dev fixtures.
 - Common errors can be logged, displayed, and serialized for diagnostics.
+- Config/state writes are atomic by default.
+- Lifecycle state is visible to diagnostics.
 
 ### Phase 1: App Routes And Deep Links
 
@@ -498,6 +542,9 @@ Recommended dependencies:
 - `serde`
 - `uuid`
 - `chrono`
+
+Work continued:
+
 - Record every meaningful app notification before native delivery.
 - Bell button opens the inbox instead of showing a throwaway toast.
 - Add mark-read, clear-all, and item click behavior.
@@ -1183,6 +1230,201 @@ Acceptance criteria:
 - Settings and Diagnostics clearly show telemetry state.
 - Enabling remote export requires a deliberate runtime setting change.
 
+### Phase 22: Native App Menu And Command Registry
+
+Purpose:
+
+- Add the desktop-standard menu/command surface that users expect on macOS, Windows, and Linux.
+
+Files:
+
+- `src/app_menu.rs`
+- `src/commands.rs`
+- `src/launcher.rs`
+- `src/app.rs`
+- `src/views/settings.rs`
+
+Dependencies:
+
+- GPUI/native app menu APIs.
+- `undo` for undo/redo command availability.
+
+Work:
+
+- Define one command registry shared by:
+  - native app menu
+  - command palette
+  - keyboard shortcuts
+  - toolbar/status actions
+- Add standard app commands:
+  - About
+  - Settings
+  - Diagnostics
+  - Notifications
+  - Copy Diagnostics
+  - Open Logs Folder
+  - Undo
+  - Redo
+  - Check Connectivity
+  - Quit
+- Add platform-specific menu placement where required:
+  - macOS application menu conventions
+  - Windows/Linux app menu fallback surface if native menu support is limited
+- Keep command enabled/disabled state derived from capabilities/session/task state.
+
+Acceptance criteria:
+
+- Standard commands are available from the launcher and native menu surface.
+- Undo/redo menu state tracks the command stack.
+- Disabled commands explain their reason in diagnostics or logs.
+
+### Phase 23: Lifecycle, Shutdown, And Crash Diagnostics
+
+Purpose:
+
+- Make startup, shutdown, background services, and crash reporting explicit.
+
+Files:
+
+- `src/lifecycle.rs`
+- `src/app.rs`
+- `src/tasks.rs`
+- `src/logging.rs`
+- `src/desktop_actions.rs`
+- `src/views/diagnostics.rs`
+
+Work:
+
+- Define startup stages:
+  - initialize tracing
+  - initialize paths
+  - load config
+  - open database
+  - initialize capabilities
+  - register notifications
+  - register tray/hotkeys/menu
+  - open first window
+- Define shutdown stages:
+  - stop accepting IPC
+  - cancel or drain background tasks
+  - stop file watchers
+  - unregister hotkeys
+  - persist state
+  - flush logs
+  - flush telemetry if enabled
+- Add a panic hook that records:
+  - app version
+  - build profile
+  - platform
+  - active route
+  - lifecycle stage
+  - redacted panic summary
+- Route lifecycle failures into capabilities, diagnostics, and the error surface.
+
+Policy:
+
+- Panic diagnostics must not include secrets, notification contents, raw file paths beyond app-owned paths, or raw deep-link payloads.
+- Shutdown should prefer graceful drains, then bounded cancellation.
+- Log guards and telemetry flushes must happen last.
+
+Acceptance criteria:
+
+- Diagnostics shows current lifecycle state and last startup/shutdown error.
+- A test panic path can be triggered in dev and appears in file logs.
+- App quit does not leave duplicate hotkey/tray/IPC/watch resources running.
+
+### Phase 24: Atomic Config Writes, Migrations, And Recovery
+
+Purpose:
+
+- Prevent corrupt config/state files and make upgrades safe.
+
+Files:
+
+- `Cargo.toml`
+- `src/app_state.rs`
+- `src/config_migrations.rs`
+- `src/paths.rs`
+- `src/views/diagnostics.rs`
+
+Selected dependencies:
+
+- `atomic-write-file`
+- `semver`
+- `tempfile` for tests
+
+Work:
+
+- Write JSON config/state through `atomic-write-file`.
+- Keep a version field in every persisted config/state file.
+- Add config migrations with explicit from/to versions.
+- Validate loaded config before applying it.
+- On corrupt config:
+  - move bad file to a quarantine path
+  - write a default replacement
+  - surface a warning in diagnostics/error surface
+- Use `semver` for app/config compatibility reporting.
+
+Acceptance criteria:
+
+- Interrupted writes do not leave half-written config.
+- Corrupt config is preserved for debugging and replaced safely.
+- Migration tests run against `tempfile` directories.
+- Diagnostics shows config version and last migration result.
+
+### Phase 25: Test Harness And QA Matrix
+
+Purpose:
+
+- Make this boilerplate testable as a desktop platform layer, not only as isolated Rust modules.
+
+Files:
+
+- `tests/`
+- `src/testing.rs`
+- `docs/desktop-boilerplate-features-plan.md`
+- `docs/qa-matrix.md`
+
+Selected dependency:
+
+- `tempfile`
+
+Work:
+
+- Add test helpers for:
+  - temporary app config/data/cache/log dirs
+  - fake capabilities
+  - fake notification backend
+  - fake secure storage backend
+  - fake telemetry sink
+  - fake connectivity probe
+- Add integration tests for:
+  - route parsing
+  - event queue ordering
+  - atomic config writes
+  - config migration/recovery
+  - database migration
+  - command undo/redo
+  - capability degradation
+- Add a manual QA matrix for:
+  - macOS app bundle launch
+  - raw binary launch
+  - notification permission/actions/reply
+  - deep-link open
+  - second-instance forwarding
+  - global shortcut registration/failure
+  - copy diagnostics
+  - open logs folder
+  - file/folder picker cancel/success
+  - connectivity probe success/failure
+  - secure storage unavailable path
+
+Acceptance criteria:
+
+- Tests can run without touching real user config/data directories.
+- Manual QA steps are explicit enough to reproduce platform bugs.
+- Every platform feature has at least one automated unit/integration test or a documented manual QA step.
+
 ## Cross-Cutting Design Rules
 
 - Prefer typed app routes over raw strings after parsing.
@@ -1201,13 +1443,14 @@ Implement these together:
 2. `AppRoute`
 3. app event bus
 4. persistent app state in user config dir
-5. route persistence
-6. first-run state
-7. command palette updated to emit routes
+5. atomic config writes/migrations/recovery
+6. route persistence
+7. first-run state
+8. command palette updated to emit routes
 
 Reason:
 
-- Every later feature needs stable IDs, typed errors, app paths, serialization, routes, events, and persisted state.
+- Every later feature needs stable IDs, typed errors, app paths, serialization, safe writes, migrations, routes, events, and persisted state.
 
 ## Recommended Second Implementation Batch
 
@@ -1218,10 +1461,12 @@ Implement:
 3. central error surface
 4. diagnostics page
 5. native desktop utility actions
+6. lifecycle/shutdown/crash diagnostics
+7. test harness and QA matrix
 
 Reason:
 
-- Platform-heavy work should not start until logs, capability status, diagnostics, and common desktop actions are available.
+- Platform-heavy work should not start until logs, capability status, diagnostics, lifecycle handling, test harnesses, and common desktop actions are available.
 
 ## Recommended Third Implementation Batch
 
@@ -1231,10 +1476,11 @@ Implement:
 2. second-instance IPC forwarding
 3. focused-window restore on forwarded links
 4. global shortcut settings
+5. native app menu and command registry
 
 Reason:
 
-- External entry points affect process lifetime and OS-global state, so they come after observability.
+- External entry points and native command surfaces affect process lifetime and OS-global state, so they come after observability.
 
 ## Recommended Fourth Implementation Batch
 
@@ -1286,6 +1532,7 @@ Group 1:
 2. event bus
 3. persistent app state
 4. first-run state
+5. config migrations/recovery
 
 Group 2:
 
@@ -1294,12 +1541,15 @@ Group 2:
 3. errors
 4. diagnostics
 5. desktop utility actions
+6. lifecycle/crash diagnostics
+7. test harness
 
 Group 3:
 
 1. single instance
 2. deep-link forwarding
 3. global shortcuts
+4. native app menu
 
 Group 4:
 
@@ -1342,6 +1592,10 @@ Feature-specific checks:
   - config file created in user config dir
   - corrupted config falls back safely
   - active route restores
+- Config writes/migrations:
+  - config writes are atomic
+  - corrupt config is quarantined
+  - migrations are tested with `tempfile`
 - Inbox:
   - records native notification attempts
   - unread count updates
@@ -1385,6 +1639,16 @@ Feature-specific checks:
   - remote export is disabled by default
   - runtime consent controls exporter activation
   - diagnostics distinguish local logs from telemetry export
+- Native app menu:
+  - standard commands are reachable from the native menu and launcher
+  - menu enabled/disabled state follows command state
+- Lifecycle/crash:
+  - shutdown flushes state, logs, and telemetry in order
+  - panic hook writes redacted diagnostics
+  - duplicate hotkey/tray/IPC/watch resources are not left running after quit
+- Test harness:
+  - tests use temporary app directories
+  - platform-sensitive behavior has automated coverage or a manual QA entry
 
 ## Final Product Decisions
 
@@ -1402,6 +1666,11 @@ Feature-specific checks:
 - Local database: SQLite via `rusqlite`.
 - Undo/redo: general app command system using `undo`.
 - Telemetry: compile `opentelemetry` / `tracing-opentelemetry`; remote export disabled until user/runtime consent.
+- Native menu: shared command registry drives launcher, menu, shortcuts, and status actions.
+- Config writes: JSON config/state uses `atomic-write-file`.
+- Version checks: app/config/database compatibility uses `semver`.
+- Test harness: filesystem tests use `tempfile` and never touch real user directories.
+- Lifecycle: shutdown coordinator owns task cancellation, watcher shutdown, hotkey unregister, state flush, log flush, and telemetry flush.
 
 ## References
 
@@ -1430,3 +1699,6 @@ Feature-specific checks:
 - `undoredo`: <https://docs.rs/undoredo/latest/undoredo/>
 - `opentelemetry`: <https://docs.rs/opentelemetry/latest/opentelemetry/>
 - `tracing-opentelemetry`: <https://docs.rs/tracing-opentelemetry/latest/tracing_opentelemetry/>
+- `atomic-write-file`: <https://docs.rs/crate/atomic-write-file/latest>
+- `tempfile`: <https://docs.rs/tempfile>
+- `semver`: <https://docs.rs/semver/latest/semver/>
