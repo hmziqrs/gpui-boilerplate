@@ -373,6 +373,8 @@ const canonical = new URL(Astro.url.pathname, SITE).toString();
           const group = new THREE.Group();
           scene.add(group);
           const ctx = { THREE, scene, camera, renderer, group };
+          let tickFn = null;
+          ctx.onTick = (fn) => { tickFn = fn; };
           builder(ctx);
           let lastW = 0, lastH = 0;
           function resize() {
@@ -399,8 +401,12 @@ const canonical = new URL(Astro.url.pathname, SITE).toString();
             requestAnimationFrame(loop);
             if (!visible) return;
             t += 0.016;
-            group.rotation.y = t * 0.1;
-            group.rotation.x = Math.sin(t * 0.06) * 0.12;
+            if (tickFn) {
+              tickFn(t, group);
+            } else {
+              group.rotation.y = t * 0.1;
+              group.rotation.x = Math.sin(t * 0.06) * 0.12;
+            }
             renderer.render(scene, camera);
           })();
         }
@@ -436,36 +442,106 @@ const canonical = new URL(Astro.url.pathname, SITE).toString();
           ctx.group.add(new ctx.THREE.Points(geo, mat));
         }
 
-        // ===== 1. HERO — Lattice cube with connected grid =====
+        // ===== 1. HERO — Lattice cube with build animation =====
         const heroHost = document.querySelector('[data-three="hero-glyph"]');
         if (heroHost)
           makeScene(heroHost, (ctx) => {
             ctx.camera.position.z = 6;
-            // Outer box wireframe
-            addWire(ctx, new ctx.THREE.BoxGeometry(3, 3, 3), AMBER_C, 0.2);
-            // Inner smaller box
-            addWire(ctx, new ctx.THREE.BoxGeometry(1.8, 1.8, 1.8), GOLD_C, 0.15);
-            // Diagonal cross-braces (corner to corner)
             const d = 1.5;
+            const items = [];
+
+            function track(mat, target, start, dur) {
+              mat.opacity = 0;
+              items.push({ mat, target, start, dur });
+            }
+
+            function dot(pos, color, size, target, start, dur) {
+              const geo = new ctx.THREE.BufferGeometry();
+              geo.setAttribute('position', new ctx.THREE.Float32BufferAttribute(pos, 3));
+              const mat = new ctx.THREE.PointsMaterial({
+                color, transparent: true, opacity: 0,
+                size, sizeAttenuation: true
+              });
+              ctx.group.add(new ctx.THREE.Points(geo, mat));
+              track(mat, target, start, dur);
+            }
+
+            function line(a, b, color, target, start, dur) {
+              const verts = [...a, ...b];
+              const geo = new ctx.THREE.BufferGeometry();
+              geo.setAttribute('position', new ctx.THREE.Float32BufferAttribute(verts, 3));
+              const mat = new ctx.THREE.LineBasicMaterial({ color, transparent: true, opacity: 0 });
+              ctx.group.add(new ctx.THREE.LineSegments(geo, mat));
+              track(mat, target, start, dur);
+            }
+
+            // Vertex dots (8 corners) — 0.0s to 0.8s
+            const c = [];
+            for (let x = -1; x <= 1; x += 2)
+              for (let y = -1; y <= 1; y += 2)
+                for (let z = -1; z <= 1; z += 2)
+                  c.push([x * d, y * d, z * d]);
+
+            c.forEach((pos, i) => {
+              dot(pos, GOLD_C, 0.1, 1.0, i * 0.1, 0.3);
+            });
+
+            // Cube edges (12) — 0.6s to 1.8s
+            const edgeIdx = [
+              [0,4],[4,5],[5,1],[1,0],
+              [2,6],[6,7],[7,3],[3,2],
+              [0,2],[4,6],[5,7],[1,3],
+            ];
+            edgeIdx.forEach(([a, b], i) => {
+              line(c[a], c[b], AMBER_C, 0.3, 0.6 + i * 0.1, 0.3);
+            });
+
+            // Mid-edge dots — 1.2s to 1.8s
+            const mids = [];
+            for (let a = -d; a <= d; a += 2 * d)
+              for (let b = -d; b <= d; b += 2 * d) {
+                mids.push([0, a, b], [a, 0, b], [a, b, 0]);
+              }
+            mids.forEach((pos, i) => {
+              dot(pos, AMBER_C, 0.05, 0.6, 1.2 + i * 0.025, 0.25);
+            });
+
+            // Diagonal cross-braces — 1.6s to 2.2s
             const braces = [
               [[-d,-d,-d],[d,d,d]], [[-d,-d,d],[d,d,-d]],
               [[-d,d,-d],[d,-d,d]], [[-d,d,d],[d,-d,-d]],
             ];
-            addLines(ctx, braces, AMBER_C, 0.1);
-            // Vertex dots
-            const verts = [];
-            for (let x = -1; x <= 1; x += 2)
-              for (let y = -1; y <= 1; y += 2)
-                for (let z = -1; z <= 1; z += 2)
-                  verts.push(x*d, y*d, z*d);
-            addDots(ctx, verts, GOLD_C, 1.0, 0.1);
-            // Mid-edge dots
-            const mids = [];
-            for (let a = -d; a <= d; a += 2*d)
-              for (let b = -d; b <= d; b += 2*d) {
-                mids.push(0,a,b, a,0,b, a,b,0);
+            braces.forEach(([a, b], i) => {
+              line(a, b, AMBER_C, 0.1, 1.6 + i * 0.15, 0.4);
+            });
+
+            // Inner wireframe box — 2.2s
+            const innerMat = new ctx.THREE.MeshBasicMaterial({
+              color: GOLD_C, wireframe: true, transparent: true, opacity: 0
+            });
+            ctx.group.add(new ctx.THREE.Mesh(new ctx.THREE.BoxGeometry(1.8, 1.8, 1.8), innerMat));
+            track(innerMat, 0.15, 2.2, 0.8);
+
+            // Outer wireframe box — 2.6s
+            const outerMat = new ctx.THREE.MeshBasicMaterial({
+              color: AMBER_C, wireframe: true, transparent: true, opacity: 0
+            });
+            ctx.group.add(new ctx.THREE.Mesh(new ctx.THREE.BoxGeometry(3, 3, 3), outerMat));
+            track(outerMat, 0.2, 2.6, 0.8);
+
+            const BUILD_END = 3.4;
+            ctx.onTick((t, group) => {
+              for (const item of items) {
+                const p = Math.max(0, Math.min(1, (t - item.start) / item.dur));
+                item.mat.opacity = item.target * (1 - Math.pow(1 - p, 3));
               }
-            addDots(ctx, mids, AMBER_C, 0.6, 0.05);
+              if (t > BUILD_END) {
+                const rt = t - BUILD_END;
+                const ease = Math.min(1, rt / 1.0);
+                group.rotation.y = rt * 0.1 * ease;
+                group.rotation.x = Math.sin(rt * 0.06) * 0.12 * ease;
+              }
+            });
           });
 
         // ===== 2. BENTO — DNA double helix with line segments =====
