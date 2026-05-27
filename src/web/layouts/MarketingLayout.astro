@@ -549,7 +549,6 @@ const canonical = new URL(Astro.url.pathname, SITE).toString();
               line(a, b, AMBER_C, 0.25, 4.8 + i * 0.45, 1.2);
             });
 
-            // Face diagonal crosses (6 faces × 2 = 12 lines) - shortened to avoid center intersection
             const faceCross = [
               [[-d,-d,d],[d,d,d]], [[-d,d,d],[d,-d,d]],       // front
               [[-d,-d,-d],[d,d,-d]], [[-d,d,-d],[d,-d,-d]],   // back
@@ -559,11 +558,7 @@ const canonical = new URL(Astro.url.pathname, SITE).toString();
               [[-d,-d,-d],[d,-d,d]], [[-d,-d,d],[d,-d,-d]],   // bottom
             ];
             faceCross.forEach(([a, b], i) => {
-              // Trim 12% from each end to avoid center intersection
-              const dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2];
-              const trimA = [a[0] + dx * 0.12, a[1] + dy * 0.12, a[2] + dz * 0.12];
-              const trimB = [b[0] - dx * 0.12, b[1] - dy * 0.12, b[2] - dz * 0.12];
-              line(trimA, trimB, AMBER_C, 0.25, 5.5 + i * 0.12, 0.8);
+              line(a, b, AMBER_C, 0.25, 5.5 + i * 0.12, 0.8);
             });
 
             const innerMat = new ctx.THREE.MeshBasicMaterial({
