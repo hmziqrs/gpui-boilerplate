@@ -1,0 +1,37 @@
+{
+  "name": "gpui-starter",
+  "version": "0.1.0",
+  "description": "A boilerplate for building desktop apps with GPUI",
+  "type": "module",
+  "scripts": {
+    "docs:dev": "astro dev",
+    "docs:build": "astro build",
+    "docs:preview": "astro preview"
+  },
+  "keywords": [
+    "gpui",
+    "rust",
+    "desktop",
+    "starter",
+    "boilerplate"
+  ],
+  "author": "hmziqrs",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hmziqrs/gpui-app.git"
+  },
+  "devDependencies": {
+    "@astrojs/starlight": "^0.39.2",
+    "@tailwindcss/vite": "^4.3.0",
+    "@types/node": "^20.0.0",
+    "astro": "^6.3.3",
+    "tailwindcss": "^4.3.0",
+    "three": "^0.184.0"
+  },
+  "dependencies": {
+    "@iconify-json/lucide": "^1.2.109",
+    "@iconify-json/simple-icons": "^1.2.83",
+    "astro-icon": "^1.1.5"
+  }
+}

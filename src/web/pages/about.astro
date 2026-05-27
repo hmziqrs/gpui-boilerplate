@@ -1,0 +1,166 @@
+---
+import MarketingLayout from '../layouts/MarketingLayout.astro';
+---
+
+<MarketingLayout title="About gpui-starter">
+
+  <!-- Hero -->
+  <section class="pt-32 pb-16 px-6">
+    <div class="max-w-3xl mx-auto text-center">
+      <span class="eyebrow">About</span>
+      <h1 class="mt-4 text-4xl sm:text-5xl font-extrabold tracking-tight leading-[1.1]">
+        A boilerplate.<br /><span class="gradient-text">Not a framework.</span>
+      </h1>
+      <p class="mt-6 text-lg text-text-dim max-w-lg mx-auto">
+        gpui-starter is a working multi-page desktop app you can clone, study,
+        and build on. It's not an abstraction layer — it's a starting point
+        with real, production-quality patterns.
+      </p>
+    </div>
+  </section>
+
+  <!-- Why it exists -->
+  <section class="py-12 px-6 reveal">
+    <div class="max-w-4xl mx-auto">
+      <div class="glass rounded-2xl p-8 md:p-10">
+        <h2 class="text-2xl font-bold mb-4">Why it exists</h2>
+        <p class="text-text-dim leading-relaxed">
+          GPUI is Zed Industries' GPU-accelerated UI framework for Rust. It's
+          fast, type-safe, and elegant — but it comes with no documentation on
+          how to structure a real app. gpui-starter fills that gap: a
+          batteries-included desktop application that shows you how to wire up
+          navigation, themes, i18n, forms, and system integration. Clone it,
+          run it, and start building.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Design principles -->
+  <section class="py-12 px-6 reveal">
+    <div class="max-w-4xl mx-auto">
+      <h2 class="text-2xl font-bold mb-6 text-center">Design principles</h2>
+      <div class="grid md:grid-cols-2 gap-5">
+        <div class="glass rounded-2xl p-6">
+          <div class="icon-box mb-3">
+            <svg class="w-5 h-5 text-amber" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>
+          </div>
+          <h3 class="text-lg font-bold mb-2">Real Rust code</h3>
+          <p class="text-sm text-text-dim">Not toy examples. Production patterns with proper error handling, entity lifecycle management, and render purity.</p>
+        </div>
+        <div class="glass rounded-2xl p-6">
+          <div class="icon-box mb-3">
+            <svg class="w-5 h-5 text-amber" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+          </div>
+          <h3 class="text-lg font-bold mb-2">Batteries included</h3>
+          <p class="text-sm text-text-dim">Themes, i18n, forms, launcher, tray icon — all working out of the box. No "add this yourself" placeholders.</p>
+        </div>
+        <div class="glass rounded-2xl p-6">
+          <div class="icon-box mb-3">
+            <svg class="w-5 h-5 text-amber" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+          </div>
+          <h3 class="text-lg font-bold mb-2">Production patterns</h3>
+          <p class="text-sm text-text-dim">Architecture and performance guides distilled from real GPUI development. State tiers, render purity, backpressure.</p>
+        </div>
+        <div class="glass rounded-2xl p-6">
+          <div class="icon-box mb-3">
+            <svg class="w-5 h-5 text-amber" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          </div>
+          <h3 class="text-lg font-bold mb-2">Open source</h3>
+          <p class="text-sm text-text-dim">MIT licensed. Fork it, customize it, ship it. No attribution required.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How it works -->
+  <section class="py-12 px-6 reveal">
+    <div class="max-w-3xl mx-auto">
+      <h2 class="text-2xl font-bold mb-6">How it works</h2>
+      <div class="space-y-4">
+        <div class="glass rounded-xl p-5 flex gap-4 items-start">
+          <span class="stat-num text-2xl font-extrabold shrink-0">1</span>
+          <div>
+            <h3 class="font-bold mb-1">AppRoot creates the layout</h3>
+            <p class="text-sm text-text-dim">A resizable sidebar + content area. Pages are enum variants rendered by the active selection.</p>
+          </div>
+        </div>
+        <div class="glass rounded-xl p-5 flex gap-4 items-start">
+          <span class="stat-num text-2xl font-extrabold shrink-0">2</span>
+          <div>
+            <h3 class="font-bold mb-1">Sidebar emits page changes</h3>
+            <p class="text-sm text-text-dim">Clicking a nav item updates the active page. The content area re-renders with the new view.</p>
+          </div>
+        </div>
+        <div class="glass rounded-xl p-5 flex gap-4 items-start">
+          <span class="stat-num text-2xl font-extrabold shrink-0">3</span>
+          <div>
+            <h3 class="font-bold mb-1">Launcher opens as a popup</h3>
+            <p class="text-sm text-text-dim">Cmd+K opens a floating PopUp window with search. Selections communicate back via a global.</p>
+          </div>
+        </div>
+        <div class="glass rounded-xl p-5 flex gap-4 items-start">
+          <span class="stat-num text-2xl font-extrabold shrink-0">4</span>
+          <div>
+            <h3 class="font-bold mb-1">Themes hot-reload from disk</h3>
+            <p class="text-sm text-text-dim">ThemeRegistry watches the themes/ directory. JSON changes are applied instantly with no restart.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Stats -->
+  <section class="py-12 px-6 reveal">
+    <div class="max-w-4xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-5 text-center">
+      <div class="glass rounded-xl p-5">
+        <div class="stat-num text-2xl font-extrabold">v0.1.0</div>
+        <div class="text-sm text-text-mute mt-1">Current version</div>
+      </div>
+      <div class="glass rounded-xl p-5">
+        <div class="stat-num text-2xl font-extrabold">21</div>
+        <div class="text-sm text-text-mute mt-1">Built-in themes</div>
+      </div>
+      <div class="glass rounded-xl p-5">
+        <div class="stat-num text-2xl font-extrabold">MIT</div>
+        <div class="text-sm text-text-mute mt-1">License</div>
+      </div>
+      <div class="glass rounded-xl p-5">
+        <div class="stat-num text-2xl font-extrabold">2024</div>
+        <div class="text-sm text-text-mute mt-1">Rust edition</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Author -->
+  <section class="py-12 px-6 reveal">
+    <div class="max-w-3xl mx-auto">
+      <div class="glass rounded-2xl p-8 flex flex-col md:flex-row gap-6 items-center md:items-start">
+        <div class="w-16 h-16 rounded-full bg-amber/20 flex items-center justify-center shrink-0">
+          <span class="text-2xl font-bold text-amber">H</span>
+        </div>
+        <div>
+          <h3 class="text-lg font-bold">hmziqrs</h3>
+          <p class="text-sm text-text-dim mt-1">
+            Building Rust tools and desktop apps.
+          </p>
+          <div class="flex gap-4 mt-3">
+            <a href="https://github.com/hmziqrs" target="_blank" rel="noopener" class="text-sm text-text-mute no-underline hover:text-amber transition-colors">GitHub</a>
+            <a href="https://hmziq.rs" target="_blank" rel="noopener" class="text-sm text-text-mute no-underline hover:text-amber transition-colors">hmziq.rs</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="py-16 px-6 reveal">
+    <div class="max-w-3xl mx-auto text-center">
+      <div class="flex flex-wrap justify-center gap-4">
+        <a href="/docs/" class="btn-primary">Get started</a>
+        <a href="https://github.com/hmziqrs/gpui-app" target="_blank" rel="noopener" class="btn-secondary">View on GitHub</a>
+      </div>
+    </div>
+  </section>
+
+</MarketingLayout>
