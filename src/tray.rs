@@ -7,7 +7,7 @@
 use std::time::Duration;
 
 use gpui::App;
-use tray_icon::{TrayIcon, TrayIconBuilder, TrayIconEvent};
+use tray_icon::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 
 // ---------------------------------------------------------------------------
 // Icon pixel data – a hand-crafted 36×36 RGBA magnifying-glass template image
@@ -96,29 +96,22 @@ pub fn setup(cx: &mut App) {
     Box::leak(Box::new(tray));
 
     // Poll click events from a background task and dispatch to main thread.
-    let bg = cx.background_executor().clone();
-    let async_cx = cx.to_async();
-
-    cx.background_executor()
-        .spawn(async move {
-            loop {
-                while let Ok(event) = TrayIconEvent::receiver().try_recv() {
-                    // Only act on left-click (ignore right-click / double-click)
-                    if matches!(
-                        event.click.button,
-                        tray_icon::MouseButton::Left
-                    ) && matches!(
-                        event.click.button_state,
-                        tray_icon::MouseButtonState::Up
-                    ) {
-                        async_cx
-                            .update(|cx| crate::launcher::open_launcher(cx))
-                            .ok();
-                    }
+    cx.spawn(async move |cx| {
+        let bg = cx.background_executor();
+        loop {
+            while let Ok(event) = TrayIconEvent::receiver().try_recv() {
+                if let TrayIconEvent::Click {
+                    button: MouseButton::Left,
+                    button_state: MouseButtonState::Up,
+                    ..
+                } = event
+                {
+                    cx.update(crate::launcher::open_launcher);
                 }
-                // Poll every 50 ms – low overhead, imperceptible latency
-                bg.timer(Duration::from_millis(50)).await;
             }
-        })
-        .detach();
+            // Poll every 50 ms – low overhead, imperceptible latency
+            bg.timer(Duration::from_millis(50)).await;
+        }
+    })
+    .detach();
 }
