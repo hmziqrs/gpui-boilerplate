@@ -35,7 +35,7 @@ Out of scope:
 
 ## Crate Research
 
-Recommended candidates:
+Chosen crates:
 
 - `serde`
   - Use for versioned app state, persisted inbox items, command metadata, diagnostics snapshots, and capability exports.
@@ -74,13 +74,13 @@ Recommended candidates:
   - Already in use for macOS global hotkey support.
   - Extend existing usage rather than replacing it.
 - `reqwest`
-  - Use only if we add a real network client or connectivity probe.
-  - Do not add it only to ping a URL unless network features are coming.
+  - Use for the concrete connectivity probe and future HTTP-backed desktop features.
+  - Keep the probe endpoint configurable and visible in Diagnostics.
 - `network-interface`
-  - Useful for diagnostics about local interfaces, not enough by itself for internet reachability.
+  - Use for local interface diagnostics alongside the `reqwest` reachability probe.
 - `accesskit`
-  - Useful if GPUI does not already expose the accessibility tree we need.
-  - First step should be auditing GPUI accessibility support before adding it directly.
+  - Use for the accessibility implementation/audit path.
+  - GPUI support should still be audited first, but AccessKit is the selected crate if direct integration is required.
 - `open`
   - Use for opening URLs, log folders, config folders, and support links in the system default app.
   - Prefer this over shelling out to `open`, `xdg-open`, or `start`.
@@ -91,20 +91,23 @@ Recommended candidates:
   - Use for clipboard text/image/file-path operations.
   - Useful for "copy diagnostics", "copy logs path", and later app-level clipboard actions.
 - `notify`
-  - Use only if we need file-system watching for config/log/import folders.
-  - Do not add it for static file pickers.
+  - Use for file-system watching of config/log/import folders.
+  - Do not use it for static file pickers.
 - `rusqlite`
-  - Use if we want a conventional local SQLite database for app data, inbox history, sync metadata, or cached records.
-  - Best fit when data is relational, inspectable, and likely to need migrations.
+  - Selected local database backend.
+  - Use SQLite for app data, inbox history, sync metadata, cached records, and inspectable migrations.
 - `redb`
-  - Use if we want a pure-Rust embedded key-value store.
-  - Better fit for simple local records and indexes when SQL is unnecessary.
-- `undo` / `undoredo`
-  - Optional helpers for undo/redo stacks.
-  - Prefer app-local command types first so UI labels, persistence, permissions, and side effects stay explicit.
+  - Not selected for this boilerplate.
+  - Keep it out unless a downstream product explicitly wants embedded key-value storage instead of SQLite.
+- `undo`
+  - Selected helper crate for undo/redo stack mechanics.
+  - Keep app-local command types for labels, persistence, permissions, and side effects.
+- `undoredo`
+  - Not selected for this boilerplate.
+  - Snapshot/delta undo is less explicit than command-based undo for desktop application actions.
 - `opentelemetry` / `tracing-opentelemetry`
-  - Use only behind an explicit telemetry feature flag.
-  - The boilerplate should define a telemetry boundary, not send events by default.
+  - Selected telemetry stack.
+  - Remote export remains controlled by runtime consent/settings, but the integration path is not deferred.
 
 App-local features with no crate required:
 
@@ -114,7 +117,7 @@ App-local features with no crate required:
 - background task registry
 - first-run state
 - diagnostics view
-- telemetry no-op sink
+- telemetry disabled/local/remote sinks
 - undo command registry
 - native utility service wrappers
 
@@ -237,7 +240,23 @@ Implement once the app shell is stable:
 
 Reason:
 
-- These features are important, but each has product/platform decisions that should not block the core boilerplate.
+- These features are important and the crate choices are now fixed; they come later only because they depend on the shell and observability layers.
+
+## Concrete Decisions
+
+- Deep-link parsing: use `url`.
+- App paths: use `directories`.
+- Single instance: use `single-instance` for the process guard and `interprocess` for forwarding payloads.
+- Persistent logs: use `tracing-appender`.
+- Secure storage: use `keyring`.
+- Global shortcuts: continue with `global-hotkey`.
+- Connectivity: use `reqwest` for reachability checks and `network-interface` for local interface diagnostics.
+- Accessibility: use `accesskit` as the selected accessibility integration crate after the GPUI audit identifies the exact bridge point.
+- Desktop actions: use `open`, `rfd`, `arboard`, and `notify`.
+- Local database: use `rusqlite`; do not use `redb` in this boilerplate.
+- Undo/redo: use `undo`; do not use `undoredo` in this boilerplate.
+- Telemetry: use `opentelemetry` and `tracing-opentelemetry`; remote export is runtime-consent controlled, not feature-deferred.
+- Serialization/errors/IDs/time: use `serde`, `serde_json`, `thiserror`, `uuid`, and `chrono`.
 
 ## Detailed Implementation Phases
 
@@ -822,26 +841,30 @@ Files:
 - `src/status_bar.rs`
 - `src/views/diagnostics.rs`
 
-Candidate dependencies:
+Selected dependencies:
 
-- `reqwest` if the app adds real HTTP/network features.
-- `network-interface` for diagnostics about local interfaces.
+- `reqwest`
+- `network-interface`
 
-Recommended v1:
+Implementation:
 
-- Define the state model without adding a network crate yet.
-- Add manual/demo transitions for `Unknown`, `Online`, and `Offline`.
+- Define the state model for `Unknown`, `Online`, `Offline`, and `CaptiveOrFiltered`.
+- Add a `reqwest` reachability probe with a configurable endpoint.
+- Add `network-interface` diagnostics for local interface names, addresses, and link-adjacent state where available.
 - Wire the state to status bar and diagnostics.
 
-Reason:
+Policy:
 
-- A boilerplate should not make external network calls by default unless the app has a real network feature.
+- The default probe endpoint must be explicit in Diagnostics.
+- Probe failures should degrade connectivity state, not create noisy user errors.
+- Do not send app/user identity with connectivity probes.
 
 Acceptance criteria:
 
 - Connectivity state is represented centrally.
 - Status bar and diagnostics can show it.
-- Future HTTP clients/background sync can update it.
+- A manual "Check connectivity now" action runs the `reqwest` probe.
+- Local interface diagnostics are visible.
 
 ### Phase 15: Secure Storage Boundary
 
@@ -867,8 +890,8 @@ Work:
   - `get_secret`
   - `delete_secret`
   - `is_available`
-- Implement a `keyring` backend behind feature/platform guards.
-- Add a no-op unavailable backend for unsupported/dev environments.
+- Implement a `keyring` backend.
+- Add an unavailable backend only for platforms where `keyring` cannot initialize at runtime.
 - Report capability status in Diagnostics.
 
 Policy:
@@ -880,7 +903,7 @@ Policy:
 Acceptance criteria:
 
 - Secure storage availability is visible.
-- Basic set/get/delete integration test can run behind an opt-in flag or mock backend.
+- Basic set/get/delete tests cover the mock backend and a manually run native backend check.
 - App state and logs do not contain secret material.
 
 ### Phase 16: Account / Session Placeholder
@@ -923,13 +946,15 @@ Files:
 - `docs/accessibility-checklist.md`
 - `src/views/diagnostics.rs`
 
-Candidate dependency:
+Selected dependency:
 
-- `accesskit`, only after auditing GPUI's current accessibility support.
+- `accesskit`
 
 Work:
 
 - Document keyboard navigation expectations.
+- Audit GPUI's current accessibility bridge points.
+- Add AccessKit integration where GPUI does not expose enough accessibility metadata.
 - Audit icon-only buttons for labels/tooltips.
 - Check focus order for:
   - sidebar
@@ -965,10 +990,7 @@ Recommended dependencies:
 - `open`
 - `arboard`
 - `rfd`
-
-Optional dependency:
-
-- `notify`, only for real file-system watching.
+- `notify`
 
 Work:
 
@@ -981,6 +1003,8 @@ Work:
   - `pick_file`
   - `pick_folder`
   - `save_file`
+  - `watch_path`
+  - `unwatch_path`
 - Report per-action availability in capabilities/diagnostics.
 - Route failures into the central error surface.
 - Keep dialogs behind user actions, never startup.
@@ -996,6 +1020,7 @@ Acceptance criteria:
 - Diagnostics can copy text through the shared clipboard service.
 - Logs/config folders can be opened through the shared opener service.
 - File/folder picker wrappers exist behind a small manual test surface.
+- Config/log/import path watchers can be registered and stopped cleanly.
 - Unsupported platform behavior is visible through capabilities.
 
 ### Phase 19: Local App Database Boundary
@@ -1011,16 +1036,19 @@ Files:
 - `src/app_state.rs`
 - `src/views/diagnostics.rs`
 
-Candidate dependencies:
+Selected dependency:
 
-- `rusqlite` for SQLite-backed relational local data.
-- `redb` for pure-Rust embedded key-value data.
+- `rusqlite`
 
-Recommended v1:
+Implementation:
 
-- Do not migrate current small app settings from JSON yet.
-- Define a storage boundary and diagnostics first.
-- Add a concrete database backend only when notification inbox history, task history, sync cache, or app records need it.
+- Add a SQLite database under the app data directory.
+- Keep simple user preferences in JSON config.
+- Store queryable app records in SQLite:
+  - notification inbox history
+  - background task history
+  - diagnostics snapshots
+  - future sync/cache records
 
 Work:
 
@@ -1030,19 +1058,16 @@ Work:
   - health check
   - compact/vacuum or maintenance
 - Keep app preferences in config JSON unless there is a clear query/migration need.
-- If choosing SQLite:
-  - use `rusqlite`
-  - store database under the app data directory
-  - include migration version in diagnostics
-- If choosing embedded KV:
-  - use `redb`
-  - define typed table/key namespaces
-  - avoid ad hoc serialized blobs without versioning
+- Use `rusqlite`.
+- Store database under the app data directory.
+- Include migration version in diagnostics.
+- Add a small migration runner with explicit schema versions.
+- Add a health check query.
 
 Acceptance criteria:
 
-- Diagnostics can show whether a database backend exists, where it lives, and which schema version is active.
-- App startup does not require a database unless a feature actually uses it.
+- Diagnostics shows the SQLite database path and active schema version.
+- App startup initializes or migrates the database.
 - Corrupted or incompatible local data fails visibly through the central error surface.
 
 ### Phase 20: Undoable App Commands
@@ -1059,15 +1084,14 @@ Files:
 - `src/status_bar.rs`
 - `src/views/settings.rs`
 
-Candidate dependencies:
+Selected dependency:
 
 - `undo`
-- `undoredo`
 
-Recommended v1:
+Implementation:
 
-- Start with app-local command structs and an in-memory undo stack.
-- Add a crate only if the command stack becomes repetitive or needs snapshot/delta helpers.
+- Use `undo` for undo/redo stack mechanics.
+- Keep app-local command structs for action labels, side effects, persistence, and permissions.
 
 Work:
 
@@ -1115,16 +1139,20 @@ Files:
 - `src/views/settings.rs`
 - `src/views/diagnostics.rs`
 
-Candidate dependencies:
+Selected dependencies:
 
 - `opentelemetry`
 - `tracing-opentelemetry`
 
-Recommended v1:
+Implementation:
 
-- Implement a no-op telemetry sink.
+- Implement telemetry sinks:
+  - disabled sink
+  - local diagnostics sink
+  - OpenTelemetry tracing sink
 - Keep local tracing/file logs separate from telemetry export.
-- Add remote telemetry crates only behind a feature flag and user-visible setting.
+- Compile the telemetry stack into the boilerplate.
+- Remote export is controlled by runtime consent and settings.
 
 Work:
 
@@ -1145,15 +1173,15 @@ Work:
 
 Policy:
 
-- Default must be disabled.
+- Default remote export must be disabled.
 - Never send notification contents, secrets, file paths, or raw deep-link payloads without product-specific review.
 - Keep correlation IDs allowed, but avoid stable user identity until an app explicitly opts in.
 
 Acceptance criteria:
 
-- Boilerplate builds with telemetry disabled.
+- Boilerplate builds with telemetry crates present.
 - Settings and Diagnostics clearly show telemetry state.
-- Enabling any remote exporter requires a deliberate feature/config change.
+- Enabling remote export requires a deliberate runtime setting change.
 
 ## Cross-Cutting Design Rules
 
@@ -1242,25 +1270,11 @@ Reason:
 Implement:
 
 1. local app database boundary
-2. telemetry no-op boundary
+2. telemetry boundary
 
 Reason:
 
-- These should remain optional until a real app feature requires durable queryable data or remote diagnostics.
-
-## Deferred / Feature-Flagged Additions
-
-Keep behind explicit product decisions:
-
-1. `rusqlite` or `redb` concrete backend
-2. `notify` file-system watching
-3. `reqwest` connectivity probe or HTTP client
-4. `opentelemetry` / `tracing-opentelemetry` exporter
-5. `accesskit` direct integration
-
-Reason:
-
-- These are available crates, but adding them too early increases binary/platform surface without proving the app needs them.
+- These are heavier foundations, but the crate choices are settled: SQLite via `rusqlite` and telemetry via `opentelemetry` / `tracing-opentelemetry`.
 
 ## Original Feature Groups
 
@@ -1347,38 +1361,47 @@ Feature-specific checks:
   - copy diagnostics uses the shared clipboard wrapper
   - open logs/config folder uses the shared opener wrapper
   - picker cancellation is handled without error noise
+  - file watchers can be registered and stopped cleanly
+- Connectivity:
+  - manual reachability probe updates state
+  - local interface diagnostics render
+  - probe endpoint is visible in Diagnostics
 - Secure storage:
   - unavailable backend is handled without panic
   - no secret values appear in logs or app state
+- Accessibility:
+  - keyboard path exists for new controls
+  - AccessKit integration status is visible in Diagnostics
 - Local database:
-  - database backend is optional at startup
-  - schema/version diagnostics are visible when enabled
+  - SQLite database initializes at startup
+  - schema/version diagnostics are visible
   - migration failure routes to the central error surface
 - Undo/redo:
   - undoable commands expose labels
   - irreversible operations are not added to the undo stack
   - rejected commands surface structured errors
 - Telemetry:
-  - disabled by default
-  - remote exporter code is feature-gated
+  - crates are compiled in
+  - remote export is disabled by default
+  - runtime consent controls exporter activation
   - diagnostics distinguish local logs from telemetry export
 
-## Open Questions
+## Final Product Decisions
 
-- Should Diagnostics be a real sidebar page or a Settings subpage?
-- Should notification inbox be a sidebar page, a bell popover, or both?
-- Which crate should we use for single-instance IPC?
-- Do we want the custom URL scheme to be `gpui-starter://` or a product-neutral placeholder?
-- Should first-run be enabled in the boilerplate by default, or only as an optional example?
-- Should file logging be enabled in release by default?
-- Should secure storage be compiled by default or behind a feature flag?
-- Should connectivity ever make a real network request in boilerplate mode?
-- Does GPUI already provide enough accessibility support, or do we need direct AccessKit integration?
-- Should file/folder pickers be exposed in Settings only as a manual test surface, or hidden until a product feature needs them?
-- Should clipboard support include file paths/images in the boilerplate, or text-only diagnostics copy for v1?
-- Should the first database backend be SQLite via `rusqlite`, embedded KV via `redb`, or no backend until a feature requires it?
-- Should undo/redo be limited to settings/demo state, or should it become a general app command system immediately?
-- Should telemetry remain a no-op boundary forever in the boilerplate, with real exporters only in downstream apps?
+- Diagnostics location: real sidebar page, also linked from Settings.
+- Notification inbox: bell popover for quick access plus a full Notifications page.
+- Single-instance IPC: `single-instance` for lock, `interprocess` for payload forwarding.
+- URL scheme: keep `gpui-starter://` until the boilerplate is renamed.
+- First-run: enabled by default.
+- File logging: enabled in dev and release, with user-visible log path and retention policy.
+- Secure storage: compiled by default with `keyring`.
+- Connectivity: real manual `reqwest` probe plus `network-interface` diagnostics.
+- Accessibility: use GPUI metadata where available and `accesskit` where the bridge is missing.
+- File/folder pickers: exposed as shared desktop actions with a small Settings/Diagnostics manual test surface.
+- Clipboard: support text first for Diagnostics and paths where the platform backend supports it.
+- Local database: SQLite via `rusqlite`.
+- Undo/redo: general app command system using `undo`.
+- Telemetry: compile `opentelemetry` / `tracing-opentelemetry`; remote export disabled until user/runtime consent.
 
 ## References
 
