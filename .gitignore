@@ -1,1 +1,10 @@
 target
+
+# Website
+node_modules
+dist
+.astro
+
+# Environment
+.env
+.env.*

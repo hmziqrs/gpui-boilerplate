@@ -1,0 +1,412 @@
+---
+/** Animated CSS mockup of the gpui-starter desktop app. Cycles through 5 frames. */
+---
+
+<div class="desktop-mockup mx-auto max-w-2xl">
+  <!-- Title bar -->
+  <div class="mock-titlebar">
+    <div class="flex items-center gap-1.5">
+      <span class="mock-dot" style="background:#ff5f57"></span>
+      <span class="mock-dot" style="background:#febc2e"></span>
+      <span class="mock-dot" style="background:#28c840"></span>
+    </div>
+    <span class="mock-title">gpui-starter</span>
+    <div class="w-12"></div>
+  </div>
+
+  <!-- Window body -->
+  <div class="mock-body">
+    <!-- Sidebar -->
+    <div class="mock-sidebar">
+      <div class="sidebar-item active" data-frame-active="1">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1l7 6v8H1V7z"/></svg>
+        <span data-label="home">Home</span>
+      </div>
+      <div class="sidebar-item" data-frame-active="2,3,4,5">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><rect x="2" y="2" width="12" height="12" rx="2"/></svg>
+        <span data-label="form">Form</span>
+      </div>
+      <div class="sidebar-item" data-frame-active="2,3,4,5">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="8" r="6"/></svg>
+        <span data-label="settings">Settings</span>
+      </div>
+      <div class="sidebar-item">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 2a5 5 0 110 10A5 5 0 018 3z"/></svg>
+        <span data-label="about">About</span>
+      </div>
+    </div>
+
+    <!-- Content area -->
+    <div class="mock-content">
+      <!-- Frame 1: Home -->
+      <div class="app-frame">
+        <div class="frame-header">Welcome to GPUI Starter</div>
+        <div class="frame-sub">A boilerplate for building desktop apps with GPUI</div>
+        <div class="frame-stats">
+          <div class="stat-pill"><span class="stat-val">21</span> themes</div>
+          <div class="stat-pill"><span class="stat-val">6+</span> languages</div>
+          <div class="stat-pill"><span class="stat-val">100%</span> Rust</div>
+        </div>
+      </div>
+
+      <!-- Frame 2: Theme picker -->
+      <div class="app-frame">
+        <div class="frame-header">Settings</div>
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-[10px] text-text-dim">Dark Mode</span>
+          <div class="toggle-on"><div class="toggle-knob"></div></div>
+        </div>
+        <div class="text-[10px] text-text-dim mb-2">Theme</div>
+        <div class="flex flex-wrap gap-1.5">
+          <span class="theme-tag active-tag">Catppuccin</span>
+          <span class="theme-tag">Tokyo Night</span>
+          <span class="theme-tag">Dracula</span>
+          <span class="theme-tag">One Dark</span>
+        </div>
+      </div>
+
+      <!-- Frame 3: Command Launcher -->
+      <div class="app-frame">
+        <div class="cmd-bar">
+          <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor" class="text-amber"><circle cx="7" cy="7" r="5.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M11 11l3.5 3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          <span class="text-text-dim text-[10px]">Search pages and commands...</span>
+          <span class="cursor-blink"></span>
+        </div>
+        <div class="cmd-results">
+          <div class="cmd-row active">
+            <div class="cmd-icon">⌂</div>
+            <div><div class="text-[10px] font-medium text-text">Home</div><div class="text-[8px] text-text-mute">Open the Home page</div></div>
+          </div>
+          <div class="cmd-row">
+            <div class="cmd-icon dim">☆</div>
+            <div><div class="text-[10px] text-text-dim">Form</div><div class="text-[8px] text-text-mute">Open the Form page</div></div>
+          </div>
+          <div class="cmd-row">
+            <div class="cmd-icon dim">⚙</div>
+            <div><div class="text-[10px] text-text-dim">Settings</div><div class="text-[8px] text-text-mute">Open settings</div></div>
+          </div>
+        </div>
+        <div class="cmd-footer">
+          <span>↑↓ navigate</span><span>↵ open</span><span>esc close</span>
+        </div>
+      </div>
+
+      <!-- Frame 4: i18n -->
+      <div class="app-frame">
+        <div class="frame-header">设置</div>
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-[10px] text-text-dim">深色模式</span>
+          <div class="toggle-on"><div class="toggle-knob"></div></div>
+        </div>
+        <div class="text-[10px] text-text-dim mb-2">语言</div>
+        <div class="flex flex-wrap gap-1.5">
+          <span class="theme-tag">English</span>
+          <span class="theme-tag active-tag">简体中文</span>
+        </div>
+      </div>
+
+      <!-- Frame 5: Form validation -->
+      <div class="app-frame">
+        <div class="frame-header">Create Account</div>
+        <div class="space-y-2.5">
+          <div>
+            <div class="field-label">Full Name</div>
+            <div class="field-box">John Doe</div>
+          </div>
+          <div>
+            <div class="field-label">Email</div>
+            <div class="field-box error">invalid</div>
+            <div class="field-error">Enter a valid email address</div>
+          </div>
+          <div>
+            <div class="field-label">Password</div>
+            <div class="field-box">••••</div>
+          </div>
+          <div class="flex gap-2 pt-1">
+            <span class="btn-sm-primary">Create Account</span>
+            <span class="btn-sm-ghost">Reset</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .desktop-mockup {
+    border-radius: 12px;
+    border: 1px solid rgba(245, 158, 11, 0.15);
+    background: rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+    backdrop-filter: blur(16px);
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5), 0 0 80px rgba(245, 158, 11, 0.05);
+  }
+
+  .mock-titlebar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: rgba(0, 0, 0, 0.4);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .mock-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+
+  .mock-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.5);
+    letter-spacing: 0.02em;
+  }
+
+  .mock-body {
+    display: flex;
+    min-height: 260px;
+  }
+
+  .mock-sidebar {
+    width: 72px;
+    padding: 12px 8px;
+    background: rgba(0, 0, 0, 0.3);
+    border-right: 1px solid rgba(255, 255, 255, 0.04);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.35);
+    transition: all 0.2s;
+  }
+
+  .sidebar-item.active {
+    color: #f59e0b;
+    background: rgba(245, 158, 11, 0.1);
+  }
+
+  .mock-content {
+    flex: 1;
+    padding: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .app-frame {
+    position: absolute;
+    inset: 0;
+    padding: 16px;
+    opacity: 0;
+    transform: translateY(6px);
+    animation: app-frame-cycle 25s ease-in-out infinite;
+  }
+
+  .app-frame:nth-child(1) { animation-delay: 0s; }
+  .app-frame:nth-child(2) { animation-delay: 5s; }
+  .app-frame:nth-child(3) { animation-delay: 10s; }
+  .app-frame:nth-child(4) { animation-delay: 15s; }
+  .app-frame:nth-child(5) { animation-delay: 20s; }
+
+  @keyframes app-frame-cycle {
+    0%, 16%   { opacity: 0; transform: translateY(6px); }
+    18%, 34%  { opacity: 1; transform: translateY(0); }
+    36%, 100% { opacity: 0; transform: translateY(-6px); }
+  }
+
+  .frame-header {
+    font-size: 13px;
+    font-weight: 700;
+    color: #e4e4e7;
+    margin-bottom: 10px;
+  }
+
+  .frame-sub {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.4);
+    margin-bottom: 14px;
+  }
+
+  .frame-stats {
+    display: flex;
+    gap: 8px;
+  }
+
+  .stat-pill {
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.4);
+    padding: 4px 10px;
+    border-radius: 20px;
+    background: rgba(245, 158, 11, 0.06);
+    border: 1px solid rgba(245, 158, 11, 0.12);
+  }
+
+  .stat-val {
+    color: #f59e0b;
+    font-weight: 700;
+  }
+
+  .toggle-on {
+    width: 28px;
+    height: 14px;
+    border-radius: 999px;
+    background: #f59e0b;
+    position: relative;
+  }
+
+  .toggle-knob {
+    position: absolute;
+    right: 2px;
+    top: 2px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #0c0c0f;
+  }
+
+  .theme-tag {
+    font-size: 9px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.4);
+  }
+
+  .active-tag {
+    border-color: #f59e0b;
+    color: #f59e0b;
+    background: rgba(245, 158, 11, 0.08);
+  }
+
+  .cmd-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border: 1px solid rgba(245, 158, 11, 0.25);
+    border-radius: 8px;
+    background: rgba(10, 10, 16, 0.9);
+    margin-bottom: 6px;
+  }
+
+  .cmd-results {
+    padding: 4px;
+    margin-bottom: 6px;
+  }
+
+  .cmd-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 6px;
+  }
+
+  .cmd-row.active {
+    background: rgba(245, 158, 11, 0.08);
+  }
+
+  .cmd-icon {
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    background: rgba(245, 158, 11, 0.15);
+    font-size: 10px;
+    color: #f59e0b;
+  }
+
+  .cmd-icon.dim {
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(255, 255, 255, 0.3);
+  }
+
+  .cmd-footer {
+    display: flex;
+    gap: 14px;
+    padding: 6px 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.04);
+    font-size: 8px;
+    color: rgba(255, 255, 255, 0.25);
+  }
+
+  .field-label {
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.4);
+    margin-bottom: 3px;
+  }
+
+  .field-box {
+    height: 22px;
+    border-radius: 5px;
+    border: 1px solid rgba(245, 158, 11, 0.15);
+    background: rgba(0, 0, 0, 0.25);
+    padding: 0 8px;
+    display: flex;
+    align-items: center;
+    font-size: 10px;
+    color: #e4e4e7;
+  }
+
+  .field-box.error {
+    border-color: rgba(248, 113, 113, 0.4);
+  }
+
+  .field-error {
+    font-size: 8px;
+    color: #f87171;
+    margin-top: 2px;
+  }
+
+  .btn-sm-primary {
+    font-size: 9px;
+    padding: 4px 10px;
+    border-radius: 5px;
+    background: #f59e0b;
+    color: #0c0c0f;
+    font-weight: 700;
+  }
+
+  .btn-sm-ghost {
+    font-size: 9px;
+    padding: 4px 10px;
+    border-radius: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.4);
+  }
+
+  .cursor-blink {
+    display: inline-block;
+    width: 1px;
+    height: 12px;
+    background: #f59e0b;
+    margin-left: auto;
+    animation: blink 1s steps(1) infinite;
+  }
+
+  @keyframes blink {
+    50% { opacity: 0; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .app-frame {
+      animation: none;
+      position: relative;
+      opacity: 1;
+      transform: none;
+    }
+    .app-frame:nth-child(n+2) { display: none; }
+  }
+</style>

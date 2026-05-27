@@ -1,0 +1,684 @@
+---
+interface Props {
+  title?: string;
+  description?: string;
+  ogType?: 'website' | 'article';
+  noindex?: boolean;
+}
+
+const SITE = 'https://gpui-starter.hmziq.xyz';
+const DEFAULT_TITLE = 'gpui-starter: Build desktop apps with GPUI';
+const DEFAULT_DESC =
+  'A production-ready Rust boilerplate for GPUI desktop apps. Themes, i18n, forms, command launcher, and more.';
+
+const {
+  title = DEFAULT_TITLE,
+  description = DEFAULT_DESC,
+  ogType = 'website',
+  noindex = false,
+} = Astro.props;
+
+const canonical = new URL(Astro.url.pathname, SITE).toString();
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    {noindex && <meta name="robots" content="noindex,nofollow" />}
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content={ogType} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:site_name" content="gpui-starter" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <style is:global>
+      @import '../styles/globals.css';
+    </style>
+  </head>
+  <body class="bg-bg text-text">
+    <div class="scroll-progress" id="scroll-progress"></div>
+    <div class="grid-overlay"></div>
+    <div class="grain"></div>
+
+    <header class="nav-bar fixed top-0 left-0 right-0 z-50">
+      <div
+        class="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between"
+      >
+        <a href="/" class="flex items-center gap-3 no-underline">
+          <svg
+            class="brand-mark"
+            viewBox="0 0 64 64"
+            fill="none"
+            width="36"
+            height="36"
+            aria-hidden="true"
+          >
+            <defs>
+              <linearGradient id="brandGrad" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#fde68a"></stop>
+                <stop offset="1" stop-color="#d97706"></stop>
+              </linearGradient>
+            </defs>
+            <rect
+              x="10"
+              y="22"
+              width="36"
+              height="28"
+              rx="5"
+              fill="#0c0c0f"
+              stroke="#fbbf24"
+              stroke-opacity=".5"></rect>
+            <rect
+              x="14"
+              y="18"
+              width="36"
+              height="28"
+              rx="5"
+              fill="#0c0c0f"
+              stroke="#d97706"
+              stroke-opacity=".6"></rect>
+            <rect
+              x="18"
+              y="14"
+              width="36"
+              height="28"
+              rx="5"
+              fill="#0c0c0f"
+              stroke="#f59e0b"
+              stroke-opacity=".7"></rect>
+            <rect
+              x="20"
+              y="16"
+              width="28"
+              height="22"
+              rx="5"
+              fill="url(#brandGrad)"></rect>
+            <rect
+              x="26"
+              y="22"
+              width="16"
+              height="3"
+              rx="1.5"
+              fill="#0c0c0f"
+              opacity="0.6"></rect>
+            <rect
+              x="26"
+              y="28"
+              width="10"
+              height="3"
+              rx="1.5"
+              fill="#0c0c0f"
+              opacity="0.4"></rect>
+          </svg>
+          <span class="text-[15px] font-bold tracking-tight text-text"
+            >gpui<span class="text-text-mute">-</span><span class="text-amber"
+              >starter</span
+            ></span
+          >
+        </a>
+        <nav class="flex items-center gap-1">
+          <a
+            href="/docs/"
+            class="px-3 py-2 text-sm text-text-dim no-underline hover:text-amber rounded-md transition-colors"
+            >Docs</a
+          >
+          <a
+            href="/docs/themes/"
+            class="px-3 py-2 text-sm text-text-dim no-underline hover:text-amber rounded-md transition-colors"
+            >Themes</a
+          >
+          <a
+            href="/docs/architecture/"
+            class="px-3 py-2 text-sm text-text-dim no-underline hover:text-amber rounded-md transition-colors"
+            >Architecture</a
+          >
+          <a
+            href="/about/"
+            class="px-3 py-2 text-sm text-text-dim no-underline hover:text-amber rounded-md transition-colors"
+            >About</a
+          >
+          <a
+            href="https://github.com/hmziqrs/gpui-app"
+            target="_blank"
+            rel="noopener"
+            class="ml-2 px-3 py-2 text-sm text-text-dim no-underline hover:text-amber rounded-md transition-colors inline-flex items-center gap-1.5"
+          >
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              aria-hidden="true"
+              ><path
+                d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.4-4-1.4-.5-1.4-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2 0 1.9 1.2 1.9 1.2 1.1 1.9 2.9 1.4 3.6 1 .1-.8.4-1.4.8-1.7-2.7-.3-5.5-1.3-5.5-6 0-1.3.5-2.4 1.2-3.2-.1-.3-.6-1.5.1-3.2 0 0 1-.3 3.3 1.2A11.5 11.5 0 0 1 12 5.8c1 0 2 .1 3 .4 2.3-1.5 3.3-1.2 3.3-1.2.7 1.7.2 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.7-5.5 6 .5.4.9 1.1.9 2.3v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 .3"
+              ></path></svg
+            >
+            GitHub
+          </a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="relative z-10">
+      <slot />
+    </main>
+
+    <footer
+      class="relative z-10 mt-32 pt-16 pb-10 px-6 border-t border-edge bg-gradient-to-b from-transparent to-amber/[0.025]"
+    >
+      <div class="max-w-6xl mx-auto">
+        <div
+          class="grid grid-cols-2 md:grid-cols-[1.4fr_1fr_1fr_1fr] gap-10 md:gap-12"
+        >
+          <div class="col-span-2 md:col-span-1">
+            <div class="flex items-center gap-2 mb-3">
+              <span class="inline-block w-2 h-2 rounded-full bg-amber"></span>
+              <span class="text-base font-bold">gpui-starter</span>
+            </div>
+            <p class="text-sm text-text-mute max-w-xs leading-relaxed">
+              A production-ready Rust boilerplate for building desktop
+              applications with GPUI. Themes, i18n, form validation, and a
+              command launcher out of the box.
+            </p>
+          </div>
+          <div>
+            <h4
+              class="text-xs font-semibold uppercase tracking-wider text-text mb-3"
+            >
+              Features
+            </h4>
+            <ul class="space-y-2 text-sm list-none p-0 m-0">
+              <li>
+                <a
+                  href="/docs/getting-started/"
+                  class="text-text-mute no-underline hover:text-amber"
+                  >Get started</a
+                >
+              </li>
+              <li>
+                <a
+                  href="/docs/themes/"
+                  class="text-text-mute no-underline hover:text-amber"
+                  >Themes</a
+                >
+              </li>
+              <li>
+                <a
+                  href="/docs/i18n/"
+                  class="text-text-mute no-underline hover:text-amber"
+                  >i18n</a
+                >
+              </li>
+              <li>
+                <a
+                  href="/docs/forms/"
+                  class="text-text-mute no-underline hover:text-amber"
+                  >Forms</a
+                >
+              </li>
+            </ul>
+          </div>
+          <div>
+            <h4
+              class="text-xs font-semibold uppercase tracking-wider text-text mb-3"
+            >
+              Resources
+            </h4>
+            <ul class="space-y-2 text-sm list-none p-0 m-0">
+              <li>
+                <a
+                  href="/docs/architecture/"
+                  class="text-text-mute no-underline hover:text-amber"
+                  >Architecture</a
+                >
+              </li>
+              <li>
+                <a
+                  href="/docs/performance/"
+                  class="text-text-mute no-underline hover:text-amber"
+                  >Performance</a
+                >
+              </li>
+              <li>
+                <a
+                  href="https://github.com/hmziqrs/gpui-app"
+                  target="_blank"
+                  rel="noopener"
+                  class="text-text-mute no-underline hover:text-amber"
+                  >GitHub</a
+                >
+              </li>
+              <li>
+                <a
+                  href="https://github.com/hmziqrs/gpui-app/issues"
+                  target="_blank"
+                  rel="noopener"
+                  class="text-text-mute no-underline hover:text-amber"
+                  >Issues</a
+                >
+              </li>
+            </ul>
+          </div>
+          <div>
+            <h4
+              class="text-xs font-semibold uppercase tracking-wider text-text mb-3"
+            >
+              Legal
+            </h4>
+            <ul class="space-y-2 text-sm list-none p-0 m-0">
+              <li>
+                <a
+                  href="/about/"
+                  class="text-text-mute no-underline hover:text-amber"
+                  >About</a
+                >
+              </li>
+              <li>
+                <a
+                  href="/privacy/"
+                  class="text-text-mute no-underline hover:text-amber"
+                  >Privacy policy</a
+                >
+              </li>
+              <li>
+                <a
+                  href="/terms/"
+                  class="text-text-mute no-underline hover:text-amber"
+                  >Terms of use</a
+                >
+              </li>
+              <li>
+                <a
+                  href="https://github.com/hmziqrs/gpui-app/blob/master/LICENSE"
+                  target="_blank"
+                  rel="noopener"
+                  class="text-text-mute no-underline hover:text-amber"
+                  >MIT license</a
+                >
+              </li>
+            </ul>
+          </div>
+        </div>
+        <div class="divider-glow mt-12 mb-6"></div>
+        <div
+          class="flex flex-wrap justify-between items-center gap-3 text-xs text-text-mute"
+        >
+          <span>MIT licensed &copy; 2026 hmziqrs</span>
+          <div class="flex items-center gap-4">
+            <a
+              href="/sitemap-index.xml"
+              class="hover:text-amber transition-colors no-underline text-text-mute"
+              >Sitemap</a
+            >
+            <span class="font-mono">v0.1.0</span>
+          </div>
+        </div>
+      </div>
+    </footer>
+
+    <script>
+      // ---------- Scroll progress ----------
+      const progress = document.getElementById('scroll-progress');
+      function updateProgress() {
+        const h = document.documentElement;
+        const pct = (h.scrollTop / (h.scrollHeight - h.clientHeight)) * 100;
+        if (progress) progress.style.width = pct + '%';
+      }
+      window.addEventListener('scroll', updateProgress, { passive: true });
+
+      // ---------- Reveal on scroll ----------
+      const io = new IntersectionObserver(
+        (entries) => {
+          for (const e of entries) {
+            if (e.isIntersecting) {
+              e.target.classList.add('visible');
+              io.unobserve(e.target);
+            }
+          }
+        },
+        { threshold: 0, rootMargin: '0px 0px -10% 0px' }
+      );
+      document.querySelectorAll('.reveal').forEach((el) => io.observe(el));
+
+      // ---------- Three.js: wireframe geometry structures ----------
+      async function initThree() {
+        const THREE = await import('three');
+        const AMBER_C = 0xf59e0b;
+        const GOLD_C  = 0xfbbf24;
+        const DEEP_C  = 0xd97706;
+
+        function makeScene(host, builder) {
+          const canvas = document.createElement('canvas');
+          canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;display:block;';
+          host.appendChild(canvas);
+          const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+          renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+          const scene = new THREE.Scene();
+          const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
+          camera.position.z = 5;
+          const group = new THREE.Group();
+          scene.add(group);
+          const ctx = { THREE, scene, camera, renderer, group };
+          builder(ctx);
+          let lastW = 0, lastH = 0;
+          function resize() {
+            const w = host.clientWidth || 1;
+            const h = host.clientHeight || 1;
+            if (w === lastW && h === lastH) return;
+            lastW = w; lastH = h;
+            renderer.setSize(w, h, false);
+            canvas.width = w * renderer.getPixelRatio();
+            canvas.height = h * renderer.getPixelRatio();
+            canvas.style.width = w + 'px';
+            canvas.style.height = h + 'px';
+            camera.aspect = w / h;
+            camera.updateProjectionMatrix();
+          }
+          resize();
+          const ro = new ResizeObserver(resize);
+          ro.observe(host);
+          setTimeout(() => ro.disconnect(), 600);
+          let visible = true;
+          new IntersectionObserver(([e]) => { visible = e.isIntersecting; }, { threshold: 0.05 }).observe(host);
+          let t = 0;
+          (function loop() {
+            requestAnimationFrame(loop);
+            if (!visible) return;
+            t += 0.016;
+            group.rotation.y = t * 0.1;
+            group.rotation.x = Math.sin(t * 0.06) * 0.12;
+            renderer.render(scene, camera);
+          })();
+        }
+
+        // Helper: add a wireframe mesh with amber lines
+        function addWire(ctx, geometry, color, opacity) {
+          const mat = new ctx.THREE.MeshBasicMaterial({
+            color, wireframe: true, transparent: true, opacity: opacity || 0.35
+          });
+          const mesh = new ctx.THREE.Mesh(geometry, mat);
+          ctx.group.add(mesh);
+          return mesh;
+        }
+
+        // Helper: add a LineSegments from pairs of [x,y,z]
+        function addLines(ctx, pairs, color, opacity) {
+          const verts = [];
+          pairs.forEach(([a, b]) => { verts.push(...a, ...b); });
+          const geo = new ctx.THREE.BufferGeometry();
+          geo.setAttribute('position', new ctx.THREE.Float32BufferAttribute(verts, 3));
+          const mat = new ctx.THREE.LineBasicMaterial({ color, transparent: true, opacity: opacity || 0.4 });
+          ctx.group.add(new ctx.THREE.LineSegments(geo, mat));
+        }
+
+        // Helper: add small dots at positions
+        function addDots(ctx, positions, color, opacity, size) {
+          const geo = new ctx.THREE.BufferGeometry();
+          geo.setAttribute('position', new ctx.THREE.Float32BufferAttribute(positions, 3));
+          const mat = new ctx.THREE.PointsMaterial({
+            color, transparent: true, opacity: opacity || 0.8,
+            size: size || 0.06, sizeAttenuation: true
+          });
+          ctx.group.add(new ctx.THREE.Points(geo, mat));
+        }
+
+        // ===== 1. HERO — Lattice cube with connected grid =====
+        const heroHost = document.querySelector('[data-three="hero-glyph"]');
+        if (heroHost)
+          makeScene(heroHost, (ctx) => {
+            ctx.camera.position.z = 6;
+            // Outer box wireframe
+            addWire(ctx, new ctx.THREE.BoxGeometry(3, 3, 3), AMBER_C, 0.2);
+            // Inner smaller box
+            addWire(ctx, new ctx.THREE.BoxGeometry(1.8, 1.8, 1.8), GOLD_C, 0.15);
+            // Diagonal cross-braces (corner to corner)
+            const d = 1.5;
+            const braces = [
+              [[-d,-d,-d],[d,d,d]], [[-d,-d,d],[d,d,-d]],
+              [[-d,d,-d],[d,-d,d]], [[-d,d,d],[d,-d,-d]],
+            ];
+            addLines(ctx, braces, AMBER_C, 0.1);
+            // Vertex dots
+            const verts = [];
+            for (let x = -1; x <= 1; x += 2)
+              for (let y = -1; y <= 1; y += 2)
+                for (let z = -1; z <= 1; z += 2)
+                  verts.push(x*d, y*d, z*d);
+            addDots(ctx, verts, GOLD_C, 1.0, 0.1);
+            // Mid-edge dots
+            const mids = [];
+            for (let a = -d; a <= d; a += 2*d)
+              for (let b = -d; b <= d; b += 2*d) {
+                mids.push(0,a,b, a,0,b, a,b,0);
+              }
+            addDots(ctx, mids, AMBER_C, 0.6, 0.05);
+          });
+
+        // ===== 2. BENTO — DNA double helix with line segments =====
+        const bentoHost = document.querySelector('[data-three="bento-orb"]');
+        if (bentoHost)
+          makeScene(bentoHost, (ctx) => {
+            ctx.camera.position.z = 5;
+            const turns = 3;
+            const steps = 80;
+            const radius = 1.0;
+            const height = 4.0;
+
+            // Build strand paths
+            const strandA = [], strandB = [];
+            for (let i = 0; i <= steps; i++) {
+              const prog = i / steps;
+              const angle = prog * turns * Math.PI * 2;
+              const y = (prog - 0.5) * height;
+              strandA.push([radius * Math.cos(angle), y, radius * Math.sin(angle)]);
+              strandB.push([radius * Math.cos(angle + Math.PI), y, radius * Math.sin(angle + Math.PI)]);
+            }
+            // Draw strands as connected line segments
+            const pairsA = [], pairsB = [];
+            for (let i = 0; i < steps; i++) {
+              pairsA.push([strandA[i], strandA[i+1]]);
+              pairsB.push([strandB[i], strandB[i+1]]);
+            }
+            addLines(ctx, pairsA, AMBER_C, 0.7);
+            addLines(ctx, pairsB, GOLD_C, 0.5);
+
+            // Rungs connecting the two strands
+            const rungs = [];
+            for (let i = 0; i < steps; i += 6) {
+              rungs.push([strandA[i], strandB[i]]);
+            }
+            addLines(ctx, rungs, DEEP_C, 0.3);
+
+            // Dots at strand vertices
+            const dots = [];
+            strandA.forEach(p => dots.push(...p));
+            addDots(ctx, dots, AMBER_C, 0.9, 0.06);
+            const dotsB = [];
+            strandB.forEach(p => dotsB.push(...p));
+            addDots(ctx, dotsB, GOLD_C, 0.7, 0.05);
+          });
+
+        // ===== 3. FEATURE CARDS — 5 distinct wireframe structures =====
+        const structures = {
+          // Brick/block wall — rectangles stacked in brick pattern
+          dodec(ctx) {
+            const lines = [];
+            const rows = 5, cols = 4;
+            const bw = 0.4, bh = 0.3, gap = 0.05;
+            for (let r = 0; r < rows; r++) {
+              const off = (r % 2) * (bw + gap) * 0.5;
+              for (let c = 0; c < cols; c++) {
+                const x = c * (bw + gap) + off - cols * (bw + gap) * 0.5;
+                const y = r * (bh + gap) - rows * (bh + gap) * 0.5;
+                // Rectangle edges
+                const tl = [x, y + bh, 0], tr = [x + bw, y + bh, 0];
+                const bl = [x, y, 0], br = [x + bw, y, 0];
+                lines.push([tl,tr],[tr,br],[br,bl],[bl,tl]);
+              }
+            }
+            addLines(ctx, lines, AMBER_C, 0.5);
+            // Corner dots
+            const dots = [];
+            for (let r = 0; r < rows; r++) {
+              const off = (r % 2) * (bw + gap) * 0.5;
+              for (let c = 0; c < cols; c++) {
+                const x = c * (bw + gap) + off - cols * (bw + gap) * 0.5;
+                const y = r * (bh + gap) - rows * (bh + gap) * 0.5;
+                dots.push(x, y+bh, 0, x+bw, y+bh, 0, x+bw, y, 0, x, y, 0);
+              }
+            }
+            addDots(ctx, dots, GOLD_C, 0.9, 0.05);
+          },
+
+          // Pyramid — stacked square rings
+          octa(ctx) {
+            const lines = [];
+            const layers = 7;
+            const base = 1.4;
+            for (let i = 0; i < layers; i++) {
+              const frac = i / (layers - 1);
+              const s = base * (1 - frac * 0.85);
+              const y = (frac - 0.5) * 2.8;
+              const h = s / 2;
+              const c = [[-h,y,-h],[h,y,-h],[h,y,h],[-h,y,h]];
+              for (let j = 0; j < 4; j++) lines.push([c[j], c[(j+1)%4]]);
+              // Verticals to next layer
+              if (i < layers - 1) {
+                const ns = base * (1 - (frac + 1/(layers-1)) * 0.85);
+                const ny = ((frac + 1/(layers-1)) - 0.5) * 2.8;
+                const nh = ns / 2;
+                const nc = [[-nh,ny,-nh],[nh,ny,-nh],[nh,ny,nh],[-nh,ny,nh]];
+                for (let j = 0; j < 4; j++) lines.push([c[j], nc[j]]);
+              }
+            }
+            addLines(ctx, lines, AMBER_C, 0.5);
+            // Apex dot
+            addDots(ctx, [0, 1.2, 0], GOLD_C, 1.0, 0.08);
+          },
+
+          // Atom — nucleus + 3 tilted orbital rings
+          ico(ctx) {
+            // 3 orbital rings using Line with circular points
+            const ringLines = [];
+            for (let ri = 0; ri < 3; ri++) {
+              const r = 0.7 + ri * 0.25;
+              const steps = 48;
+              const tiltX = ri === 0 ? 0 : ri === 1 ? Math.PI/3 : -Math.PI/4;
+              const tiltZ = ri === 0 ? 0 : ri === 1 ? 0 : Math.PI/6;
+              for (let i = 0; i < steps; i++) {
+                const a1 = (i / steps) * Math.PI * 2;
+                const a2 = ((i+1) / steps) * Math.PI * 2;
+                let p1 = [r*Math.cos(a1), 0, r*Math.sin(a1)];
+                let p2 = [r*Math.cos(a2), 0, r*Math.sin(a2)];
+                // Apply tilts
+                [p1, p2].forEach(p => {
+                  let [x,y,z] = p;
+                  let ny = y*Math.cos(tiltX) - z*Math.sin(tiltX);
+                  let nz = y*Math.sin(tiltX) + z*Math.cos(tiltX);
+                  y = ny; z = nz;
+                  let nx = x*Math.cos(tiltZ) - y*Math.sin(tiltZ);
+                  ny = x*Math.sin(tiltZ) + y*Math.cos(tiltZ);
+                  p[0]=nx; p[1]=ny; p[2]=nz;
+                });
+                ringLines.push([p1, p2]);
+              }
+            }
+            addLines(ctx, ringLines, AMBER_C, 0.4);
+            // Nucleus
+            addWire(ctx, new ctx.THREE.OctahedronGeometry(0.12), GOLD_C, 0.8);
+            addDots(ctx, [0,0,0], GOLD_C, 1.0, 0.08);
+          },
+
+          // Crystal — octahedron with visible edges
+          tetra(ctx) {
+            const v = [
+              [0,1.2,0],[0,-1.2,0],[1.2,0,0],[-1.2,0,0],[0,0,1.2],[0,0,-1.2]
+            ];
+            const edges = [
+              [0,2],[0,3],[0,4],[0,5],
+              [1,2],[1,3],[1,4],[1,5],
+              [2,4],[4,3],[3,5],[5,2]
+            ];
+            const lines = edges.map(([a,b]) => [v[a], v[b]]);
+            addLines(ctx, lines, AMBER_C, 0.6);
+            // Vertex dots
+            const dots = [];
+            v.forEach(p => dots.push(...p));
+            addDots(ctx, dots, GOLD_C, 1.0, 0.07);
+          },
+
+          // Tower — vertical scaffold with cross-bracing
+          box(ctx) {
+            const lines = [];
+            const floors = 6;
+            const w = 0.5, fh = 0.35;
+            for (let f = 0; f < floors; f++) {
+              const y = (f - floors/2 + 0.5) * fh;
+              const hw = w/2 * (1 - f * 0.02);
+              const c = [[-hw,y,-hw],[hw,y,-hw],[hw,y,hw],[-hw,y,hw]];
+              // Floor ring
+              for (let j = 0; j < 4; j++) lines.push([c[j], c[(j+1)%4]]);
+              // Verticals
+              if (f < floors - 1) {
+                const ny = y + fh;
+                const nhw = w/2 * (1 - (f+1) * 0.02);
+                const nc = [[-nhw,ny,-nhw],[nhw,ny,-nhw],[nhw,ny,nhw],[-nhw,ny,nhw]];
+                for (let j = 0; j < 4; j++) lines.push([c[j], nc[j]]);
+                // Cross bracing on each face
+                for (let j = 0; j < 4; j++) {
+                  lines.push([c[j], nc[(j+1)%4]]);
+                }
+              }
+            }
+            addLines(ctx, lines, AMBER_C, 0.5);
+            // Corner dots
+            const dots = [];
+            for (let f = 0; f < floors; f++) {
+              const y = (f - floors/2 + 0.5) * fh;
+              const hw = w/2 * (1 - f * 0.02);
+              dots.push(-hw,y,-hw, hw,y,-hw, hw,y,hw, -hw,y,hw);
+            }
+            addDots(ctx, dots, GOLD_C, 0.8, 0.04);
+          },
+        };
+
+        document.querySelectorAll('[data-three="feature-shape"]').forEach((host) => {
+          const kind = host.getAttribute('data-shape') || 'ico';
+          makeScene(host, (ctx) => {
+            ctx.camera.position.z = 3.6;
+            (structures[kind] || structures.ico)(ctx);
+          });
+        });
+
+        // ===== 4. CTA — Icosahedron wireframe with inner sphere =====
+        const ctaHost = document.querySelector('[data-three="cta-shape"]');
+        if (ctaHost)
+          makeScene(ctaHost, (ctx) => {
+            ctx.camera.position.z = 5.5;
+            // Outer icosahedron wireframe
+            addWire(ctx, new ctx.THREE.IcosahedronGeometry(2.0, 0), AMBER_C, 0.25);
+            // Inner dodecahedron
+            addWire(ctx, new ctx.THREE.DodecahedronGeometry(1.0, 0), GOLD_C, 0.15);
+            // Vertex dots on outer
+            const icoGeo = new ctx.THREE.IcosahedronGeometry(2.0, 0);
+            addDots(ctx, icoGeo.attributes.position.array, GOLD_C, 0.9, 0.08);
+          });
+      }
+      initThree();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,249 @@
+---
+import MarketingLayout from '../layouts/MarketingLayout.astro';
+import AppPreview from '../components/AppPreview.astro';
+---
+
+<MarketingLayout title="gpui-starter: Build desktop apps with GPUI">
+
+  <!-- ==================== HERO ==================== -->
+  <section class="relative pt-32 pb-20 px-6 overflow-hidden">
+    <div class="max-w-6xl mx-auto grid lg:grid-cols-2 gap-12 items-center">
+      <div>
+        <span class="eyebrow">Rust + GPUI</span>
+        <h1 class="mt-6 text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.1]">
+          Build desktop apps<br /><span class="gradient-text">with GPUI.</span>
+        </h1>
+        <p class="mt-6 text-lg text-text-dim max-w-lg leading-relaxed">
+          A production-ready Rust boilerplate for GPUI. Multi-page navigation,
+          command launcher, 21 built-in themes, i18n, form validation, and a
+          macOS tray icon — all out of the box.
+        </p>
+        <div class="mt-4 flex flex-wrap gap-3 text-sm text-text-dim">
+          <span class="flex items-center gap-1.5">
+            <svg class="w-4 h-4 text-amber" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>
+            Rust + GPUI
+          </span>
+          <span class="flex items-center gap-1.5">
+            <svg class="w-4 h-4 text-amber" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>
+            21 themes included
+          </span>
+          <span class="flex items-center gap-1.5">
+            <svg class="w-4 h-4 text-amber" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>
+            i18n ready (en + zh-CN)
+          </span>
+        </div>
+        <div class="mt-8 flex flex-wrap gap-4">
+          <a href="/docs/" class="btn-primary">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
+            Get Started
+          </a>
+          <a href="https://github.com/hmziqrs/gpui-app" target="_blank" rel="noopener" class="btn-secondary">
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.4-4-1.4-.5-1.4-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2 0 1.9 1.2 1.9 1.2 1.1 1.9 2.9 1.4 3.6 1 .1-.8.4-1.4.8-1.7-2.7-.3-5.5-1.3-5.5-6 0-1.3.5-2.4 1.2-3.2-.1-.3-.6-1.5.1-3.2 0 0 1-.3 3.3 1.2A11.5 11.5 0 0 1 12 5.8c1 0 2 .1 3 .4 2.3-1.5 3.3-1.2 3.3-1.2.7 1.7.2 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.7-5.5 6 .5.4.9 1.1.9 2.3v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 .3" /></svg>
+            GitHub
+          </a>
+        </div>
+      </div>
+
+      <!-- Hero 3D glyph + desktop window -->
+      <div class="relative h-[420px] overflow-hidden" data-three="hero-glyph">
+        <div class="absolute inset-0 flex items-center justify-center z-10">
+          <div class="w-[340px] rounded-xl border border-[rgba(245,158,11,0.15)] bg-[rgba(8,8,13,0.88)] backdrop-blur-xl shadow-[0_30px_80px_-20px_rgba(0,0,0,0.6),0_0_80px_-30px_rgba(245,158,11,0.2)] overflow-hidden">
+            <!-- Title bar -->
+            <div class="flex items-center gap-2 px-3 py-2 border-b border-[rgba(245,158,11,0.08)] bg-[rgba(0,0,0,0.3)]">
+              <span class="w-2.5 h-2.5 rounded-full bg-[#ff5f57]"></span>
+              <span class="w-2.5 h-2.5 rounded-full bg-[#febc2e]"></span>
+              <span class="w-2.5 h-2.5 rounded-full bg-[#28c840]"></span>
+              <span class="ml-2 text-[10px] font-mono text-text-mute">gpui-starter</span>
+            </div>
+            <!-- App body -->
+            <div class="flex h-[200px]">
+              <!-- Sidebar -->
+              <div class="w-14 border-r border-[rgba(245,158,11,0.08)] flex flex-col gap-1 p-1.5 text-[9px]">
+                <div class="flex items-center gap-1 py-1 px-1.5 rounded bg-[rgba(245,158,11,0.12)] text-amber font-bold">
+                  <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0v-6" /></svg>
+                  Home
+                </div>
+                <div class="flex items-center gap-1 py-1 px-1.5 text-text-mute">
+                  <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                  Form
+                </div>
+                <div class="flex items-center gap-1 py-1 px-1.5 text-text-mute">
+                  <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                  Set.
+                </div>
+                <div class="flex items-center gap-1 py-1 px-1.5 text-text-mute">
+                  <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  About
+                </div>
+              </div>
+              <!-- Content -->
+              <div class="flex-1 flex flex-col items-center justify-center p-4 text-center">
+                <div class="text-sm font-bold text-text mb-1">Welcome to GPUI Starter</div>
+                <div class="text-[10px] text-text-mute mb-3">A boilerplate for building desktop apps with GPUI</div>
+                <div class="px-3 py-1 rounded bg-amber text-bg text-[10px] font-bold">Get Started</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== INSTALL ==================== -->
+  <section class="py-20 px-6 reveal">
+    <div class="max-w-3xl mx-auto text-center">
+      <span class="eyebrow">Quick Start</span>
+      <h2 class="mt-4 text-3xl font-bold">Clone. Build. Run.</h2>
+      <div class="mt-8 terminal text-left">
+        <div class="terminal-header">
+          <span class="terminal-dot" style="background:#ff5f57"></span>
+          <span class="terminal-dot" style="background:#febc2e"></span>
+          <span class="terminal-dot" style="background:#28c840"></span>
+        </div>
+        <div class="terminal-body">
+          <div><span class="term-prompt">$ </span><span class="term-cmd">git</span> <span class="term-arg">clone</span> <span class="term-str">https://github.com/hmziqrs/gpui-app.git</span></div>
+          <div><span class="term-prompt">$ </span><span class="term-cmd">cd</span> <span class="term-str">gpui-app</span></div>
+          <div><span class="term-prompt">$ </span><span class="term-cmd">cargo run</span><span class="cursor-blink"></span></div>
+        </div>
+      </div>
+      <p class="mt-4 text-sm text-text-mute">
+        Requires Rust 1.85+. macOS (native), Linux (X11 + Wayland), Windows.
+      </p>
+    </div>
+  </section>
+
+  <!-- ==================== STATS ==================== -->
+  <section class="py-12 px-6">
+    <div class="max-w-4xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-6 text-center reveal">
+      <div>
+        <div class="stat-num text-3xl font-extrabold">21</div>
+        <div class="text-sm text-text-mute mt-1">Built-in themes</div>
+      </div>
+      <div>
+        <div class="stat-num text-3xl font-extrabold">4</div>
+        <div class="text-sm text-text-mute mt-1">App pages</div>
+      </div>
+      <div>
+        <div class="stat-num text-3xl font-extrabold">2</div>
+        <div class="text-sm text-text-mute mt-1">Languages</div>
+      </div>
+      <div>
+        <div class="stat-num text-3xl font-extrabold">Cmd+K</div>
+        <div class="text-sm text-text-mute mt-1">Command launcher</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== FEATURES ==================== -->
+  <section class="py-20 px-6">
+    <div class="max-w-6xl mx-auto">
+      <div class="text-center mb-12 reveal">
+        <span class="eyebrow">Features</span>
+        <h2 class="mt-4 text-3xl font-bold">
+          Everything you need to <span class="gradient-text">ship fast</span>
+        </h2>
+      </div>
+
+      <div class="grid md:grid-cols-3 gap-5 reveal">
+        <!-- Big card: Multi-page app with 3D orb -->
+        <div class="glass rounded-2xl p-8 md:col-span-2 md:row-span-2 relative overflow-hidden" data-three="bento-orb">
+          <div class="relative z-10">
+            <div class="icon-box mb-4">
+              <svg class="w-5 h-5 text-amber" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
+            </div>
+            <h3 class="text-2xl font-bold mb-3">Multi-page architecture</h3>
+            <p class="text-text-dim max-w-md leading-relaxed">
+              Resizable sidebar with navigation. Four pages out of the box:
+              Home, Form, Settings, and About. Add new pages by implementing
+              a single Render trait.
+            </p>
+          </div>
+        </div>
+
+        <!-- Theme system with wireframe dodecahedron -->
+        <div class="glass rounded-2xl p-6 relative overflow-hidden" data-three="feature-shape" data-shape="dodec">
+          <div class="relative z-10">
+            <div class="icon-box mb-3">
+              <svg class="w-5 h-5 text-amber" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" /></svg>
+            </div>
+            <h3 class="text-lg font-bold mb-2">21 themes</h3>
+            <p class="text-sm text-text-dim">Catppuccin, Dracula, Tokyo Night, and 18 more. Hot-reload from JSON files. Runtime light/dark switching.</p>
+          </div>
+        </div>
+
+        <!-- i18n with wireframe octahedron -->
+        <div class="glass rounded-2xl p-6 relative overflow-hidden" data-three="feature-shape" data-shape="octa">
+          <div class="relative z-10">
+            <div class="icon-box mb-3">
+              <svg class="w-5 h-5 text-amber" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" /></svg>
+            </div>
+            <h3 class="text-lg font-bold mb-2">Internationalization</h3>
+            <p class="text-sm text-text-dim">es-fluent with English + Simplified Chinese. Fluent message format for forms and UI. Easy to add languages.</p>
+          </div>
+        </div>
+
+        <!-- Command Launcher with wireframe icosahedron -->
+        <div class="glass rounded-2xl p-6 relative overflow-hidden" data-three="feature-shape" data-shape="ico">
+          <div class="relative z-10">
+            <div class="icon-box mb-3">
+              <svg class="w-5 h-5 text-amber" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+            </div>
+            <h3 class="text-lg font-bold mb-2">Command launcher</h3>
+            <p class="text-sm text-text-dim">Cmd+K spotlight search. Navigate pages, switch themes. Floating popup window with keyboard navigation.</p>
+          </div>
+        </div>
+
+        <!-- Form validation with wireframe tetrahedron -->
+        <div class="glass rounded-2xl p-6 relative overflow-hidden" data-three="feature-shape" data-shape="tetra">
+          <div class="relative z-10">
+            <div class="icon-box mb-3">
+              <svg class="w-5 h-5 text-amber" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+            </div>
+            <h3 class="text-lg font-bold mb-2">Form validation</h3>
+            <p class="text-sm text-text-dim">gpui-form + koruma validators. Email, phone, URL, non-empty. Fluent-localized error messages.</p>
+          </div>
+        </div>
+
+        <!-- macOS tray with wireframe box -->
+        <div class="glass rounded-2xl p-6 relative overflow-hidden" data-three="feature-shape" data-shape="box">
+          <div class="relative z-10">
+            <div class="icon-box mb-3">
+              <svg class="w-5 h-5 text-amber" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+            </div>
+            <h3 class="text-lg font-bold mb-2">macOS tray icon</h3>
+            <p class="text-sm text-text-dim">Menu bar icon with click-to-open launcher. Option+Space global hotkey. Platform-specific when needed.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== APP PREVIEW ==================== -->
+  <section class="py-20 px-6 reveal">
+    <div class="max-w-4xl mx-auto text-center">
+      <span class="eyebrow">See it in action</span>
+      <h2 class="mt-4 text-3xl font-bold mb-8">The app, animated</h2>
+      <AppPreview />
+    </div>
+  </section>
+
+  <!-- ==================== CTA ==================== -->
+  <section class="py-20 px-6 reveal">
+    <div class="max-w-3xl mx-auto text-center relative h-[300px] overflow-hidden" data-three="cta-shape">
+      <div class="relative z-10">
+        <h2 class="text-4xl font-extrabold mb-4">
+          Build your next <span class="gradient-text">desktop app.</span>
+        </h2>
+        <p class="text-text-dim mb-8 max-w-md mx-auto">
+          Start with a working multi-page app. Customize the pages, add your
+          features, ship your product.
+        </p>
+        <div class="flex flex-wrap justify-center gap-4">
+          <a href="/docs/" class="btn-primary">Read the docs</a>
+          <a href="https://github.com/hmziqrs/gpui-app" target="_blank" rel="noopener" class="btn-secondary">View on GitHub</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</MarketingLayout>
