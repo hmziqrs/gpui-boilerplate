@@ -161,6 +161,8 @@ impl Render for Launcher {
 
         v_flex()
             .size_full()
+            .rounded(theme.radius_lg)
+            .overflow_hidden()
             .key_context(CONTEXT)
             .track_focus(&self.focus_handle)
             .focus_trap("launcher", &self.focus_handle)
@@ -190,7 +192,7 @@ impl Render for Launcher {
                     .py(px(12.))
                     .gap_3()
                     .border_b_1()
-                    .border_color(theme.border)
+                    .border_color(theme.border.opacity(0.3))
                     .items_center()
                     .child(
                         Icon::new(IconName::Search)
@@ -227,8 +229,10 @@ impl Render for Launcher {
                             .items_center()
                             .rounded(theme.radius)
                             .cursor_pointer()
-                            .when(is_selected, |el| el.bg(theme.list_active))
-                            .when(!is_selected, |el| el.hover(|el| el.bg(theme.list_hover)))
+                            .when(is_selected, |el| el.bg(theme.list_active.opacity(0.6)))
+                            .when(!is_selected, |el| {
+                                el.hover(|el| el.bg(theme.list_hover.opacity(0.4)))
+                            })
                             .on_mouse_move(cx.listener(move |this, _, _, cx| {
                                 if this.selected_index != display_ix {
                                     this.selected_index = display_ix;
@@ -247,7 +251,7 @@ impl Render for Launcher {
                                     .items_center()
                                     .justify_center()
                                     .rounded(theme.radius)
-                                    .bg(theme.secondary)
+                                    .bg(theme.secondary.opacity(0.4))
                                     .child(Icon::new(icon).small()),
                             )
                             .child(
@@ -407,6 +411,7 @@ pub fn open_launcher(cx: &mut App) {
             kind: WindowKind::PopUp,
             is_movable: true,
             is_resizable: false,
+            window_background: WindowBackgroundAppearance::Blurred,
             window_min_size: Some(gpui::Size {
                 width: window_w,
                 height: window_h,
@@ -417,7 +422,7 @@ pub fn open_launcher(cx: &mut App) {
         let window = cx
             .open_window(options, |window, cx| {
                 let launcher_root = cx.new(|cx| LauncherRoot::new(window, cx));
-                cx.new(|cx| Root::new(launcher_root, window, cx))
+                cx.new(|cx| Root::new(launcher_root, window, cx).bg(transparent_black()))
             })
             .expect("failed to open launcher window");
 
