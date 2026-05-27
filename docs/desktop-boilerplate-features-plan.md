@@ -19,6 +19,7 @@ This plan focuses on reusable app behavior:
 - global shortcut settings
 - connectivity state
 - secure storage boundary
+- native desktop utility actions
 - accessibility checklist
 - local app database boundary
 - undoable app commands
@@ -30,13 +31,27 @@ Out of scope:
 - installers
 - auto-update implementation
 - document/file-editor workflows
-- arbitrary file/folder picker demos unless a feature needs them
 - remote push notifications
 
 ## Crate Research
 
 Recommended candidates:
 
+- `serde`
+  - Use for versioned app state, persisted inbox items, command metadata, diagnostics snapshots, and capability exports.
+  - Already a standard dependency class for Rust desktop state boundaries.
+- `serde_json`
+  - Use for human-inspectable app config/state files.
+  - Prefer this for v1 settings before adding a database.
+- `thiserror`
+  - Use for typed app/domain errors.
+  - Prefer this over unstructured string errors for the central error surface.
+- `uuid`
+  - Use for notification IDs, task IDs, command IDs, event correlation IDs, and diagnostics correlation.
+  - Enable generation features only where needed.
+- `chrono`
+  - Use for user-facing timestamps in inbox, task history, diagnostics, and logs exports.
+  - Keep serialized formats explicit.
 - `url`
   - Use for parsing custom deep-link URLs into structured data.
   - Prefer this over ad hoc string splitting once routes have query parameters.
@@ -66,6 +81,18 @@ Recommended candidates:
 - `accesskit`
   - Useful if GPUI does not already expose the accessibility tree we need.
   - First step should be auditing GPUI accessibility support before adding it directly.
+- `open`
+  - Use for opening URLs, log folders, config folders, and support links in the system default app.
+  - Prefer this over shelling out to `open`, `xdg-open`, or `start`.
+- `rfd`
+  - Use for cross-platform native file/folder pickers and simple native message dialogs.
+  - Keep picker demos small; the reusable part is the platform service wrapper.
+- `arboard`
+  - Use for clipboard text/image/file-path operations.
+  - Useful for "copy diagnostics", "copy logs path", and later app-level clipboard actions.
+- `notify`
+  - Use only if we need file-system watching for config/log/import folders.
+  - Do not add it for static file pickers.
 - `rusqlite`
   - Use if we want a conventional local SQLite database for app data, inbox history, sync metadata, or cached records.
   - Best fit when data is relational, inspectable, and likely to need migrations.
@@ -89,6 +116,7 @@ App-local features with no crate required:
 - diagnostics view
 - telemetry no-op sink
 - undo command registry
+- native utility service wrappers
 
 ## Current Architecture Audit
 
@@ -113,11 +141,142 @@ App-local features with no crate required:
 - Background work has no shared model for progress, cancellation, and errors.
 - There is no status bar or activity area for ambient app state.
 - Diagnostics are spread across logs and Settings text, not exposed as a coherent view.
+- Common desktop utilities like copy diagnostics, open logs folder, and native file/folder pickers do not have a shared service boundary.
 - There is no local database boundary for apps that outgrow JSON state.
 - There is no undo/redo command model for user-facing state changes.
 - There is no telemetry boundary that makes analytics/diagnostics export explicitly opt-in.
 
-## Implementation Order
+## Dependency-Ordered Roadmap
+
+This is the order to implement the plan in practice. It is stricter than the feature list because later features should not invent their own state, errors, logging, or capability reporting.
+
+### Layer 0: Shared Primitives
+
+Implement first:
+
+1. `src/ids.rs`
+2. `src/time.rs`
+3. `src/errors.rs`
+4. `src/paths.rs`
+5. common serialization helpers
+
+Crates:
+
+- `serde`
+- `serde_json`
+- `thiserror`
+- `uuid`
+- `chrono`
+- `directories`
+
+Reason:
+
+- Routes, events, notifications, tasks, diagnostics, and persistence all need stable IDs, timestamps, typed errors, and OS-correct paths.
+
+### Layer 1: Routing, Events, And State
+
+Implement next:
+
+1. Phase 1: app routes and deep links
+2. Phase 2: central app event bus
+3. Phase 3: persistent app state in user config directory
+4. Phase 10: first-run/setup state
+
+Reason:
+
+- Everything user-visible should move through typed routes/events and survive relaunch before platform features are layered on.
+
+### Layer 2: Observability And Support Surface
+
+Implement before advanced features:
+
+1. Phase 11: file logging
+2. Phase 12: runtime capabilities registry
+3. Phase 8: central error surface
+4. Phase 9: diagnostics view
+5. Phase 18: native desktop utility actions
+
+Reason:
+
+- Deep links, notifications, shortcuts, secure storage, and IPC are platform-sensitive. They need logs, capability status, diagnostics, and common utility actions before debugging becomes expensive.
+
+### Layer 3: External Entry Points
+
+Implement after observability:
+
+1. Phase 4: single-instance and deep-link forwarding
+2. Phase 13: global shortcut settings
+
+Reason:
+
+- These features affect process lifetime and global OS state. They should be capability-gated and diagnosable before they are enabled broadly.
+
+### Layer 4: User-Facing App Shell
+
+Implement after routes/events/state exist:
+
+1. Phase 5: internal notification inbox
+2. Phase 6: background task manager
+3. Phase 7: status bar/activity area
+4. Phase 20: undoable app commands
+
+Reason:
+
+- These features are core desktop UX, but they depend on the event bus, persistence, errors, and diagnostics.
+
+### Layer 5: Platform And Product Boundaries
+
+Implement once the app shell is stable:
+
+1. Phase 14: connectivity state
+2. Phase 15: secure storage boundary
+3. Phase 16: account/session placeholder
+4. Phase 17: accessibility checklist
+5. Phase 19: local app database boundary
+6. Phase 21: telemetry boundary
+
+Reason:
+
+- These features are important, but each has product/platform decisions that should not block the core boilerplate.
+
+## Detailed Implementation Phases
+
+### Phase 0: Shared Primitives
+
+Purpose:
+
+- Create the common types every later feature should reuse instead of inventing local versions.
+
+Files:
+
+- `Cargo.toml`
+- `src/ids.rs`
+- `src/time.rs`
+- `src/errors.rs`
+- `src/paths.rs`
+
+Recommended dependencies:
+
+- `serde`
+- `serde_json`
+- `thiserror`
+- `uuid`
+- `chrono`
+- `directories`
+
+Work:
+
+- Add typed IDs for notifications, tasks, commands, and events.
+- Add timestamp helpers for persisted state and UI display.
+- Add typed app error categories.
+- Add app path helpers for config, data, cache, logs, and runtime IPC.
+- Add serialization helpers for versioned state structs.
+
+Acceptance criteria:
+
+- Later modules do not use raw `String` IDs where typed IDs exist.
+- App paths never point at `target/` except test/dev fixtures.
+- Common errors can be logged, displayed, and serialized for diagnostics.
 
 ### Phase 1: App Routes And Deep Links
 
@@ -132,6 +291,10 @@ Files:
 - `src/root.rs`
 - `src/launcher.rs`
 - `src/app.rs`
+
+Recommended dependency:
+
+- `url`
 
 Work:
 
@@ -171,6 +334,12 @@ Files:
 - `src/launcher.rs`
 - `src/notifications/service.rs`
 
+Recommended dependencies:
+
+- `uuid`
+- `chrono`
+- `serde`
+
 Work:
 
 - Add an app-local event queue/global.
@@ -209,6 +378,8 @@ Files:
 Dependencies:
 
 - `directories`
+- `serde`
+- `serde_json`
 
 State to persist:
 
@@ -252,7 +423,8 @@ Files:
 
 Recommended dependency:
 
-- `single-instance` or an app-local local-socket implementation.
+- `single-instance` for the process guard.
+- `interprocess` for second-instance payload forwarding.
 
 Work:
 
@@ -301,6 +473,12 @@ Work:
   - source backend
   - importance
   - optional action metadata
+
+Recommended dependencies:
+
+- `serde`
+- `uuid`
+- `chrono`
 - Record every meaningful app notification before native delivery.
 - Bell button opens the inbox instead of showing a throwaway toast.
 - Add mark-read, clear-all, and item click behavior.
@@ -347,6 +525,12 @@ Core model:
   - started_at
   - finished_at
   - error
+
+Recommended dependencies:
+
+- `uuid`
+- `chrono`
+- `serde`
 
 Work:
 
@@ -405,6 +589,10 @@ Files:
 - `src/root.rs`
 - `src/views/settings.rs`
 
+Recommended dependency:
+
+- `thiserror`
+
 Work:
 
 - Add `AppError`.
@@ -458,6 +646,11 @@ Actions:
 - copy diagnostics
 - open logs folder once file logging exists
 - refresh diagnostics
+
+Recommended dependencies:
+
+- `arboard`
+- `open`
 
 Acceptance criteria:
 
@@ -753,7 +946,59 @@ Acceptance criteria:
 - Icon-only controls have accessible naming strategy or tooltip at minimum.
 - Accessibility limitations are documented rather than hidden.
 
-### Phase 18: Local App Database Boundary
+### Phase 18: Native Desktop Utility Actions
+
+Purpose:
+
+- Provide cross-platform wrappers for desktop actions that almost every app eventually needs.
+
+Files:
+
+- `Cargo.toml`
+- `src/desktop_actions.rs`
+- `src/views/diagnostics.rs`
+- `src/views/settings.rs`
+- `src/capabilities.rs`
+
+Recommended dependencies:
+
+- `open`
+- `arboard`
+- `rfd`
+
+Optional dependency:
+
+- `notify`, only for real file-system watching.
+
+Work:
+
+- Add service functions:
+  - `open_url`
+  - `open_path`
+  - `open_logs_folder`
+  - `copy_text`
+  - `copy_diagnostics`
+  - `pick_file`
+  - `pick_folder`
+  - `save_file`
+- Report per-action availability in capabilities/diagnostics.
+- Route failures into the central error surface.
+- Keep dialogs behind user actions, never startup.
+
+Policy:
+
+- Do not make arbitrary file/folder demos the feature; make reusable desktop service wrappers the feature.
+- File picker results should be treated as user-granted paths, not permanent broad file-system access.
+- Clipboard actions should never copy secrets unless the user explicitly requested it.
+
+Acceptance criteria:
+
+- Diagnostics can copy text through the shared clipboard service.
+- Logs/config folders can be opened through the shared opener service.
+- File/folder picker wrappers exist behind a small manual test surface.
+- Unsupported platform behavior is visible through capabilities.
+
+### Phase 19: Local App Database Boundary
 
 Purpose:
 
@@ -800,7 +1045,7 @@ Acceptance criteria:
 - App startup does not require a database unless a feature actually uses it.
 - Corrupted or incompatible local data fails visibly through the central error surface.
 
-### Phase 19: Undoable App Commands
+### Phase 20: Undoable App Commands
 
 Purpose:
 
@@ -856,7 +1101,7 @@ Acceptance criteria:
 - Undo/redo availability is visible in launcher or status area.
 - Rejected commands route to the central error surface.
 
-### Phase 20: Telemetry Boundary
+### Phase 21: Telemetry Boundary
 
 Purpose:
 
@@ -924,29 +1169,46 @@ Acceptance criteria:
 
 Implement these together:
 
-1. `AppRoute`
-2. app event bus
-3. persistent app state in user config dir
-4. route persistence
-5. command palette updated to emit routes
+1. shared primitives
+2. `AppRoute`
+3. app event bus
+4. persistent app state in user config dir
+5. route persistence
+6. first-run state
+7. command palette updated to emit routes
 
 Reason:
 
-- Deep links, single-instance forwarding, notification inbox, diagnostics, and first-run all need a real route/event/state foundation.
+- Every later feature needs stable IDs, typed errors, app paths, serialization, routes, events, and persisted state.
 
 ## Recommended Second Implementation Batch
 
 Implement:
 
-1. single-instance lock
-2. deep-link forwarding
-3. focused-window restore on forwarded links
+1. file logging
+2. capabilities registry
+3. central error surface
+4. diagnostics page
+5. native desktop utility actions
 
 Reason:
 
-- This is the natural follow-up after routes exist.
+- Platform-heavy work should not start until logs, capability status, diagnostics, and common desktop actions are available.
 
 ## Recommended Third Implementation Batch
+
+Implement:
+
+1. single-instance lock
+2. second-instance IPC forwarding
+3. focused-window restore on forwarded links
+4. global shortcut settings
+
+Reason:
+
+- External entry points affect process lifetime and OS-global state, so they come after observability.
+
+## Recommended Fourth Implementation Batch
 
 Implement:
 
@@ -954,47 +1216,92 @@ Implement:
 2. bell popover/page
 3. unread state
 4. notification persistence
+5. background task manager
+6. status bar/activity area
+7. undoable app command model
 
 Reason:
 
-- Native local notifications already exist, but the app still needs internal notification history.
-
-## Recommended Fourth Implementation Batch
-
-Implement:
-
-1. file logging
-2. capabilities registry
-3. diagnostics page
-
-Reason:
-
-- These make every platform feature easier to debug and give the boilerplate a professional support surface.
+- These are the core desktop app-shell features and should all share routes, events, state, errors, diagnostics, and IDs.
 
 ## Recommended Fifth Implementation Batch
 
 Implement:
 
-1. global shortcut settings
-2. connectivity state model
-3. secure storage boundary
+1. connectivity state model
+2. secure storage boundary
+3. account/session placeholder
 4. accessibility checklist
 
 Reason:
 
-- These are valuable desktop foundations, but they should build on the route/event/state/capability layers.
+- These are cross-cutting product/platform boundaries that should be wired after the shell is stable.
 
 ## Recommended Sixth Implementation Batch
 
 Implement:
 
 1. local app database boundary
-2. undoable app command model
-3. telemetry no-op boundary
+2. telemetry no-op boundary
 
 Reason:
 
-- These are important production-grade foundations, but they should not block deep links, diagnostics, notifications, or state persistence. They also need clear product decisions before concrete backends are enabled.
+- These should remain optional until a real app feature requires durable queryable data or remote diagnostics.
+
+## Deferred / Feature-Flagged Additions
+
+Keep behind explicit product decisions:
+
+1. `rusqlite` or `redb` concrete backend
+2. `notify` file-system watching
+3. `reqwest` connectivity probe or HTTP client
+4. `opentelemetry` / `tracing-opentelemetry` exporter
+5. `accesskit` direct integration
+
+Reason:
+
+- These are available crates, but adding them too early increases binary/platform surface without proving the app needs them.
+
+## Original Feature Groups
+
+These are retained only as a checklist. The dependency-ordered batches above should drive implementation.
+
+Group 1:
+
+1. routes
+2. event bus
+3. persistent app state
+4. first-run state
+
+Group 2:
+
+1. logs
+2. capabilities
+3. errors
+4. diagnostics
+5. desktop utility actions
+
+Group 3:
+
+1. single instance
+2. deep-link forwarding
+3. global shortcuts
+
+Group 4:
+
+1. notification inbox
+2. background tasks
+3. status/activity area
+4. undo/redo
+
+Group 5:
+
+1. connectivity
+2. secure storage
+3. account/session
+4. accessibility
+5. local database
+6. telemetry
 
 ## Verification Strategy
 
@@ -1036,6 +1343,10 @@ Feature-specific checks:
 - Capabilities:
   - capabilities page/status matches actual runtime
   - degraded features include reasons
+- Desktop utility actions:
+  - copy diagnostics uses the shared clipboard wrapper
+  - open logs/config folder uses the shared opener wrapper
+  - picker cancellation is handled without error noise
 - Secure storage:
   - unavailable backend is handled without panic
   - no secret values appear in logs or app state
@@ -1063,12 +1374,19 @@ Feature-specific checks:
 - Should secure storage be compiled by default or behind a feature flag?
 - Should connectivity ever make a real network request in boilerplate mode?
 - Does GPUI already provide enough accessibility support, or do we need direct AccessKit integration?
+- Should file/folder pickers be exposed in Settings only as a manual test surface, or hidden until a product feature needs them?
+- Should clipboard support include file paths/images in the boilerplate, or text-only diagnostics copy for v1?
 - Should the first database backend be SQLite via `rusqlite`, embedded KV via `redb`, or no backend until a feature requires it?
 - Should undo/redo be limited to settings/demo state, or should it become a general app command system immediately?
 - Should telemetry remain a no-op boundary forever in the boilerplate, with real exporters only in downstream apps?
 
 ## References
 
+- `serde`: <https://docs.rs/serde/latest/serde/>
+- `serde_json`: <https://docs.rs/serde_json/latest/serde_json/>
+- `thiserror`: <https://docs.rs/thiserror/latest/thiserror/>
+- `uuid`: <https://docs.rs/uuid/latest/uuid/>
+- `chrono`: <https://docs.rs/chrono/latest/chrono/>
 - `url`: <https://docs.rs/url/latest/>
 - `directories` / `dirs` family: <https://docs.rs/crate/dirs/latest/source/README.md>
 - `single-instance`: <https://docs.rs/single-instance/latest/single_instance/struct.SingleInstance.html>
@@ -1079,6 +1397,10 @@ Feature-specific checks:
 - `reqwest`: <https://docs.rs/reqwest/latest/reqwest/>
 - `network-interface`: <https://docs.rs/network-interface>
 - `accesskit`: <https://docs.rs/accesskit/latest/accesskit/>
+- `open`: <https://docs.rs/open/latest/open/>
+- `rfd`: <https://docs.rs/rfd/latest/rfd/>
+- `arboard`: <https://docs.rs/arboard/latest/arboard/>
+- `notify`: <https://docs.rs/notify/latest/notify/>
 - `rusqlite`: <https://docs.rs/rusqlite/latest/>
 - `redb`: <https://docs.rs/redb/latest/redb/>
 - `undo`: <https://docs.rs/undo/latest/undo/>
