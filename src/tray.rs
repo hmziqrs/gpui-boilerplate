@@ -1,9 +1,6 @@
 use std::time::Duration;
 
-use global_hotkey::{
-    GlobalHotKeyEvent, GlobalHotKeyManager,
-    hotkey::{Code, HotKey, Modifiers},
-};
+use global_hotkey::GlobalHotKeyEvent;
 use gpui::App;
 use tray_icon::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 
@@ -76,7 +73,8 @@ fn build_icon() -> tray_icon::Icon {
 // ---------------------------------------------------------------------------
 
 pub fn setup(cx: &mut App) {
-    tracing::info!(target: LOG, "Setting up tray icon and global hotkey");
+    tracing::info!(target: LOG, "Setting up tray icon");
+    let shortcuts_registered = crate::shortcuts::snapshot(cx).registered;
 
     let icon = build_icon();
     let tray: TrayIcon = TrayIconBuilder::new()
@@ -88,15 +86,6 @@ pub fn setup(cx: &mut App) {
         .expect("failed to create tray icon");
     Box::leak(Box::new(tray));
     tracing::debug!(target: LOG, "Tray icon created");
-
-    let hotkey_manager =
-        GlobalHotKeyManager::new().expect("failed to create global hotkey manager");
-    let hotkey = HotKey::new(Some(Modifiers::ALT), Code::Space);
-    hotkey_manager
-        .register(hotkey)
-        .expect("failed to register global hotkey ⌥Space");
-    Box::leak(Box::new(hotkey_manager));
-    tracing::info!(target: LOG, hotkey = "⌥Space", "Global hotkey registered");
 
     cx.spawn(async move |cx| {
         let bg = cx.background_executor();
@@ -113,9 +102,11 @@ pub fn setup(cx: &mut App) {
                 }
             }
 
-            while let Ok(_ev) = GlobalHotKeyEvent::receiver().try_recv() {
-                tracing::info!(target: LOG, source = "hotkey_alt_space", "Launcher trigger");
-                cx.update(crate::launcher::open_launcher);
+            if shortcuts_registered {
+                while GlobalHotKeyEvent::receiver().try_recv().is_ok() {
+                    tracing::info!(target: LOG, source = "hotkey_alt_space", "Launcher trigger");
+                    cx.update(crate::launcher::open_launcher);
+                }
             }
 
             bg.timer(Duration::from_millis(50)).await;

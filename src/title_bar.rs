@@ -6,14 +6,14 @@ use gpui::{
     Styled as _, Window, div, px,
 };
 use gpui_component::{
-    ActiveTheme as _, IconName, Sizable as _, Theme, TitleBar, WindowExt as _,
+    ActiveTheme as _, IconName, Sizable as _, Theme, TitleBar,
     button::{Button, ButtonVariants as _},
     label::Label,
     menu::{AppMenuBar, DropdownMenu as _},
 };
 
 use crate::app::{SelectFont, SelectRadius};
-use crate::menus;
+use crate::app_menu;
 
 type TitleBarChild = Rc<dyn Fn(&mut Window, &mut App) -> AnyElement>;
 
@@ -29,7 +29,7 @@ impl AppTitleBar {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let app_menu_bar = menus::init(title, cx);
+        let app_menu_bar = app_menu::init(title, cx);
         let settings = cx.new(|cx| SettingsDropdown::new(window, cx));
 
         Self {
@@ -85,8 +85,15 @@ impl Render for AppTitleBar {
                             .ghost()
                             .compact()
                             .icon(IconName::Bell)
-                            .on_click(|_, window, cx| {
-                                window.push_notification("No new notifications", cx);
+                            .on_click(|_, _, cx| {
+                                crate::events::emit(
+                                    crate::events::AppEventKind::Navigate(
+                                        crate::routes::AppRoute::page(
+                                            crate::sidebar::Page::Notifications,
+                                        ),
+                                    ),
+                                    cx,
+                                );
                             }),
                     ),
             )

@@ -1,0 +1,415 @@
+use gpui::{prelude::*, *};
+use gpui_component::{button::Button, v_flex};
+
+use crate::{
+    app_state, capabilities, commands, connectivity, desktop_actions,
+    lifecycle::{LifecycleStage, LifecycleState},
+    logging, notifications, secure_storage, session, shortcuts, storage, telemetry, undo_stack,
+};
+
+pub struct DiagnosticsPage {
+    _subscriptions: Vec<Subscription>,
+}
+
+impl DiagnosticsPage {
+    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let mut subscriptions = Vec::new();
+        subscriptions.push(
+            cx.observe_global_in::<app_state::AppState>(window, |_, _, cx| {
+                cx.notify();
+            }),
+        );
+        subscriptions.push(cx.observe_global_in::<LifecycleState>(window, |_, _, cx| {
+            cx.notify();
+        }));
+        subscriptions.push(
+            cx.observe_global_in::<notifications::NativeNotificationState>(window, |_, _, cx| {
+                cx.notify();
+            }),
+        );
+        subscriptions.push(cx.observe_global_in::<capabilities::CapabilityRegistry>(
+            window,
+            |_, _, cx| {
+                cx.notify();
+            },
+        ));
+        subscriptions.push(
+            cx.observe_global_in::<storage::StorageSnapshot>(window, |_, _, cx| {
+                cx.notify();
+            }),
+        );
+        subscriptions.push(cx.observe_global_in::<telemetry::TelemetrySnapshot>(
+            window,
+            |_, _, cx| {
+                cx.notify();
+            },
+        ));
+        subscriptions.push(
+            cx.observe_global_in::<desktop_actions::DesktopActionsState>(window, |_, _, cx| {
+                cx.notify();
+            }),
+        );
+        subscriptions.push(
+            cx.observe_global_in::<shortcuts::ShortcutState>(window, |_, _, cx| {
+                cx.notify();
+            }),
+        );
+        subscriptions.push(
+            cx.observe_global_in::<undo_stack::UndoState>(window, |_, _, cx| {
+                cx.notify();
+            }),
+        );
+        Self {
+            _subscriptions: subscriptions,
+        }
+    }
+}
+
+impl Render for DiagnosticsPage {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let state = cx.try_global::<app_state::AppState>().cloned();
+        let lifecycle = cx
+            .try_global::<LifecycleState>()
+            .cloned()
+            .unwrap_or_else(LifecycleState::starting);
+        let notifications = notifications::snapshot(cx);
+        let connectivity = connectivity::snapshot(cx);
+        let secure_storage = secure_storage::snapshot(cx);
+        let session = session::snapshot(cx);
+        let logging = logging::snapshot(cx);
+        let storage = storage::snapshot(cx);
+        let telemetry = telemetry::snapshot(cx);
+        let capabilities = capabilities::snapshot(cx);
+        let shortcuts = shortcuts::snapshot(cx);
+        let desktop_actions = desktop_actions::snapshot(cx);
+        let undo = undo_stack::snapshot(cx);
+        let command_registry = commands::registry();
+        let command_titles = command_registry
+            .iter()
+            .map(|command| command.title.to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let command_states = command_registry
+            .iter()
+            .map(|command| {
+                let availability = commands::availability(command.id, cx);
+                let reason = availability
+                    .disabled_reason
+                    .map(|value| value.to_string())
+                    .unwrap_or_else(|| "-".to_string());
+                format!(
+                    "{}: enabled={} reason={}",
+                    command.title, availability.enabled, reason
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(" | ");
+        let undo_last_label = undo
+            .past
+            .last()
+            .map(|entry| entry.label.clone())
+            .unwrap_or_else(|| "None".to_string());
+        let undo_last_timestamp = undo
+            .past
+            .last()
+            .map(|entry| entry.created_at.to_rfc3339())
+            .unwrap_or_else(|| "None".to_string());
+
+        let lifecycle_label = match lifecycle.stage {
+            LifecycleStage::Starting => "Starting",
+            LifecycleStage::Running => "Running",
+            LifecycleStage::ShuttingDown => "ShuttingDown",
+            LifecycleStage::Crashed => "Crashed",
+        };
+        let lifecycle_panic_summary =
+            crate::lifecycle::last_panic_summary().unwrap_or_else(|| "None".to_string());
+
+        let mut rows = vec![
+            row("App", env!("CARGO_PKG_NAME")),
+            row("Version", env!("CARGO_PKG_VERSION")),
+            row("Lifecycle", lifecycle_label),
+            row(
+                "Lifecycle Startup Step",
+                lifecycle.startup_step.as_deref().unwrap_or("None"),
+            ),
+            row(
+                "Lifecycle Shutdown Step",
+                lifecycle.shutdown_step.as_deref().unwrap_or("None"),
+            ),
+            row(
+                "Lifecycle Startup Error",
+                lifecycle.last_startup_error.as_deref().unwrap_or("None"),
+            ),
+            row(
+                "Lifecycle Shutdown Error",
+                lifecycle.last_shutdown_error.as_deref().unwrap_or("None"),
+            ),
+            row("Lifecycle Panic Summary", &lifecycle_panic_summary),
+            row(
+                "Notification Backend",
+                &notifications.active_backend.to_string(),
+            ),
+            row(
+                "Notification Permission",
+                notifications.permission.label().as_ref(),
+            ),
+            row(
+                "Notification Degraded",
+                notifications.degraded_reason.as_deref().unwrap_or("No"),
+            ),
+            row("Connectivity", &format!("{:?}", connectivity.state)),
+            row("Connectivity Probe URL", &connectivity.probe_url),
+            row(
+                "Connectivity Last Error",
+                connectivity.last_error.as_deref().unwrap_or("None"),
+            ),
+            row(
+                "Secure Storage Available",
+                if secure_storage.available {
+                    "Yes"
+                } else {
+                    "No"
+                },
+            ),
+            row(
+                "Secure Storage Error",
+                secure_storage.last_error.as_deref().unwrap_or("None"),
+            ),
+            row("Session", &format!("{:?}", session.state)),
+            row("Commands", &command_registry.len().to_string()),
+            row("Command Titles", &command_titles),
+            row("Command Availability", &command_states),
+            row(
+                "First Run Pending",
+                if crate::first_run::is_pending(cx) {
+                    "Yes"
+                } else {
+                    "No"
+                },
+            ),
+            row(
+                "Logging Enabled",
+                if logging.enabled { "Yes" } else { "No" },
+            ),
+            row(
+                "Logging Guard Active",
+                if logging.has_guard { "Yes" } else { "No" },
+            ),
+            row(
+                "Logging Error",
+                logging.last_error.as_deref().unwrap_or("None"),
+            ),
+            row(
+                "Storage Available",
+                if storage.available { "Yes" } else { "No" },
+            ),
+            row(
+                "Storage Healthy",
+                if storage.healthy { "Yes" } else { "No" },
+            ),
+            row("Storage DB Path", &storage.db_path),
+            row(
+                "Storage Schema Version",
+                &storage.schema_version.to_string(),
+            ),
+            row(
+                "Storage Last Maintenance",
+                storage.last_maintenance_at.as_deref().unwrap_or("None"),
+            ),
+            row(
+                "Storage Last Migration",
+                storage.last_migration_result.as_deref().unwrap_or("None"),
+            ),
+            row(
+                "Storage Error",
+                storage.last_error.as_deref().unwrap_or("None"),
+            ),
+            row(
+                "Telemetry Compiled",
+                if telemetry.compiled { "Yes" } else { "No" },
+            ),
+            row(
+                "Telemetry Consented",
+                if telemetry.consented { "Yes" } else { "No" },
+            ),
+            row(
+                "Telemetry Enabled",
+                if telemetry.enabled { "Yes" } else { "No" },
+            ),
+            row("Telemetry Mode", &format!("{:?}", telemetry.mode)),
+            row(
+                "Telemetry Endpoint",
+                telemetry.endpoint_redacted.as_deref().unwrap_or("None"),
+            ),
+            row(
+                "Telemetry Error",
+                telemetry.last_error.as_deref().unwrap_or("None"),
+            ),
+            row(
+                "Telemetry Export Error",
+                telemetry.last_export_error.as_deref().unwrap_or("None"),
+            ),
+            row(
+                "Telemetry Events Recorded",
+                &telemetry.events_recorded.to_string(),
+            ),
+            row(
+                "Desktop Clipboard Available",
+                if desktop_actions.clipboard_available {
+                    "Yes"
+                } else {
+                    "No"
+                },
+            ),
+            row(
+                "Desktop Picker Available",
+                if desktop_actions.picker_available {
+                    "Yes"
+                } else {
+                    "No"
+                },
+            ),
+            row(
+                "Desktop Opener Available",
+                if desktop_actions.opener_available {
+                    "Yes"
+                } else {
+                    "No"
+                },
+            ),
+            row(
+                "Desktop Active Watchers",
+                &desktop_actions.active_watchers.to_string(),
+            ),
+            row(
+                "Desktop Last Error",
+                desktop_actions.last_error.as_deref().unwrap_or("None"),
+            ),
+            row("Undo Stack Size", &undo.past.len().to_string()),
+            row("Redo Stack Size", &undo.future.len().to_string()),
+            row("Undo Last Label", &undo_last_label),
+            row("Undo Last Timestamp", &undo_last_timestamp),
+            row(
+                "Undo Last Rejected",
+                undo.last_rejected.as_deref().unwrap_or("None"),
+            ),
+            row(
+                "Shortcut Enabled (Config)",
+                if shortcuts.enabled { "Yes" } else { "No" },
+            ),
+            row(
+                "Shortcut Registered",
+                if shortcuts.registered { "Yes" } else { "No" },
+            ),
+            row("Shortcut Accelerator", &shortcuts.accelerator),
+            row(
+                "Shortcut Error",
+                shortcuts.last_error.as_deref().unwrap_or("None"),
+            ),
+        ];
+
+        if let Some(app_state) = &state {
+            let fallback_log_dir = app_state.paths.log_dir.display().to_string();
+            let display_log_dir = if logging.log_dir.is_empty() {
+                fallback_log_dir.as_str()
+            } else {
+                logging.log_dir.as_str()
+            };
+            rows.push(row(
+                "Config Dir",
+                &app_state.paths.config_dir.display().to_string(),
+            ));
+            rows.push(row(
+                "Data Dir",
+                &app_state.paths.data_dir.display().to_string(),
+            ));
+            rows.push(row(
+                "Cache Dir",
+                &app_state.paths.cache_dir.display().to_string(),
+            ));
+            rows.push(row("Log Dir", display_log_dir));
+            rows.push(row("Log File Prefix", &logging.file_prefix));
+            rows.push(row(
+                "State File",
+                &app_state.paths.state_file.display().to_string(),
+            ));
+            rows.push(row(
+                "Active Route",
+                &app_state.config.active_route.to_url().to_string(),
+            ));
+            rows.push(row("Config Version", &app_state.config.version.to_string()));
+            rows.push(row(
+                "State Load Error",
+                app_state.last_load_error.as_deref().unwrap_or("None"),
+            ));
+            rows.push(row(
+                "State Save Error",
+                app_state.last_save_error.as_deref().unwrap_or("None"),
+            ));
+        }
+
+        for (name, status) in capabilities {
+            let value = format!(
+                "supported={} enabled={} degraded={} reason={} error={}",
+                status.supported,
+                status.enabled,
+                status.degraded,
+                status.reason.as_deref().unwrap_or("-"),
+                status.last_error.as_deref().unwrap_or("-")
+            );
+            rows.push(row(&format!("Capability:{name}"), &value));
+        }
+
+        v_flex()
+            .size_full()
+            .p_6()
+            .gap_3()
+            .child(
+                div()
+                    .text_xl()
+                    .font_weight(FontWeight::BOLD)
+                    .child("Diagnostics"),
+            )
+            .child(
+                Button::new("diagnostics-refresh")
+                    .outline()
+                    .label("Refresh")
+                    .on_click(|_, _, cx| {
+                        crate::events::emit(crate::events::AppEventKind::DiagnosticsChanged, cx);
+                    }),
+            )
+            .child(
+                Button::new("diagnostics-reset-first-run")
+                    .outline()
+                    .label("Reset First-Run")
+                    .on_click(|_, _, cx| {
+                        crate::first_run::reset(cx);
+                    }),
+            )
+            .when(cfg!(debug_assertions), |this| {
+                this.child(
+                    Button::new("diagnostics-trigger-test-panic")
+                        .outline()
+                        .label("Trigger Test Panic")
+                        .on_click(|_, _, cx| {
+                            cx.dispatch_action(&crate::app::TriggerTestPanic);
+                        }),
+                )
+            })
+            .children(rows)
+    }
+}
+
+fn row(label: &str, value: &str) -> Div {
+    div().child(
+        div()
+            .flex()
+            .gap_2()
+            .child(
+                div()
+                    .font_weight(FontWeight::BOLD)
+                    .child(format!("{label}:")),
+            )
+            .child(div().child(value.to_string())),
+    )
+}

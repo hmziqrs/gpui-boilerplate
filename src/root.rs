@@ -6,20 +6,27 @@ use gpui_component::{
     v_flex,
 };
 
-use crate::app::ToggleSearch;
-use crate::launcher::PendingNavigation;
 use crate::sidebar::Page;
 use crate::title_bar::AppTitleBar;
-use crate::views::{AboutPage, FormPage, HomePage, SettingsPage};
+use crate::views::{
+    AboutPage, DiagnosticsPage, FormPage, HomePage, NotificationsPage, SettingsPage,
+};
+use crate::{
+    app::ToggleSearch,
+    events::{self, AppEventKind},
+    routes::AppRoute,
+};
 
 pub struct AppRoot {
     focus_handle: FocusHandle,
     title_bar: Entity<AppTitleBar>,
-    active_page: Page,
+    active_route: AppRoute,
     collapsed: bool,
     home_page: Entity<HomePage>,
     form_page: Entity<FormPage>,
     settings_page: Entity<SettingsPage>,
+    notifications_page: Entity<NotificationsPage>,
+    diagnostics_page: Entity<DiagnosticsPage>,
     about_page: Entity<AboutPage>,
 }
 
@@ -33,37 +40,85 @@ impl AppRoot {
         let home_page = cx.new(|_| HomePage::new());
         let form_page = cx.new(|cx| FormPage::new(window, cx));
         let settings_page = cx.new(|cx| SettingsPage::new(window, cx));
+        let notifications_page = cx.new(|cx| NotificationsPage::new(window, cx));
+        let diagnostics_page = cx.new(|cx| DiagnosticsPage::new(window, cx));
         let about_page = cx.new(|_| AboutPage::new());
 
-        // React to navigation requests coming from the launcher window
-        cx.observe_global::<PendingNavigation>(|this, cx| {
-            if let Some(page) = cx.global::<PendingNavigation>().0 {
-                this.active_page = page;
-                cx.set_global(PendingNavigation(None));
-                cx.notify();
+        // React to app-wide events coming from launcher/deep links.
+        cx.observe_global::<events::AppEventQueue>(|this, cx| {
+            for event in events::drain(cx) {
+                match event.kind {
+                    AppEventKind::Navigate(route) => this.set_route(route, cx),
+                    AppEventKind::DeepLinkReceived(link) => match AppRoute::parse_deep_link(&link) {
+                        Ok(route) => this.set_route(route, cx),
+                        Err(err) => events::emit_error(err, cx),
+                    },
+                    AppEventKind::AppError(error) => {
+                        tracing::warn!(target: "gpui_starter::root", error, "app error event received");
+                    }
+                    AppEventKind::BackgroundTaskChanged(_) | AppEventKind::DiagnosticsChanged => {}
+                }
             }
         })
         .detach();
+        cx.observe_global::<crate::tasks::TaskRegistry>(|_, cx| {
+            cx.notify();
+        })
+        .detach();
+        cx.observe_global::<crate::notifications::NativeNotificationState>(|_, cx| {
+            cx.notify();
+        })
+        .detach();
+        cx.observe_global::<crate::notifications::inbox::NotificationInboxState>(|_, cx| {
+            cx.notify();
+        })
+        .detach();
+        cx.observe_global::<crate::connectivity::ConnectivitySnapshot>(|_, cx| {
+            cx.notify();
+        })
+        .detach();
+        cx.observe_global::<crate::session::SessionSnapshot>(|_, cx| {
+            cx.notify();
+        })
+        .detach();
 
+        let config = crate::app_state::config(cx);
         Self {
             focus_handle: cx.focus_handle(),
             title_bar,
-            active_page: Page::Home,
-            collapsed: false,
+            active_route: config.active_route,
+            collapsed: config.sidebar_collapsed,
             home_page,
             form_page,
             settings_page,
+            notifications_page,
+            diagnostics_page,
             about_page,
         }
     }
 
     fn active_page_view(&self) -> AnyView {
-        match self.active_page {
+        match self.active_route.page_for_render() {
             Page::Home => self.home_page.clone().into(),
             Page::Form => self.form_page.clone().into(),
             Page::Settings => self.settings_page.clone().into(),
+            Page::Notifications => self.notifications_page.clone().into(),
+            Page::Diagnostics => self.diagnostics_page.clone().into(),
             Page::About => self.about_page.clone().into(),
         }
+    }
+
+    fn set_route(&mut self, route: AppRoute, cx: &mut Context<Self>) {
+        if self.active_route == route {
+            return;
+        }
+        let route_url = route.to_url();
+        tracing::info!(target: "gpui_starter::root", route = ?route, route_url, "navigating");
+        self.active_route = route.clone();
+        crate::app_state::update_config(cx, |config| {
+            config.active_route = route;
+        });
+        cx.notify();
     }
 }
 
@@ -78,8 +133,8 @@ impl Render for AppRoot {
         let sheet_layer = Root::render_sheet_layer(window, cx);
         let dialog_layer = Root::render_dialog_layer(window, cx);
         let notification_layer = Root::render_notification_layer(window, cx);
-        let page_title = self.active_page.title();
-        let active_page = self.active_page;
+        let page_title = self.active_route.title();
+        let active_page = self.active_route.page_for_render();
 
         let sidebar = Sidebar::new("app-sidebar")
             .w(relative(1.))
@@ -108,8 +163,7 @@ impl Render for AppRoot {
                             .icon(Icon::new(page.icon()).small())
                             .active(active_page == *page)
                             .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                                this.active_page = *page;
-                                cx.notify();
+                                this.set_route(AppRoute::page(*page), cx);
                             }))
                     }),
                 )),
@@ -164,6 +218,7 @@ impl Render for AppRoot {
                             ),
                     ),
             )
+            .child(crate::status_bar::render(&self.active_route, cx))
             .children(sheet_layer)
             .children(dialog_layer)
             .children(notification_layer)

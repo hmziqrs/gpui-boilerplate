@@ -1,4 +1,5 @@
 mod backend;
+pub mod inbox;
 mod service;
 
 pub use service::{

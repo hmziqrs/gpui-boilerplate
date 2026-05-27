@@ -4,10 +4,7 @@ use gpui::{
     Action, App, AppContext as _, Bounds, Focusable as _, Global, KeyBinding, SharedString,
     WindowBounds, WindowKind, WindowOptions, actions, px, size,
 };
-use gpui_component::{
-    ActiveTheme, Root, TitleBar, WindowExt, scroll::ScrollbarShow, text::markdown,
-};
-use serde::{Deserialize, Serialize};
+use gpui_component::{ActiveTheme, Root, TitleBar, WindowExt, text::markdown};
 use strum::EnumIter;
 
 // ---------------------------------------------------------------------------
@@ -22,7 +19,10 @@ pub enum Languages {}
 // Actions
 // ---------------------------------------------------------------------------
 
-actions!(app, [About, Quit, ToggleSearch]);
+actions!(
+    app,
+    [About, Quit, ToggleSearch, OpenDiagnostics, TriggerTestPanic]
+);
 
 #[derive(Action, Clone, PartialEq, Eq, serde::Deserialize)]
 #[action(namespace = app, no_json)]
@@ -35,6 +35,10 @@ pub struct SelectFont(pub usize);
 #[derive(Action, Clone, PartialEq, Eq, serde::Deserialize)]
 #[action(namespace = app, no_json)]
 pub struct SelectRadius(pub usize);
+
+#[derive(Action, Clone, PartialEq, Eq, serde::Deserialize)]
+#[action(namespace = app, no_json)]
+pub struct ExecuteCommand(pub crate::commands::CommandId);
 
 // ---------------------------------------------------------------------------
 // Locale state (reactive global for settings page)
@@ -60,11 +64,22 @@ pub fn set_locale(locale: &str, cx: &mut App) {
             .unwrap_or_else(|_| es_fluent::unic_langid::langid!("en")),
     );
     cx.set_global::<LocaleState>(LocaleState(SharedString::from(locale.to_string())));
+    crate::app_state::update_config(cx, |config| {
+        config.locale = locale.to_string();
+    });
     cx.refresh_windows();
 }
 
 pub fn set_theme_mode(mode: gpui_component::ThemeMode, cx: &mut App) {
+    set_theme_mode_with_record(mode, true, cx);
+}
+
+pub fn set_theme_mode_with_record(mode: gpui_component::ThemeMode, record: bool, cx: &mut App) {
+    let before = cx.theme().mode;
     gpui_component::Theme::change(mode, None, cx);
+    if record {
+        crate::undo_stack::record_theme_mode_change(before, mode, cx);
+    }
     cx.refresh_windows();
 }
 
@@ -73,84 +88,129 @@ pub fn set_theme_mode(mode: gpui_component::ThemeMode, cx: &mut App) {
 // ---------------------------------------------------------------------------
 
 pub fn init(cx: &mut App) {
-    use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _};
-    let _ = tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer())
-        .with(
-            tracing_subscriber::EnvFilter::from_default_env()
-                // GPUI logs "window not found" at ERROR when platform display-link
-                // callbacks fire after a window is removed — harmless during teardown.
-                // GPUI platform callbacks (display link, resize, etc.) fire
-                // briefly after a window is removed — "window not found" at
-                // ERROR is benign teardown noise, so we silence the module.
-                .add_directive("gpui::window=off".parse().unwrap())
-                .add_directive(format!("{}=trace", env!("CARGO_PKG_NAME")).parse().unwrap())
-                .add_directive("gpui_starter=trace".parse().unwrap())
-                .add_directive("user_notify=debug".parse().unwrap())
-                .add_directive("notify_rust=debug".parse().unwrap()),
-        )
-        .try_init();
+    crate::lifecycle::install_panic_hook();
+    crate::lifecycle::set_startup_step("component_init", cx);
 
     // Must be called before using any gpui-component features
     gpui_component::init(cx);
+    crate::lifecycle::set_stage(crate::lifecycle::LifecycleStage::Starting, cx);
+    crate::lifecycle::set_startup_step("app_state_init", cx);
+    crate::app_state::initialize(cx);
+    crate::lifecycle::set_startup_step("logging_init", cx);
+    crate::logging::initialize(cx);
+    crate::lifecycle::set_startup_step("capabilities_init", cx);
+    crate::capabilities::initialize(cx);
+    crate::capabilities::set(
+        "app_state",
+        crate::capabilities::CapabilityStatus::supported_enabled(),
+        cx,
+    );
+    crate::capabilities::set(
+        "deep_links",
+        crate::capabilities::CapabilityStatus::supported_enabled(),
+        cx,
+    );
+    crate::capabilities::set(
+        "diagnostics",
+        crate::capabilities::CapabilityStatus::supported_enabled(),
+        cx,
+    );
+    crate::capabilities::set(
+        "notification_inbox",
+        crate::capabilities::CapabilityStatus::supported_enabled(),
+        cx,
+    );
+    crate::capabilities::set(
+        "background_tasks",
+        crate::capabilities::CapabilityStatus::supported_enabled(),
+        cx,
+    );
+    crate::capabilities::set(
+        "status_bar",
+        crate::capabilities::CapabilityStatus::supported_enabled(),
+        cx,
+    );
+    crate::capabilities::set(
+        "connectivity",
+        crate::capabilities::CapabilityStatus::supported_enabled(),
+        cx,
+    );
+    crate::capabilities::set(
+        "session",
+        crate::capabilities::CapabilityStatus::supported_enabled(),
+        cx,
+    );
+    crate::capabilities::set(
+        "first_run",
+        crate::capabilities::CapabilityStatus::supported_enabled(),
+        cx,
+    );
+    crate::capabilities::set(
+        "launcher",
+        crate::capabilities::CapabilityStatus::supported_enabled(),
+        cx,
+    );
+    crate::capabilities::set(
+        "app_menu",
+        crate::capabilities::CapabilityStatus::supported_enabled(),
+        cx,
+    );
+    crate::capabilities::set(
+        "command_registry",
+        crate::capabilities::CapabilityStatus::supported_enabled(),
+        cx,
+    );
+    crate::capabilities::set(
+        "accessibility",
+        crate::capabilities::CapabilityStatus {
+            supported: true,
+            enabled: true,
+            degraded: false,
+            reason: Some("baseline keyboard/focus navigation available".into()),
+            last_error: None,
+        },
+        cx,
+    );
 
     // Initialize es-fluent i18n for app and form text
     let _ = crate::i18n::init_i18n(
         <_ as Into<es_fluent::unic_langid::LanguageIdentifier>>::into(Languages::default()),
     );
 
-    cx.set_global::<LocaleState>(LocaleState(SharedString::from(
-        <_ as Into<es_fluent::unic_langid::LanguageIdentifier>>::into(Languages::default())
-            .to_string(),
-    )));
-
-    // Restore persisted theme settings
-    let persisted =
-        std::fs::read_to_string(format!("{}/target/state.json", env!("CARGO_MANIFEST_DIR")))
-            .ok()
-            .and_then(|json| serde_json::from_str::<PersistedState>(&json).ok());
+    let persisted = crate::app_state::config(cx);
+    set_locale(&persisted.locale, cx);
 
     // Load extra themes from the themes/ directory (with hot-reload)
-    let persisted_for_closure = persisted.clone();
+    let persisted_theme = persisted.theme.clone();
     if let Err(err) = gpui_component::ThemeRegistry::watch_dir(
         std::path::PathBuf::from(format!("{}/themes", env!("CARGO_MANIFEST_DIR"))),
         cx,
         move |cx| {
-            if let Some(ref s) = persisted_for_closure
-                && let Some(theme) = gpui_component::ThemeRegistry::global(cx)
-                    .themes()
-                    .get(&s.theme)
-                    .cloned()
+            if let Some(theme) = gpui_component::ThemeRegistry::global(cx)
+                .themes()
+                .get(persisted_theme.as_str())
+                .cloned()
             {
                 gpui_component::Theme::global_mut(cx).apply_config(&theme);
             }
         },
     ) {
         tracing::error!("Failed to watch themes directory: {}", err);
+        crate::lifecycle::set_startup_error(format!("theme watch failed: {err}"), cx);
     }
 
-    if let Some(ref s) = persisted
-        && let Some(show) = s.scrollbar_show
-    {
+    if let Some(show) = persisted.scrollbar_show {
         gpui_component::Theme::global_mut(cx).scrollbar_show = show;
     }
     cx.refresh_windows();
 
-    // Persist theme on change (only when actually different)
-    let last_persisted = persisted.clone();
     cx.observe_global::<gpui_component::Theme>(move |cx| {
-        let s = PersistedState {
-            theme: cx.theme().theme_name().clone(),
-            scrollbar_show: Some(cx.theme().scrollbar_show),
-        };
-        if Some(&s) != last_persisted.as_ref()
-            && let Ok(json) = serde_json::to_string_pretty(&s)
-        {
-            let _ = std::fs::write(
-                format!("{}/target/state.json", env!("CARGO_MANIFEST_DIR")),
-                &json,
-            );
-        }
+        let theme_name = cx.theme().theme_name().to_string();
+        let scrollbar_show = cx.theme().scrollbar_show;
+        crate::app_state::update_config(cx, |config| {
+            config.theme = theme_name;
+            config.scrollbar_show = Some(scrollbar_show);
+        });
     })
     .detach();
 
@@ -166,17 +226,32 @@ pub fn init(cx: &mut App) {
         cx.refresh_windows();
     });
     cx.on_action(|switch: &SwitchThemeMode, cx| {
-        gpui_component::Theme::change(switch.0, None, cx);
-        cx.refresh_windows();
+        set_theme_mode(switch.0, cx);
     });
     cx.on_action(|locale: &SelectLocale, cx| {
         set_locale(&locale.0, cx);
     });
 
     crate::launcher::init(cx);
-    cx.set_global(crate::launcher::PendingNavigation(None));
+    cx.set_global(crate::events::AppEventQueue::default());
     cx.set_global(crate::launcher::LauncherOpen(false));
+    crate::lifecycle::set_startup_step("runtime_services_init", cx);
+    crate::tasks::initialize(cx);
+    crate::undo_stack::initialize(cx);
+    crate::shortcuts::initialize(cx);
+    crate::connectivity::initialize(cx);
+    crate::desktop_actions::initialize(cx);
+    crate::secure_storage::initialize(cx);
+    crate::session::initialize(cx);
+    crate::storage::initialize(cx);
+    crate::telemetry::initialize(cx);
+    crate::telemetry::record_event("app_runtime_initialized", cx);
+    crate::notifications::inbox::initialize(cx);
     crate::notifications::initialize(cx);
+    crate::notifications::set_native_notifications_enabled(
+        persisted.native_notifications_enabled,
+        cx,
+    );
 
     // Key bindings
     cx.bind_keys([
@@ -189,6 +264,20 @@ pub fn init(cx: &mut App) {
     ]);
 
     cx.on_action(|_: &Quit, cx| {
+        crate::lifecycle::set_shutdown_step("begin_shutdown", cx);
+        crate::lifecycle::set_stage(crate::lifecycle::LifecycleStage::ShuttingDown, cx);
+        crate::lifecycle::set_shutdown_step("drain_tasks", cx);
+        crate::tasks::shutdown(cx);
+        crate::lifecycle::set_shutdown_step("stop_watchers", cx);
+        crate::desktop_actions::shutdown(cx);
+        crate::lifecycle::set_shutdown_step("flush_storage", cx);
+        crate::storage::shutdown(cx);
+        crate::lifecycle::set_shutdown_step("flush_telemetry", cx);
+        crate::telemetry::record_event("app_shutdown_requested", cx);
+        crate::telemetry::shutdown(cx);
+        crate::lifecycle::set_shutdown_step("flush_logs", cx);
+        crate::logging::shutdown(cx);
+        crate::lifecycle::set_shutdown_step("quit", cx);
         cx.quit();
     });
 
@@ -211,8 +300,39 @@ pub fn init(cx: &mut App) {
             });
         }
     });
+    cx.on_action(|_: &OpenDiagnostics, cx| {
+        crate::events::emit(
+            crate::events::AppEventKind::Navigate(crate::routes::AppRoute::page(
+                crate::sidebar::Page::Diagnostics,
+            )),
+            cx,
+        );
+    });
+    cx.on_action(|_: &TriggerTestPanic, _cx| {
+        panic!("gpui-starter test panic action");
+    });
+    cx.on_action(|command: &ExecuteCommand, cx| {
+        let availability = crate::commands::availability(command.0, cx);
+        if !availability.enabled {
+            let reason = availability
+                .disabled_reason
+                .as_ref()
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "command disabled".to_string());
+            tracing::warn!(
+                target: "gpui_starter::commands",
+                command = ?command.0,
+                reason = %reason,
+                "command ignored"
+            );
+            return;
+        }
+        crate::commands::execute(command.0, cx);
+    });
 
     cx.activate(true);
+    crate::lifecycle::set_startup_step("running", cx);
+    crate::lifecycle::set_stage(crate::lifecycle::LifecycleStage::Running, cx);
 }
 
 // ---------------------------------------------------------------------------
@@ -266,25 +386,6 @@ pub fn create_new_window(title: &str, cx: &mut App) {
         Ok::<_, anyhow::Error>(())
     })
     .detach();
-}
-
-// ---------------------------------------------------------------------------
-// Persisted state
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-struct PersistedState {
-    theme: SharedString,
-    scrollbar_show: Option<ScrollbarShow>,
-}
-
-impl Default for PersistedState {
-    fn default() -> Self {
-        Self {
-            theme: "Default Light".into(),
-            scrollbar_show: None,
-        }
-    }
 }
 
 // ---------------------------------------------------------------------------

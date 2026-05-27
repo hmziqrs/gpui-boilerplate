@@ -37,6 +37,38 @@ Out of scope:
 - document/file-editor workflows
 - remote push notifications
 
+## Implementation Status (2026-05-27)
+
+Completed in code:
+
+- shared primitives: ids, time, errors, paths, lifecycle baseline, atomic config writes
+- routes + deep-link parser + central app events
+- persistent app state in user config path (no `target/state.json` writes)
+- internal notification inbox model + notifications page
+- background task registry + status bar
+- diagnostics page + capabilities registry + file logging
+- first-run setup state + UI
+- single-instance guard + forwarded deep-link delivery path
+- connectivity boundary + secure storage boundary + session placeholder
+- command registry baseline + launcher integration
+
+Partially completed:
+
+- native app menu and command parity (menu enable/disable reasons still incomplete)
+- lifecycle sequencing (stage model exists; full startup/shutdown orchestration pending)
+
+Not completed yet:
+
+- accessibility checklist artifact (`docs/accessibility-checklist.md`)
+- QA matrix artifact (`docs/qa-matrix.md`)
+- local database boundary (`rusqlite`) and migration scaffolding
+- telemetry boundary (`opentelemetry` + consented runtime sink model)
+
+Critical scope boundary:
+
+- push notifications are intentionally separate and out of scope here
+- this plan covers in-app notification history and local/native desktop notifications only
+
 ## Crate Research
 
 Chosen crates:
@@ -279,6 +311,34 @@ Implement once the app shell is stable:
 Reason:
 
 - These features are important and the crate choices are now fixed; they come later only because they depend on the shell and observability layers.
+
+## Completion Order (No Deferral)
+
+Execute the remaining work in this exact order:
+
+1. strengthen lifecycle coordinator
+   - explicit startup steps
+   - shutdown coordinator with bounded drain for tasks/watchers
+   - panic/crash diagnostics enrichment in file logs
+2. finish command/menu parity
+   - single command source of truth for launcher + native menu
+   - command availability/disable reason surface in diagnostics
+3. add missing artifacts
+   - `docs/accessibility-checklist.md`
+   - `docs/qa-matrix.md`
+4. implement local database boundary
+   - `storage` module with connection boundary
+   - migration table + boot-time migration
+   - diagnostics visibility for db status/version/path
+5. implement telemetry boundary
+   - disabled/local/remote sink modes
+   - explicit runtime consent gate
+   - diagnostics visibility and redaction policy
+6. final verification gate
+   - `cargo fmt`
+   - `cargo check`
+   - `cargo test`
+   - `cargo clippy --all-targets -- -D warnings`
 
 ## Concrete Decisions
 

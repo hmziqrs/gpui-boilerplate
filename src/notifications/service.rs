@@ -4,6 +4,7 @@ use gpui::{AnyWindowHandle, App, AppContext as _, Global, SharedString, Window};
 use gpui_component::WindowExt as _;
 
 use super::backend::{NotificationBackend, NotifyRustBackend, UserNotifyBackend};
+use super::inbox::{self, NotificationAttemptRecord, NotificationInboxKind};
 
 const LOG: &str = "gpui_starter::notifications";
 pub const CATEGORY_ACTIONS: &str = "gpui-starter.actions";
@@ -383,6 +384,30 @@ pub fn initialize(cx: &mut App) {
         "installing native notification global state"
     );
     cx.set_global(NativeNotificationState { service, snapshot });
+    let degraded = cx
+        .global::<NativeNotificationState>()
+        .snapshot
+        .degraded_reason
+        .is_some();
+    crate::capabilities::set(
+        "native_notifications",
+        crate::capabilities::CapabilityStatus {
+            supported: true,
+            enabled: true,
+            degraded,
+            reason: cx
+                .global::<NativeNotificationState>()
+                .snapshot
+                .degraded_reason
+                .clone(),
+            last_error: cx
+                .global::<NativeNotificationState>()
+                .snapshot
+                .last_backend_error
+                .clone(),
+        },
+        cx,
+    );
     refresh_permission_state(cx);
 }
 
@@ -392,6 +417,9 @@ pub fn snapshot(cx: &App) -> NotificationRuntimeSnapshot {
 
 pub fn set_native_notifications_enabled(enabled: bool, cx: &mut App) {
     tracing::info!(target: LOG, enabled, "native notifications user setting changed");
+    crate::app_state::update_config(cx, |config| {
+        config.native_notifications_enabled = enabled;
+    });
     mutate_snapshot(cx, |snapshot| {
         snapshot.enabled_by_user = enabled;
         if !enabled {
@@ -400,6 +428,34 @@ pub fn set_native_notifications_enabled(enabled: bool, cx: &mut App) {
             snapshot.degraded_reason = None;
         }
     });
+    let snapshot = cx.global::<NativeNotificationState>().snapshot.clone();
+    crate::capabilities::set(
+        "native_notifications",
+        crate::capabilities::CapabilityStatus {
+            supported: true,
+            enabled,
+            degraded: snapshot.degraded_reason.is_some(),
+            reason: snapshot.degraded_reason,
+            last_error: snapshot.last_backend_error,
+        },
+        cx,
+    );
+    inbox::record_attempt(
+        NotificationAttemptRecord {
+            title: "Notification Settings Updated".to_string(),
+            body: if enabled {
+                "Native notifications enabled".to_string()
+            } else {
+                "Native notifications disabled".to_string()
+            },
+            backend: NotificationBackendKind::UiOnly,
+            delivered_natively: false,
+            degraded: !enabled,
+            error_summary: None,
+            kind: NotificationInboxKind::SettingsUpdate,
+        },
+        cx,
+    );
 }
 
 pub fn refresh_permission_state(cx: &mut App) {
@@ -429,6 +485,18 @@ pub fn request_permission_from_window(window: &mut Window, cx: &mut App) {
             mutate_snapshot(cx, |snapshot| {
                 snapshot.permission = permission;
             });
+            inbox::record_attempt(
+                NotificationAttemptRecord {
+                    title: "Notification Permission Updated".to_string(),
+                    body: message.to_string(),
+                    backend: NotificationBackendKind::UiOnly,
+                    delivered_natively: false,
+                    degraded: false,
+                    error_summary: None,
+                    kind: NotificationInboxKind::PermissionUpdate,
+                },
+                cx,
+            );
             push_in_app_feedback(window_handle, message, cx);
         });
     })
@@ -442,6 +510,8 @@ pub fn send_from_window(request: NotificationRequest, window: &mut Window, cx: &
     let enabled_by_user = state.snapshot.enabled_by_user
         && state.snapshot.permission != NotificationPermissionState::Denied;
     let fallback_message = request.body.clone();
+    let inbox_title = request.title.to_string();
+    let inbox_body = request.body.to_string();
     tracing::debug!(
         target: LOG,
         permission = ?state.snapshot.permission,
@@ -463,6 +533,18 @@ pub fn send_from_window(request: NotificationRequest, window: &mut Window, cx: &
             && result.importance == NotificationImportance::ForegroundOnly;
         cx.update(move |cx| {
             apply_send_result(&result, cx);
+            inbox::record_attempt(
+                NotificationAttemptRecord {
+                    title: inbox_title,
+                    body: inbox_body,
+                    backend: result.backend_used,
+                    delivered_natively: result.delivered_natively,
+                    degraded: result.degraded,
+                    error_summary: result.error_summary.as_ref().map(ToString::to_string),
+                    kind: NotificationInboxKind::Attempt,
+                },
+                cx,
+            );
             if should_show_in_app {
                 push_in_app_feedback(window_handle, fallback_message, cx);
             }

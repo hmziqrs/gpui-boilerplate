@@ -1,12 +1,12 @@
 use gpui::{prelude::*, *};
 use gpui_component::{
-    ActiveTheme as _, FocusTrapElement as _, Icon, IconName, Root, Sizable as _, ThemeMode, h_flex,
+    ActiveTheme as _, FocusTrapElement as _, Icon, IconName, Root, Sizable as _, h_flex,
     input::{Input, InputEvent, InputState},
     scroll::ScrollableElement as _,
     v_flex,
 };
 
-use crate::sidebar::Page;
+use crate::commands::{self, CommandId};
 
 const LOG: &str = "gpui_starter::launcher";
 
@@ -22,14 +22,6 @@ pub fn init(cx: &mut App) {
     ]);
 }
 
-// ---------------------------------------------------------------------------
-// Inter-window communication via a global
-// ---------------------------------------------------------------------------
-
-#[derive(Clone, Debug)]
-pub struct PendingNavigation(pub Option<Page>);
-impl Global for PendingNavigation {}
-
 // Prevents double-opening the launcher
 pub struct LauncherOpen(pub bool);
 impl Global for LauncherOpen {}
@@ -40,8 +32,7 @@ impl Global for LauncherOpen {}
 
 #[derive(Clone, Copy, Debug)]
 pub enum LauncherActionKind {
-    NavigatePage(Page),
-    SwitchThemeMode(ThemeMode),
+    Execute(CommandId),
 }
 
 pub struct LauncherItem {
@@ -101,29 +92,15 @@ impl Launcher {
     }
 
     fn make_items() -> Vec<LauncherItem> {
-        let mut items: Vec<LauncherItem> = Page::all()
-            .iter()
-            .map(|page| LauncherItem {
-                title: page.title().into(),
-                subtitle: format!("Open the {} page", page.title()).into(),
-                icon: page.icon(),
-                action: LauncherActionKind::NavigatePage(*page),
+        commands::registry()
+            .into_iter()
+            .map(|command| LauncherItem {
+                title: command.title,
+                subtitle: command.subtitle,
+                icon: command.icon,
+                action: LauncherActionKind::Execute(command.id),
             })
-            .collect();
-
-        items.push(LauncherItem {
-            title: "Light Mode".into(),
-            subtitle: "Switch to light theme".into(),
-            icon: IconName::Sun,
-            action: LauncherActionKind::SwitchThemeMode(ThemeMode::Light),
-        });
-        items.push(LauncherItem {
-            title: "Dark Mode".into(),
-            subtitle: "Switch to dark theme".into(),
-            icon: IconName::Moon,
-            action: LauncherActionKind::SwitchThemeMode(ThemeMode::Dark),
-        });
-        items
+            .collect()
     }
 
     fn refilter(&mut self, cx: &mut Context<Self>) {
@@ -177,6 +154,10 @@ impl Render for Launcher {
 
         v_flex()
             .size_full()
+            .bg(theme.background.opacity(0.25))
+            .border_1()
+            .border_color(theme.border.opacity(0.5))
+            .rounded(theme.radius_lg)
             .key_context(CONTEXT)
             .track_focus(&self.focus_handle)
             .focus_trap("launcher", &self.focus_handle)
@@ -349,13 +330,13 @@ impl LauncherRoot {
                 LauncherEvent::Act(action) => {
                     tracing::info!(target: LOG, action = ?action, "LauncherRoot handling action");
                     match action {
-                        LauncherActionKind::NavigatePage(page) => {
-                            tracing::info!(target: LOG, page = ?page, "Setting pending navigation");
-                            cx.set_global(PendingNavigation(Some(*page)));
-                        }
-                        LauncherActionKind::SwitchThemeMode(mode) => {
-                            tracing::info!(target: LOG, ?mode, "Switching theme mode");
-                            crate::app::set_theme_mode(*mode, cx);
+                        LauncherActionKind::Execute(command_id) => {
+                            tracing::info!(
+                                target: LOG,
+                                command = ?command_id,
+                                "Executing command"
+                            );
+                            commands::execute(*command_id, cx);
                         }
                     }
                 }
@@ -435,6 +416,7 @@ pub fn open_launcher(cx: &mut App) {
             kind: WindowKind::PopUp,
             is_movable: true,
             is_resizable: false,
+            window_background: WindowBackgroundAppearance::Blurred,
             window_min_size: Some(gpui::Size {
                 width: window_w,
                 height: window_h,
@@ -445,7 +427,7 @@ pub fn open_launcher(cx: &mut App) {
         let window = cx
             .open_window(options, |window, cx| {
                 let launcher_root = cx.new(|cx| LauncherRoot::new(window, cx));
-                cx.new(|cx| Root::new(launcher_root, window, cx))
+                cx.new(|cx| Root::new(launcher_root, window, cx).bg(transparent_black()))
             })
             .expect("failed to open launcher window");
 
