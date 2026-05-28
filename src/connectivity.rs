@@ -45,7 +45,16 @@ pub fn check_now(cx: &mut App) {
     let probe_url = snapshot(cx).probe_url;
     let interfaces = read_interfaces();
     cx.spawn(async move |cx| {
-        let result = reqwest::get(&probe_url).await;
+        let url = probe_url.clone();
+        let result = cx
+            .background_executor()
+            .spawn(async move {
+                reqwest::blocking::Client::new()
+                    .get(&url)
+                    .timeout(std::time::Duration::from_secs(10))
+                    .send()
+            })
+            .await;
         cx.update(move |cx| {
             let mut next = snapshot(cx);
             next.interfaces = interfaces;
