@@ -1,0 +1,10 @@
+{
+  "name": "gpui-starter",
+  "short_name": "gpui-starter",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ],
+  "theme_color": "#06060a",
+  "background_color": "#06060a",
+  "display": "standalone"
+}

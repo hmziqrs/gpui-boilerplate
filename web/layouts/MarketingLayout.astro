@@ -16,7 +16,7 @@ const SITE = 'https://gpui-starter.hmziq.xyz';
 const DEFAULT_TITLE = 'gpui-starter: Build desktop apps with GPUI';
 const DEFAULT_DESC =
   'A production-ready Rust boilerplate for GPUI desktop apps. Themes, i18n, forms, command launcher, and more.';
-const DEFAULT_OG_IMAGE = `${SITE}/og-image.jpg`;
+const DEFAULT_OG_IMAGE = `${SITE}/og-image.svg`;
 
 const {
   title = DEFAULT_TITLE,
@@ -83,6 +83,7 @@ if (customJsonLd) jsonLdArray.push(customJsonLd);
     <link rel="canonical" href={canonical} />
     {noindex && <meta name="robots" content="noindex,nofollow" />}
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="/site.webmanifest" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -98,7 +99,7 @@ if (customJsonLd) jsonLdArray.push(customJsonLd);
     <meta property="og:image" content={ogImageUrl} />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:image:type" content="image/jpeg" />
+    <meta property="og:image:type" content="image/svg+xml" />
     <meta property="og:image:alt" content={title} />
     {ogType === 'article' && articlePublishedTime && (
       <meta property="article:published_time" content={articlePublishedTime.toISOString()} />
@@ -203,7 +204,7 @@ if (customJsonLd) jsonLdArray.push(customJsonLd);
             ></span
           >
         </a>
-        <nav class="flex items-center gap-1">
+        <nav class="flex items-center gap-1" aria-label="Main navigation">
           <a
             href="/docs/"
             class="px-3 py-2 text-sm text-text-dim no-underline hover:text-amber rounded-md transition-colors"

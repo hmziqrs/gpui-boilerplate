@@ -10,7 +10,7 @@ hero:
       link: /docs/getting-started/
       icon: right-arrow
     - text: GitHub
-      link: https://github.com/hmziqrs/gpui-app
+      link: https://github.com/hmziqrs/gpui-boilerplate
       icon: github
       variant: secondary
 ---

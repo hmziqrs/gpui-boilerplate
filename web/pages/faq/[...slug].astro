@@ -21,14 +21,14 @@ const { Content } = await render(entry);
 const faqJsonLd = {
   '@context': 'https://schema.org',
   '@type': 'FAQPage',
-  mainEntity: {
+  mainEntity: [{
     '@type': 'Question',
     name: entry.data.question,
     acceptedAnswer: {
       '@type': 'Answer',
       text: entry.data.description,
     },
-  },
+  }],
 };
 ---
 

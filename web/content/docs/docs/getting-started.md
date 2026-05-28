@@ -12,8 +12,8 @@ description: Install and set up gpui-starter
 ## Quick start
 
 ```bash
-git clone https://github.com/hmziqrs/gpui-app.git
-cd gpui-app
+git clone https://github.com/hmziqrs/gpui-boilerplate.git
+cd gpui-boilerplate
 cargo run
 ```
 

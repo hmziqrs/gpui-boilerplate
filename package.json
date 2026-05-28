@@ -19,7 +19,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/hmziqrs/gpui-app.git"
+    "url": "git+https://github.com/hmziqrs/gpui-boilerplate.git"
   },
   "devDependencies": {
     "@astrojs/starlight": "^0.39.2",
