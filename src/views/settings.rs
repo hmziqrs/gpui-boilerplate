@@ -681,25 +681,33 @@ impl Render for SettingsPage {
                                 Button::new("secure-storage-write-demo")
                                     .outline()
                                     .label("Write Secure Value (Demo)")
-                                    .on_click(|_, _, cx| {
-                                        let _ = secure_storage::set_secret(
+                                    .on_click(|_, window, cx| {
+                                        let message = match secure_storage::set_secret(
                                             "gpui-starter",
                                             "demo-token",
                                             "demo-value",
                                             cx,
-                                        );
+                                        ) {
+                                            Ok(()) => "Secure value written".to_string(),
+                                            Err(err) => format!("Write failed: {err}"),
+                                        };
+                                        window.push_notification(message, cx);
                                     }),
                             )
                             .child(
                                 Button::new("secure-storage-delete-demo")
                                     .outline()
                                     .label("Delete Secure Value (Demo)")
-                                    .on_click(|_, _, cx| {
-                                        let _ = secure_storage::delete_secret(
+                                    .on_click(|_, window, cx| {
+                                        let message = match secure_storage::delete_secret(
                                             "gpui-starter",
                                             "demo-token",
                                             cx,
-                                        );
+                                        ) {
+                                            Ok(()) => "Secure value deleted".to_string(),
+                                            Err(err) => format!("Delete failed: {err}"),
+                                        };
+                                        window.push_notification(message, cx);
                                     }),
                             ),
                     )

@@ -39,27 +39,53 @@ pub fn snapshot(cx: &App) -> SecureStorageSnapshot {
 }
 
 pub fn set_secret(service: &str, key: &str, value: &str, cx: &mut App) -> Result<(), String> {
-    let entry = keyring::Entry::new(service, key).map_err(|err| err.to_string())?;
-    entry.set_password(value).map_err(|err| err.to_string())?;
+    let entry = keyring::Entry::new(service, key).map_err(|err| {
+        tracing::error!(target: "gpui_starter::secure_storage", "entry creation failed: {err}");
+        err.to_string()
+    })?;
+    entry.set_password(value).map_err(|err| {
+        tracing::error!(target: "gpui_starter::secure_storage", service, key, "set_password failed: {err}");
+        update_last_error(Some(err.to_string()), cx);
+        err.to_string()
+    })?;
+    tracing::info!(target: "gpui_starter::secure_storage", service, key, "secret written");
     update_last_error(None, cx);
     Ok(())
 }
 
 pub fn get_secret(service: &str, key: &str, cx: &mut App) -> Result<Option<SharedString>, String> {
-    let entry = keyring::Entry::new(service, key).map_err(|err| err.to_string())?;
+    let entry = keyring::Entry::new(service, key).map_err(|err| {
+        tracing::error!(target: "gpui_starter::secure_storage", "entry creation failed: {err}");
+        err.to_string()
+    })?;
     match entry.get_password() {
         Ok(value) => {
+            tracing::info!(target: "gpui_starter::secure_storage", service, key, "secret read");
             update_last_error(None, cx);
             Ok(Some(value.into()))
         }
-        Err(keyring::Error::NoEntry) => Ok(None),
-        Err(err) => Err(err.to_string()),
+        Err(keyring::Error::NoEntry) => {
+            tracing::warn!(target: "gpui_starter::secure_storage", service, key, "no entry found");
+            Ok(None)
+        }
+        Err(err) => {
+            tracing::error!(target: "gpui_starter::secure_storage", service, key, "get_password failed: {err}");
+            Err(err.to_string())
+        }
     }
 }
 
 pub fn delete_secret(service: &str, key: &str, cx: &mut App) -> Result<(), String> {
-    let entry = keyring::Entry::new(service, key).map_err(|err| err.to_string())?;
-    entry.delete_credential().map_err(|err| err.to_string())?;
+    let entry = keyring::Entry::new(service, key).map_err(|err| {
+        tracing::error!(target: "gpui_starter::secure_storage", "entry creation failed: {err}");
+        err.to_string()
+    })?;
+    entry.delete_credential().map_err(|err| {
+        tracing::error!(target: "gpui_starter::secure_storage", service, key, "delete failed: {err}");
+        update_last_error(Some(err.to_string()), cx);
+        err.to_string()
+    })?;
+    tracing::info!(target: "gpui_starter::secure_storage", service, key, "secret deleted");
     update_last_error(None, cx);
     Ok(())
 }
