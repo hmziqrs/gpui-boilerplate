@@ -22,7 +22,7 @@ impl Render for HomePage {
         let notifications_enabled = crate::notifications::snapshot(cx).enabled_by_user;
 
         v_flex()
-            .size_full()
+            .min_h_full()
             .items_center()
             .justify_center()
             .gap_6()

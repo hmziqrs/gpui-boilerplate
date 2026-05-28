@@ -402,7 +402,7 @@ impl Render for DiagnosticsPage {
         }
 
         v_flex()
-            .size_full()
+            .min_h_full()
             .p_6()
             .gap_3()
             .child(

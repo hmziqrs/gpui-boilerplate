@@ -7,7 +7,6 @@ use gpui_component::{
     form::{field, v_form},
     h_flex,
     input::{Input, InputEvent, InputState},
-    scroll::ScrollableElement as _,
     v_flex,
 };
 use gpui_form::GpuiForm;
@@ -232,8 +231,7 @@ impl Render for FormPage {
         let danger = cx.theme().danger;
 
         v_flex()
-            .size_full()
-            .overflow_y_scrollbar()
+            .min_h_full()
             .p_6()
             .gap_4()
             .child(

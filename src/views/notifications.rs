@@ -28,7 +28,7 @@ impl Render for NotificationsPage {
         let unread = items.iter().filter(|item| !item.read).count();
 
         v_flex()
-            .size_full()
+            .min_h_full()
             .p_6()
             .gap_4()
             .child(

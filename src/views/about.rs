@@ -12,7 +12,7 @@ impl AboutPage {
 impl Render for AboutPage {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         v_flex()
-            .size_full()
+            .min_h_full()
             .items_center()
             .justify_center()
             .gap_4()

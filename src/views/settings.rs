@@ -78,7 +78,7 @@ impl Render for SettingsPage {
             );
 
         v_flex()
-            .size_full()
+            .min_h_full()
             .p_6()
             .gap_6()
             .child(
