@@ -75,7 +75,7 @@ single-instance = "0.3.3"
 interprocess = "2.4.2"
 reqwest = { version = "0.12.24", default-features = false, features = ["blocking", "rustls-tls"] }
 network-interface = "2.0.3"
-keyring = "3.6.3"
+keyring = { version = "3.6.3", features = ["apple-native"] }
 rusqlite = { version = "0.32.1", features = ["bundled"] }
 opentelemetry = "0.24.0"
 tracing-opentelemetry = "0.25.0"
