@@ -382,6 +382,9 @@ const canonical = new URL(Astro.url.pathname, SITE).toString();
             trackedMaterials.push({ mat, target: targetOpacity, startTime: -1 });
           };
           
+          let hovered = false;
+          host.addEventListener('mouseenter', () => { hovered = true; });
+          host.addEventListener('mouseleave', () => { hovered = false; });
           builder(ctx);
           let lastW = 0, lastH = 0;
           function resize() {
@@ -416,7 +419,7 @@ const canonical = new URL(Astro.url.pathname, SITE).toString();
           (function loop() {
             requestAnimationFrame(loop);
             if (!visible) return;
-            t += 0.016;
+            if (!hovered) t += 0.016;
             
             // Animate tracked materials with staggered reveal
             if (revealed && trackedMaterials.length > 0) {
