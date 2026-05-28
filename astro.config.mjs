@@ -5,7 +5,7 @@ import icon from "astro-icon";
 
 export default defineConfig({
   site: "https://gpui-starter.hmziq.xyz",
-  srcDir: "./src/web",
+  srcDir: "./web",
   vite: {
     plugins: [tailwindcss()],
     build: {
@@ -56,7 +56,7 @@ export default defineConfig({
           items: [{ slug: "docs/architecture" }, { slug: "docs/performance" }],
         },
       ],
-      customCss: ["/src/web/styles/starlight.css"],
+      customCss: ["/web/styles/starlight.css"],
       lastUpdated: true,
       favicon: "/favicon.svg",
     }),
