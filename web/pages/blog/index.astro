@@ -1,0 +1,117 @@
+---
+import { getCollection } from 'astro:content';
+import Layout from '../../layouts/MarketingLayout.astro';
+import SocialIcon from '../../components/SocialIcon.astro';
+import { author, formatDate } from '../../util/author';
+
+const posts = (await getCollection('blog'))
+  .filter((p) => !p.data.draft)
+  .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
+---
+
+<Layout
+  title="gpui-starter Blog - Rust Desktop Development with GPUI"
+  description="Build notes, deep dives, and tutorials about building desktop apps with Rust and GPUI."
+>
+  <section class="relative z-10 pt-36 pb-12 px-6">
+    <div class="max-w-4xl mx-auto">
+      <span class="eyebrow">// Blog</span>
+      <h1
+        class="reveal mt-5 text-4xl sm:text-5xl font-extrabold tracking-[-0.02em] leading-[1.05]"
+      >
+        Writing about <span class="gradient-text">gpui-starter.</span>
+      </h1>
+      <p class="reveal mt-5 text-text-dim max-w-2xl text-lg leading-relaxed">
+        Build notes, deep dives, and the occasional rant. New posts whenever
+        there's something worth saying.
+      </p>
+    </div>
+  </section>
+
+  <section class="relative z-10 pb-32 px-6">
+    <div class="max-w-4xl mx-auto">
+      {
+        posts.length === 0 ? (
+          <p class="text-text-mute text-center py-16">
+            No posts yet. Check back soon.
+          </p>
+        ) : (
+          <ul class="list-none p-0 m-0 space-y-4">
+            {posts.map((post) => (
+              <li class="reveal">
+                <a
+                  href={`/blog/${post.id}/`}
+                  class="block glass rounded-2xl p-7 no-underline transition-colors hover:border-edge-hover group"
+                >
+                  <div class="flex items-center gap-3 text-xs text-text-mute mb-3 font-mono">
+                    <time datetime={post.data.date.toISOString()}>
+                      {formatDate(post.data.date)}
+                    </time>
+                    {post.data.tags.length > 0 && (
+                      <>
+                        <span class="opacity-40">·</span>
+                        <span class="flex gap-2">
+                          {post.data.tags.map((t) => (
+                            <span class="text-amber">#{t}</span>
+                          ))}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                  <h2 class="text-2xl font-bold tracking-tight mb-2 group-hover:text-amber transition-colors">
+                    {post.data.title}
+                  </h2>
+                  <p class="text-text-dim leading-relaxed">
+                    {post.data.description}
+                  </p>
+                </a>
+              </li>
+            ))}
+          </ul>
+        )
+      }
+
+      <div class="reveal mt-16 flex items-start gap-4 glass rounded-2xl p-6">
+        <img
+          src={author.avatar.dark}
+          alt={author.name}
+          width="56"
+          height="56"
+          class="rounded-full border border-edge flex-shrink-0"
+        />
+        <div class="flex-1">
+          <div class="flex items-baseline gap-2">
+            <a
+              href={author.url}
+              target="_blank"
+              rel="noopener"
+              class="font-semibold text-text no-underline hover:text-amber"
+            >
+              {author.name}
+            </a>
+            <span class="text-xs text-text-mute font-mono">@{author.twitterHandle}</span>
+          </div>
+          <p class="text-sm text-text-mute mt-1 mb-3 leading-relaxed">
+            {author.bio}
+          </p>
+          <div class="flex flex-wrap gap-2">
+            {
+              author.socials.map((s) => (
+                <a
+                  href={s.url}
+                  target="_blank"
+                  rel="noopener"
+                  aria-label={s.platform}
+                  title={s.platform}
+                  class="inline-flex items-center justify-center w-8 h-8 rounded-md border border-edge bg-[rgba(255,255,255,0.02)] text-text-mute no-underline hover:text-amber hover:border-edge-hover transition-colors"
+                >
+                  <SocialIcon platform={s.platform} size={15} />
+                </a>
+              ))
+            }
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</Layout>

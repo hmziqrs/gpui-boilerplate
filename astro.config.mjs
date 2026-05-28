@@ -21,7 +21,7 @@ export default defineConfig({
   integrations: [
     icon({
       include: {
-        "simple-icons": ["github", "rust"],
+        "simple-icons": ["github", "rust", "x", "linkedin", "telegram", "reddit"],
         lucide: ["globe"],
       },
     }),
@@ -32,11 +32,11 @@ export default defineConfig({
         {
           icon: "github",
           label: "GitHub",
-          href: "https://github.com/hmziqrs/gpui-app",
+          href: "https://github.com/hmziqrs/gpui-boilerplate",
         },
       ],
       editLink: {
-        baseUrl: "https://github.com/hmziqrs/gpui-app/edit/main/",
+        baseUrl: "https://github.com/hmziqrs/gpui-boilerplate/edit/main/",
       },
       sidebar: [
         {

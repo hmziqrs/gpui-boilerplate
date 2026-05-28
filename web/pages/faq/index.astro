@@ -1,0 +1,74 @@
+---
+import { getCollection } from 'astro:content';
+import Layout from '../../layouts/MarketingLayout.astro';
+
+const entries = (await getCollection('faq')).sort((a, b) => a.data.order - b.data.order);
+const categories = [...new Set(entries.map((e) => e.data.category))];
+---
+
+<Layout
+  title="FAQ - gpui-starter"
+  description="Frequently asked questions about gpui-starter, GPUI, and building desktop apps with Rust."
+>
+  <section class="relative z-10 pt-36 pb-12 px-6">
+    <div class="max-w-4xl mx-auto">
+      <span class="eyebrow">// FAQ</span>
+      <h1
+        class="reveal mt-5 text-4xl sm:text-5xl font-extrabold tracking-[-0.02em] leading-[1.05]"
+      >
+        Frequently asked <span class="gradient-text">questions.</span>
+      </h1>
+      <p class="reveal mt-5 text-text-dim max-w-2xl text-lg leading-relaxed">
+        Straight answers about gpui-starter and GPUI. Can't find what you need?
+        Check the <a href="/docs/" class="text-amber no-underline hover:underline">docs</a>,
+        browse the <a href="/blog/" class="text-amber no-underline hover:underline">blog</a>, or
+        <a href="https://github.com/hmziqrs/gpui-boilerplate/issues" target="_blank" rel="noopener" class="text-amber no-underline hover:underline">open an issue</a>.
+      </p>
+    </div>
+  </section>
+
+  <section class="relative z-10 pb-32 px-6">
+    <div class="max-w-4xl mx-auto space-y-12">
+      {categories.map((cat) => (
+        <div>
+          <h2 class="reveal text-xs font-mono uppercase tracking-[0.2em] text-amber mb-5">
+            {cat}
+          </h2>
+          <div class="space-y-3">
+            {entries
+              .filter((e) => e.data.category === cat)
+              .map((entry) => (
+                <a
+                  href={`/faq/${entry.id}/`}
+                  class="reveal block glass rounded-2xl p-6 no-underline transition-colors hover:border-edge-hover group"
+                >
+                  <h3 class="text-lg font-bold tracking-tight mb-1 group-hover:text-amber transition-colors">
+                    {entry.data.question}
+                  </h3>
+                  <p class="text-sm text-text-dim leading-relaxed">
+                    {entry.data.description}
+                  </p>
+                </a>
+              ))}
+          </div>
+        </div>
+      ))}
+
+      <div class="reveal text-center pt-8">
+        <p class="text-text-mute text-sm mb-5">Didn't find it?</p>
+        <div class="flex gap-3 justify-center flex-wrap">
+          <a
+            href="https://github.com/hmziqrs/gpui-boilerplate/issues"
+            target="_blank"
+            rel="noopener"
+            class="btn-primary"
+          >
+            Open an issue
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7"/><path d="M7 7h10v10"/></svg>
+          </a>
+          <a href="/docs/getting-started/" class="btn-secondary">Read the docs</a>
+        </div>
+      </div>
+    </div>
+  </section>
+</Layout>

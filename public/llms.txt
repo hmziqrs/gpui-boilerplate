@@ -1,0 +1,57 @@
+# gpui-starter
+
+> A production-ready Rust boilerplate for building desktop applications with GPUI.
+
+## What it is
+
+gpui-starter is a boilerplate project for building desktop apps with [GPUI](https://github.com/zed-industries/zed), the GPU-accelerated UI framework by the Zed team. It includes multi-page navigation, 21 built-in themes, internationalization, form validation, and a command launcher — everything you need to skip the boilerplate and start building.
+
+## Installation
+
+```bash
+git clone https://github.com/hmziqrs/gpui-boilerplate.git
+cd gpui-app
+cargo run
+```
+
+Requires Rust (2024 edition) and on macOS: Xcode Command Line Tools. On Linux: Vulkan headers.
+
+## Features
+
+- **Multi-page architecture** — sidebar navigation with GPUI routing
+- **21 themes** — Catppuccin, Dracula, Nord, Gruvbox, Tokyo Night, Solarized, One Dark, Rose Pine, Everforest, Kanagawa, and more. Live switching via Cmd+K.
+- **Internationalization** — English and Chinese (zh-CN) via es-fluent / Mozilla Fluent
+- **Form validation** — derive macros via gpui-form + koruma validation rules
+- **Command launcher** — Cmd+K fuzzy search across all app actions
+- **macOS system tray** — icon with quick-access menu
+- **Secure storage** — OS keychain integration via keyring crate
+- **SQLite** — local data persistence via rusqlite
+
+## Tech stack
+
+- Rust (2024 edition)
+- GPUI (GPU-accelerated UI framework from Zed)
+- gpui-component (UI component library)
+- gpui-form (form builder with derive macros)
+- es-fluent (Mozilla Fluent i18n)
+- koruma (validation)
+- rusqlite (SQLite)
+- keyring (OS credential store)
+
+## Project structure
+
+```
+src/
+├── app.rs          # AppRoot — main window
+├── page/           # Individual pages (home, settings, etc.)
+├── theme/          # 21 built-in themes
+├── i18n/           # Fluent translation files (en.ftl, zh-CN.ftl)
+├── command.rs      # Cmd+K launcher
+└── form/           # Form definitions with validation
+```
+
+## Links
+
+- Docs: https://gpui-starter.hmziq.xyz/docs/
+- GitHub: https://github.com/hmziqrs/gpui-boilerplate
+- Issues: https://github.com/hmziqrs/gpui-boilerplate/issues
