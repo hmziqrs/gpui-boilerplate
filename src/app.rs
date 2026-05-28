@@ -258,22 +258,31 @@ pub fn init(cx: &mut App) {
         crate::lifecycle::set_shutdown_step("begin_shutdown", cx);
         crate::lifecycle::set_stage(crate::lifecycle::LifecycleStage::ShuttingDown, cx);
         crate::lifecycle::set_shutdown_step("drain_tasks", cx);
-        crate::tasks::shutdown(cx);
-        crate::lifecycle::set_shutdown_step("stop_ipc", cx);
-        crate::single_instance::shutdown(cx);
-        crate::lifecycle::set_shutdown_step("stop_watchers", cx);
-        crate::desktop_actions::shutdown(cx);
-        crate::lifecycle::set_shutdown_step("unregister_shortcuts", cx);
-        crate::shortcuts::shutdown(cx);
-        crate::lifecycle::set_shutdown_step("flush_storage", cx);
-        crate::storage::shutdown(cx);
-        crate::lifecycle::set_shutdown_step("flush_telemetry", cx);
-        crate::telemetry::record_event("app_shutdown_requested", cx);
-        crate::telemetry::shutdown(cx);
-        crate::lifecycle::set_shutdown_step("flush_logs", cx);
-        crate::logging::shutdown(cx);
-        crate::lifecycle::set_shutdown_step("quit", cx);
-        cx.quit();
+
+        let drain = crate::tasks::drain_with_timeout(std::time::Duration::from_secs(5), cx);
+
+        cx.spawn(async move |cx| {
+            drain.await;
+
+            cx.update(|cx| {
+                crate::lifecycle::set_shutdown_step("stop_ipc", cx);
+                crate::single_instance::shutdown(cx);
+                crate::lifecycle::set_shutdown_step("stop_watchers", cx);
+                crate::desktop_actions::shutdown(cx);
+                crate::lifecycle::set_shutdown_step("unregister_shortcuts", cx);
+                crate::shortcuts::shutdown(cx);
+                crate::lifecycle::set_shutdown_step("flush_storage", cx);
+                crate::storage::shutdown(cx);
+                crate::lifecycle::set_shutdown_step("flush_telemetry", cx);
+                crate::telemetry::record_event("app_shutdown_requested", cx);
+                crate::telemetry::shutdown(cx);
+                crate::lifecycle::set_shutdown_step("flush_logs", cx);
+                crate::logging::shutdown(cx);
+                crate::lifecycle::set_shutdown_step("quit", cx);
+                cx.quit();
+            });
+        })
+        .detach();
     });
 
     cx.on_action(|_: &About, cx| {
