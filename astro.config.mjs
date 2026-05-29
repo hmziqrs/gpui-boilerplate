@@ -27,7 +27,7 @@ export default defineConfig({
     }),
     starlight({
       title: "gpui-starter",
-      description: "A boilerplate for building desktop apps with GPUI",
+      description: "A production-ready Rust boilerplate for GPUI desktop apps with themes, i18n, forms, and more",
       social: [
         {
           icon: "github",

@@ -6,7 +6,11 @@
   "scripts": {
     "docs:dev": "astro dev",
     "docs:build": "astro build",
-    "docs:preview": "astro preview"
+    "docs:preview": "astro preview",
+    "docs:typecheck": "astro check",
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [
     "gpui",
@@ -21,18 +25,28 @@
     "type": "git",
     "url": "git+https://github.com/hmziqrs/gpui-boilerplate.git"
   },
+  "homepage": "https://gpui-starter.hmziq.xyz",
+  "bugs": {
+    "url": "https://github.com/hmziqrs/gpui-boilerplate/issues"
+  },
   "devDependencies": {
+    "@astrojs/check": "^0.9.9",
     "@astrojs/starlight": "^0.39.2",
     "@tailwindcss/vite": "^4.3.0",
     "@types/node": "^20.0.0",
     "astro": "^6.3.3",
+    "oxlint": "^1.67.0",
     "tailwindcss": "^4.3.0",
-    "three": "^0.184.0"
+    "three": "^0.184.0",
+    "typescript": "^6.0.3"
   },
   "dependencies": {
     "@astrojs/rss": "^4.0.18",
     "@iconify-json/lucide": "^1.2.109",
     "@iconify-json/simple-icons": "^1.2.83",
     "astro-icon": "^1.1.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
