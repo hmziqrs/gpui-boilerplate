@@ -12,12 +12,12 @@ description: Install and set up gpui-starter
 ## Quick start
 
 ```bash
-git clone https://github.com/hmziqrs/gpui-boilerplate.git
-cd gpui-boilerplate
+git clone https://github.com/hmziqrs/gpui-boilerplate.git gpui-app
+cd gpui-app
 cargo run
 ```
 
-The app window opens with four pages: **Home**, **Form**, **Settings**, and **About**.
+The app window opens with six pages: **Home**, **Form**, **Settings**, **About**, **Diagnostics**, and **Notifications**.
 
 ## Project structure
 

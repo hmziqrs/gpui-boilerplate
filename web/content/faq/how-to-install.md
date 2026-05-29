@@ -14,7 +14,7 @@ order: 3
 ## Quick start
 
 ```bash
-git clone https://github.com/hmziqrs/gpui-boilerplate.git
+git clone https://github.com/hmziqrs/gpui-boilerplate.git gpui-app
 cd gpui-app
 cargo run
 ```

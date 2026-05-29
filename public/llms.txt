@@ -9,8 +9,8 @@ gpui-starter is a boilerplate project for building desktop apps with [GPUI](http
 ## Installation
 
 ```bash
-git clone https://github.com/hmziqrs/gpui-boilerplate.git
-cd gpui-boilerplate
+git clone https://github.com/hmziqrs/gpui-boilerplate.git gpui-app
+cd gpui-app
 cargo run
 ```
 
@@ -18,14 +18,17 @@ Requires Rust (2024 edition) and on macOS: Xcode Command Line Tools. On Linux: V
 
 ## Features
 
-- **Multi-page architecture** — sidebar navigation with GPUI routing
-- **21 themes** — Catppuccin, Dracula, Nord, Gruvbox, Tokyo Night, Solarized, One Dark, Rose Pine, Everforest, Kanagawa, and more. Live switching via Cmd+K.
+- **Multi-page architecture** — sidebar navigation with 6 views (Home, Form, Settings, About, Diagnostics, Notifications)
+- **21 themes** — JSON theme files loaded via gpui-component. Catppuccin, Dracula, Nord, Gruvbox, Tokyo Night, Solarized, One Dark, Rose Pine, Everforest, Kanagawa, and more. Live switching via Cmd+K.
 - **Internationalization** — English and Chinese (zh-CN) via es-fluent / Mozilla Fluent
 - **Form validation** — derive macros via gpui-form + koruma validation rules
 - **Command launcher** — Cmd+K fuzzy search across all app actions
 - **macOS system tray** — icon with quick-access menu
 - **Secure storage** — OS keychain integration via keyring crate
 - **SQLite** — local data persistence via rusqlite
+- **Notifications** — inbox and service system
+- **Single instance** — prevents multiple app instances
+- **Diagnostics** — built-in diagnostics page
 
 ## Tech stack
 
@@ -42,12 +45,16 @@ Requires Rust (2024 edition) and on macOS: Xcode Command Line Tools. On Linux: V
 
 ```
 src/
-├── app.rs          # AppRoot — main window
-├── page/           # Individual pages (home, settings, etc.)
-├── theme/          # 21 built-in themes
-├── i18n/           # Fluent translation files (en.ftl, zh-CN.ftl)
-├── command.rs      # Cmd+K launcher
-└── form/           # Form definitions with validation
+├── main.rs             # Entry point
+├── app.rs              # AppRoot — main window
+├── root.rs             # Root layout component
+├── views/              # Page views (home, form, settings, about, diagnostics, notifications)
+├── i18n/               # Fluent translation files (en.ftl, zh-CN.ftl)
+├── launcher.rs         # Cmd+K command launcher
+├── sidebar.rs          # Sidebar navigation
+├── routes.rs           # Page routing
+└── ...                 # Storage, tray, menus, shortcuts, etc.
+themes/                 # 21 JSON theme files (not Rust code)
 ```
 
 ## Links

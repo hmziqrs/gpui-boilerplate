@@ -4,11 +4,25 @@ import Layout from '../../layouts/MarketingLayout.astro';
 
 const entries = (await getCollection('faq')).sort((a, b) => a.data.order - b.data.order);
 const categories = [...new Set(entries.map((e) => e.data.category))];
+
+const faqJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: entries.map((e) => ({
+    '@type': 'Question',
+    name: e.data.question,
+    acceptedAnswer: {
+      '@type': 'Answer',
+      text: e.data.description,
+    },
+  })),
+};
 ---
 
 <Layout
   title="FAQ - gpui-starter"
   description="Frequently asked questions about gpui-starter, GPUI, and building desktop apps with Rust."
+  jsonLd={faqJsonLd}
 >
   <section class="relative z-10 pt-36 pb-12 px-6">
     <div class="max-w-4xl mx-auto">
