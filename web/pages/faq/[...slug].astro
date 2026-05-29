@@ -4,7 +4,7 @@ import Layout from '../../layouts/MarketingLayout.astro';
 
 export async function getStaticPaths() {
   const entries = await getCollection('faq');
-  const sorted = entries.sort((a, b) => a.data.order - b.data.order);
+  const sorted = entries.toSorted((a, b) => a.data.order - b.data.order);
   return sorted.map((entry, i) => ({
     params: { slug: entry.id },
     props: {

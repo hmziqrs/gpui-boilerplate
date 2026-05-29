@@ -4,6 +4,7 @@ target
 node_modules
 dist
 *.tgz
+package-lock.json
 .astro
 
 # Environment

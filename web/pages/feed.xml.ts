@@ -16,7 +16,7 @@ export async function GET(context: APIContext) {
       'A production-ready Rust boilerplate for GPUI desktop apps. Build notes, tutorials, and deep dives.',
     site: context.site,
     items: posts
-      .sort(
+      .toSorted(
         (a: CollectionEntry<'blog'>, b: CollectionEntry<'blog'>) =>
           b.data.date.valueOf() - a.data.date.valueOf(),
       )

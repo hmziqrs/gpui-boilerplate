@@ -261,6 +261,10 @@
   -webkit-text-fill-color: transparent;
 }
 
+@utility headline-glow {
+  text-shadow: 0 0 80px rgba(245, 158, 11, 0.25);
+}
+
 @utility stat-num {
   font-family: var(--font-sans);
   font-weight: 800;
