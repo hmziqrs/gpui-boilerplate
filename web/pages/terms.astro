@@ -1,109 +1,376 @@
 ---
-import MarketingLayout from '../layouts/MarketingLayout.astro';
+import Layout from '../layouts/MarketingLayout.astro';
+
+const title = 'Terms of Use - gpui-starter';
+const description =
+  'Terms of use for the gpui-starter open-source desktop app boilerplate. MIT license, no warranty, third-party dependency notices, and trademark information.';
+const updated = '2026-05-15';
+
+const sections = [
+  { id: 'acceptance', label: 'Acceptance' },
+  { id: 'software', label: 'The software' },
+  { id: 'no-warranty', label: 'No warranty' },
+  { id: 'third-party-deps', label: 'Third-party dependencies' },
+  { id: 'responsibilities', label: 'Your responsibilities' },
+  { id: 'trademarks', label: 'Trademarks' },
+  { id: 'modifications', label: 'Modifications' },
+  { id: 'governing-law', label: 'Governing law' },
+  { id: 'contact', label: 'Contact' },
+];
 ---
 
-<MarketingLayout title="Terms of Use" description="Terms of use for gpui-starter. MIT license, no warranty, third-party providers, and API cost responsibilities." noindex={true}>
+<Layout title={title} description={description}>
+  <!-- HERO -->
+  <section class="relative z-10 pt-32 pb-12 px-6">
+    <div class="max-w-4xl mx-auto">
+      <div class="reveal flex justify-center mb-6">
+        <a href="/" class="badge no-underline">
+          <svg
+            width="11"
+            height="11"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="text-amber rotate-180"
+            aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg
+          >
+          <span class="text-text-dim">Back to home</span>
+        </a>
+      </div>
 
-  <section class="pt-32 pb-20 px-6">
-    <div class="max-w-3xl mx-auto">
-      <span class="eyebrow">Legal</span>
-      <h1 class="mt-4 text-4xl font-extrabold tracking-tight">Terms of Use</h1>
-      <p class="mt-4 text-text-dim">Last updated: May 2026</p>
+      <div class="reveal text-center">
+        <span class="eyebrow">// Legal</span>
+        <h1
+          class="mt-5 text-5xl sm:text-6xl font-extrabold tracking-[-0.03em] leading-[1.05] headline-glow"
+        >
+          Terms of <span class="gradient-text">Use.</span>
+        </h1>
+        <p class="mt-5 font-mono text-sm text-text-mute">
+          Last updated <time datetime={updated}>{updated}</time>
+        </p>
+        <p class="mt-6 text-lg text-text-dim max-w-2xl mx-auto leading-relaxed">
+          The short version: gpui-starter is free, open source under MIT, and
+          provided as-is. You're responsible for how you use it and for respecting
+          the licenses of its dependencies.
+        </p>
+      </div>
     </div>
   </section>
 
-  <section class="pb-20 px-6">
-    <div class="max-w-3xl mx-auto space-y-8">
+  <!-- TWO COLUMN: TOC + CONTENT -->
+  <section class="relative z-10 px-6 pb-24">
+    <div
+      class="max-w-5xl mx-auto grid lg:grid-cols-[16rem_1fr] gap-10 items-start"
+    >
+      <!-- Sticky TOC -->
+      <aside class="reveal lg:sticky lg:top-24 self-start">
+        <div class="glass rounded-2xl p-5">
+          <h2
+            class="text-[11px] font-mono uppercase tracking-[0.12em] text-amber mb-3"
+          >
+            // Contents
+          </h2>
+          <nav>
+            <ol class="space-y-1.5 list-none p-0 m-0 mono">
+              {
+                sections.map((s, i) => (
+                  <li>
+                    <a
+                      href={`#${s.id}`}
+                      class="flex items-baseline gap-3 px-2 py-1.5 rounded-md text-sm text-text-dim hover:text-amber hover:bg-amber/[0.04] no-underline transition-colors"
+                    >
+                      <span class="font-mono text-xs text-text-mute w-5 flex-shrink-0">
+                        {String(i + 1).padStart(2, '0')}
+                      </span>
+                      <span class="font-sans">{s.label}</span>
+                    </a>
+                  </li>
+                ))
+              }
+            </ol>
+          </nav>
+        </div>
+      </aside>
 
-      <div class="glass rounded-2xl p-6 md:p-8">
-        <h2 class="text-xl font-bold mb-3">Acceptance</h2>
-        <p class="text-text-dim leading-relaxed">
-          By using gpui-starter or this website, you accept these terms. If you disagree,
-          don't use the software.
-        </p>
-      </div>
+      <!-- Content -->
+      <article class="reveal space-y-5">
+        <div class="glass rounded-2xl p-7 sm:p-9">
+          <h2
+            id="acceptance"
+            class="scroll-mt-24 text-xl sm:text-2xl font-bold tracking-tight mb-3"
+          >
+            <span class="font-mono text-amber mr-2">01</span>Acceptance
+          </h2>
+          <p class="text-text-dim leading-relaxed text-[0.95rem]">
+            By using gpui-starter or browsing this website, you agree to these
+            terms. If you do not agree, do not use the software, and please
+            leave the site.
+          </p>
+        </div>
 
-      <div class="glass rounded-2xl p-6 md:p-8">
-        <h2 class="text-xl font-bold mb-3">The software</h2>
-        <p class="text-text-dim leading-relaxed">
-          gpui-starter is released under the
-          <a href="https://opensource.org/licenses/MIT" target="_blank" rel="noopener" class="text-amber hover:text-amber-bright transition-colors">MIT License</a>.
-          You are free to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-          copies of the software. The only requirement is that the copyright notice and permission
-          notice be included in all copies or substantial portions of the software.
-        </p>
-      </div>
+        <div class="glass rounded-2xl p-7 sm:p-9">
+          <h2
+            id="software"
+            class="scroll-mt-24 text-xl sm:text-2xl font-bold tracking-tight mb-3"
+          >
+            <span class="font-mono text-amber mr-2">02</span>The software
+          </h2>
+          <p class="text-text-dim leading-relaxed text-[0.95rem] mb-4">
+            gpui-starter is released under the <strong class="text-text"
+              >MIT License</strong
+            >. The full license text is included in the <a
+              href="https://github.com/hmziqrs/gpui-boilerplate/blob/master/LICENSE"
+              target="_blank"
+              rel="noopener"
+              class="text-amber no-underline hover:underline">LICENSE file</a
+            > in the source repository. In summary, you may:
+          </p>
+          <ul class="space-y-2 list-none p-0 m-0">
+            <li class="flex gap-3 text-[0.93rem] text-text-dim">
+              <span class="flex-shrink-0 mt-2 w-1.5 h-1.5 rounded-full bg-amber"
+              ></span>Use the software for any purpose, commercial or
+              non-commercial
+            </li>
+            <li class="flex gap-3 text-[0.93rem] text-text-dim">
+              <span class="flex-shrink-0 mt-2 w-1.5 h-1.5 rounded-full bg-amber"
+              ></span>Modify, fork, and redistribute it
+            </li>
+            <li class="flex gap-3 text-[0.93rem] text-text-dim">
+              <span class="flex-shrink-0 mt-2 w-1.5 h-1.5 rounded-full bg-amber"
+              ></span>Bundle it into your own products
+            </li>
+            <li class="flex gap-3 text-[0.93rem] text-text-dim">
+              <span class="flex-shrink-0 mt-2 w-1.5 h-1.5 rounded-full bg-amber"
+              ></span>Sell copies of it (with the MIT license preserved)
+            </li>
+          </ul>
+          <p class="mt-4 text-text-dim leading-relaxed text-[0.95rem]">
+            The only obligation is that the copyright notice and license text
+            travel with any copies or substantial portions you redistribute.
+          </p>
+        </div>
 
-      <div class="glass rounded-2xl p-6 md:p-8">
-        <h2 class="text-xl font-bold mb-3">No warranty</h2>
-        <p class="text-text-dim leading-relaxed">
-          The software is provided "as is", without warranty of any kind, express or implied.
-          In no event shall the authors or copyright holders be liable for any claim, damages,
-          or other liability arising from the software or its use.
-        </p>
-      </div>
-
-      <div class="glass rounded-2xl p-6 md:p-8">
-        <h2 class="text-xl font-bold mb-4">Third-party dependencies</h2>
-        <p class="text-text-dim leading-relaxed mb-4">
-          gpui-starter depends on and is grateful for these open-source projects:
-        </p>
-        <div class="grid sm:grid-cols-2 gap-3">
-          <div class="p-3 rounded-lg bg-surface border border-edge">
-            <div class="text-sm font-bold">GPUI</div>
-            <div class="text-xs text-text-mute">by Zed Industries — GPU-accelerated UI framework</div>
+        <div class="glass rounded-2xl p-7 sm:p-9">
+          <h2
+            id="no-warranty"
+            class="scroll-mt-24 text-xl sm:text-2xl font-bold tracking-tight mb-3"
+          >
+            <span class="font-mono text-amber mr-2">03</span>No warranty
+          </h2>
+          <div
+            class="p-4 rounded-xl border border-amber-400/30 bg-amber-400/[0.05] mb-4"
+          >
+            <p
+              class="font-mono text-[11px] uppercase tracking-wider text-amber-300 mb-1"
+            >
+              As-is
+            </p>
+            <p class="text-text-dim text-[0.93rem] leading-relaxed">
+              THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+              EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+              MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND
+              NON-INFRINGEMENT.
+            </p>
           </div>
-          <div class="p-3 rounded-lg bg-surface border border-edge">
-            <div class="text-sm font-bold">gpui-component</div>
-            <div class="text-xs text-text-mute">by Longbridge — UI component library for GPUI</div>
-          </div>
-          <div class="p-3 rounded-lg bg-surface border border-edge">
-            <div class="text-sm font-bold">es-fluent</div>
-            <div class="text-xs text-text-mute">Fluent localization system for Rust</div>
-          </div>
-          <div class="p-3 rounded-lg bg-surface border border-edge">
-            <div class="text-sm font-bold">koruma</div>
-            <div class="text-xs text-text-mute">Composable validation with derive macros</div>
+          <p class="text-text-dim leading-relaxed text-[0.95rem]">
+            In plain English: this is a project maintained by an independent
+            developer in their own time. We do our best to ship working, safe
+            software, but we make no guarantees that it will work for your
+            specific setup, that it will be free of bugs, or that it will be
+            maintained indefinitely. Test in a non-critical environment first.
+          </p>
+        </div>
+
+        <div class="glass rounded-2xl p-7 sm:p-9">
+          <h2
+            id="third-party-deps"
+            class="scroll-mt-24 text-xl sm:text-2xl font-bold tracking-tight mb-3"
+          >
+            <span class="font-mono text-amber mr-2">04</span>Third-party
+            dependencies
+          </h2>
+          <p class="text-text-dim leading-relaxed text-[0.95rem] mb-4">
+            gpui-starter depends on and is grateful for these open-source projects:
+          </p>
+          <div class="grid sm:grid-cols-2 gap-3">
+            <a
+              href="https://github.com/zed-industries/zed"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="block p-4 rounded-xl border border-edge bg-amber/[0.03] hover:border-edge-hover hover:bg-amber/[0.06] no-underline transition-colors"
+            >
+              <div class="font-semibold text-text">GPUI</div>
+              <div class="text-xs text-text-mute mt-1 font-mono">
+                Zed Industries — GPU-accelerated UI
+              </div>
+            </a>
+            <a
+              href="https://github.com/longbridge/gpui-component"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="block p-4 rounded-xl border border-edge bg-amber/[0.03] hover:border-edge-hover hover:bg-amber/[0.06] no-underline transition-colors"
+            >
+              <div class="font-semibold text-text">gpui-component</div>
+              <div class="text-xs text-text-mute mt-1 font-mono">
+                Longbridge — UI component library
+              </div>
+            </a>
+            <a
+              href="https://github.com/nickel-org/es-fluent"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="block p-4 rounded-xl border border-edge bg-amber/[0.03] hover:border-edge-hover hover:bg-amber/[0.06] no-underline transition-colors"
+            >
+              <div class="font-semibold text-text">es-fluent</div>
+              <div class="text-xs text-text-mute mt-1 font-mono">
+                Fluent localization for Rust
+              </div>
+            </a>
+            <a
+              href="https://github.com/nickel-org/koruma"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="block p-4 rounded-xl border border-edge bg-amber/[0.03] hover:border-edge-hover hover:bg-amber/[0.06] no-underline transition-colors"
+            >
+              <div class="font-semibold text-text">koruma</div>
+              <div class="text-xs text-text-mute mt-1 font-mono">
+                Composable validation with derive macros
+              </div>
+            </a>
           </div>
         </div>
-      </div>
 
-      <div class="glass rounded-2xl p-6 md:p-8">
-        <h2 class="text-xl font-bold mb-3">Your responsibilities</h2>
-        <ul class="text-text-dim leading-relaxed space-y-2">
-          <li>What you build with gpui-starter is yours — you own your code</li>
-          <li>Don't use it for anything illegal</li>
-          <li>Respect the licenses of dependencies you include</li>
-          <li>The software is provided by an independent developer, not a company</li>
-        </ul>
-      </div>
+        <div class="glass rounded-2xl p-7 sm:p-9">
+          <h2
+            id="responsibilities"
+            class="scroll-mt-24 text-xl sm:text-2xl font-bold tracking-tight mb-3"
+          >
+            <span class="font-mono text-amber mr-2">05</span>Your
+            responsibilities
+          </h2>
+          <p class="text-text-dim leading-relaxed text-[0.95rem] mb-4">
+            When using gpui-starter, you agree to:
+          </p>
+          <ul class="space-y-2 list-none p-0 m-0">
+            <li class="flex gap-3 text-[0.93rem] text-text-dim">
+              <span class="flex-shrink-0 mt-2 w-1.5 h-1.5 rounded-full bg-amber"
+              ></span>Take ownership of what you build — your code is yours
+            </li>
+            <li class="flex gap-3 text-[0.93rem] text-text-dim">
+              <span class="flex-shrink-0 mt-2 w-1.5 h-1.5 rounded-full bg-amber"
+              ></span>Not use it for anything illegal
+            </li>
+            <li class="flex gap-3 text-[0.93rem] text-text-dim">
+              <span class="flex-shrink-0 mt-2 w-1.5 h-1.5 rounded-full bg-amber"
+              ></span>Respect the licenses of dependencies you include
+            </li>
+            <li class="flex gap-3 text-[0.93rem] text-text-dim">
+              <span class="flex-shrink-0 mt-2 w-1.5 h-1.5 rounded-full bg-amber"
+              ></span>Understand that this is maintained by an independent
+              developer, not a company
+            </li>
+          </ul>
+        </div>
 
-      <div class="glass rounded-2xl p-6 md:p-8">
-        <h2 class="text-xl font-bold mb-3">Trademarks</h2>
-        <p class="text-text-dim leading-relaxed">
-          GPUI is a trademark of Zed Industries, Inc. gpui-starter is not affiliated with,
-          endorsed by, or connected to Zed Industries. All other trademarks belong to their
-          respective owners.
-        </p>
-      </div>
+        <div class="glass rounded-2xl p-7 sm:p-9">
+          <h2
+            id="trademarks"
+            class="scroll-mt-24 text-xl sm:text-2xl font-bold tracking-tight mb-3"
+          >
+            <span class="font-mono text-amber mr-2">06</span>Trademarks
+          </h2>
+          <p class="text-text-dim leading-relaxed text-[0.95rem]">
+            GPUI is a trademark of Zed Industries, Inc. <strong class="text-text"
+              >gpui-starter is an independent open-source project.</strong
+            > It is not affiliated with, endorsed by, or sponsored by Zed
+            Industries. All other trademarks belong to their respective owners.
+          </p>
+        </div>
 
-      <div class="glass rounded-2xl p-6 md:p-8">
-        <h2 class="text-xl font-bold mb-3">Modifications</h2>
-        <p class="text-text-dim leading-relaxed">
-          These terms may change. Continued use after changes constitutes acceptance of the
-          updated terms.
-        </p>
-      </div>
+        <div class="glass rounded-2xl p-7 sm:p-9">
+          <h2
+            id="modifications"
+            class="scroll-mt-24 text-xl sm:text-2xl font-bold tracking-tight mb-3"
+          >
+            <span class="font-mono text-amber mr-2">07</span>Modifications
+          </h2>
+          <p class="text-text-dim leading-relaxed text-[0.95rem]">
+            We may update these terms from time to time. Material changes will
+            be reflected by bumping the "last updated" date at the top. Because
+            this page is open source, every revision is auditable in the <a
+              href="https://github.com/hmziqrs/gpui-boilerplate/commits/master/web/pages/terms.astro"
+              target="_blank"
+              rel="noopener"
+              class="text-amber no-underline hover:underline">git history</a
+            >. Continued use of the software or the site after a change
+            constitutes acceptance of the updated terms.
+          </p>
+        </div>
 
-      <div class="glass rounded-2xl p-6 md:p-8">
-        <h2 class="text-xl font-bold mb-3">Contact</h2>
-        <p class="text-text-dim leading-relaxed">
-          Questions? Open an issue at
-          <a href="https://github.com/hmziqrs/gpui-boilerplate/issues" target="_blank" rel="noopener" class="text-amber hover:text-amber-bright transition-colors">github.com/hmziqrs/gpui-boilerplate/issues</a>.
-        </p>
-      </div>
+        <div class="glass rounded-2xl p-7 sm:p-9">
+          <h2
+            id="governing-law"
+            class="scroll-mt-24 text-xl sm:text-2xl font-bold tracking-tight mb-3"
+          >
+            <span class="font-mono text-amber mr-2">08</span>Governing law
+          </h2>
+          <p class="text-text-dim leading-relaxed text-[0.95rem]">
+            These terms are governed by the laws of the maintainer's primary
+            jurisdiction. To the extent any provision is found unenforceable,
+            the remainder remains in effect. Nothing in these terms limits any
+            rights you may have under mandatory consumer protection laws in your
+            local jurisdiction.
+          </p>
+        </div>
 
+        <div class="glass rounded-2xl p-7 sm:p-9">
+          <h2
+            id="contact"
+            class="scroll-mt-24 text-xl sm:text-2xl font-bold tracking-tight mb-3"
+          >
+            <span class="font-mono text-amber mr-2">09</span>Contact
+          </h2>
+          <p class="text-text-dim leading-relaxed text-[0.95rem]">
+            For legal or licensing questions, open an <a
+              href="https://github.com/hmziqrs/gpui-boilerplate/issues"
+              target="_blank"
+              rel="noopener"
+              class="text-amber no-underline hover:underline">issue on GitHub</a
+            > or reach out via the channels on <a
+              href="https://hmziq.rs"
+              target="_blank"
+              rel="noopener"
+              class="text-amber no-underline hover:underline">hmziq.rs</a
+            >.
+          </p>
+          <div class="mt-7 flex flex-wrap gap-3">
+            <a
+              href="https://github.com/hmziqrs/gpui-boilerplate"
+              target="_blank"
+              rel="noopener"
+              class="btn-primary"
+            >
+              View source on GitHub
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+                ><path d="M7 17 17 7"></path><path d="M7 7h10v10"></path></svg
+              >
+            </a>
+            <a href="/privacy/" class="btn-secondary">Read the privacy policy</a>
+          </div>
+        </div>
+      </article>
     </div>
   </section>
-
-</MarketingLayout>
+</Layout>

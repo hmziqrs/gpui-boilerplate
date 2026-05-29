@@ -3,8 +3,25 @@ target
 # Website
 node_modules
 dist
+*.tgz
 .astro
 
 # Environment
 .env
-.env.*
+.env.development.local
+.env.test.local
+.env.production.local
+.env.local
+
+# OS
+.DS_Store
+
+# IDE
+.idea
+
+# Claude
+.claude/worktrees/
+
+# Cache
+.cache
+*.tsbuildinfo

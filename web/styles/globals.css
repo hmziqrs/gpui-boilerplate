@@ -90,6 +90,19 @@
 
 /* ========== Background layers ========== */
 
+@utility provider-card {
+  position: relative;
+  overflow: hidden;
+}
+
+@utility three-inline {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
 @utility grid-overlay {
   position: fixed;
   inset: 0;

@@ -1,5 +1,7 @@
 ---
 import { getCollection, render } from 'astro:content';
+import { existsSync } from 'fs';
+import { join } from 'path';
 import Layout from '../../layouts/MarketingLayout.astro';
 import SocialIcon from '../../components/SocialIcon.astro';
 import AudioPlayer from '../../components/AudioPlayer.astro';
@@ -16,7 +18,8 @@ export async function getStaticPaths() {
 const { post } = Astro.props;
 const { Content } = await render(post);
 const minutes = readingTime(post.body ?? '');
-const audioSrc = post.data.audio ?? null;
+const localAudioPath = join(process.cwd(), 'audio', `${post.id}.mp3`);
+const audioSrc = post.data.audio ?? (existsSync(localAudioPath) ? `/audio/${post.id}.mp3` : null);
 ---
 
 <Layout

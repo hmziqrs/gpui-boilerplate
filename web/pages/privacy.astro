@@ -1,89 +1,299 @@
 ---
-import MarketingLayout from '../layouts/MarketingLayout.astro';
+import Layout from '../layouts/MarketingLayout.astro';
+
+const title = 'Privacy Policy - gpui-starter';
+const description =
+  'How the gpui-starter website handles your data. No analytics, no cookies, no tracking. The desktop app collects nothing.';
+const updated = '2026-05-15';
+
+const sections = [
+  { id: 'scope', label: 'Scope' },
+  { id: 'data-we-collect', label: 'Data we collect' },
+  { id: 'data-we-dont', label: "Data we don't collect" },
+  { id: 'third-party', label: 'Third-party services' },
+  { id: 'your-rights', label: 'Your rights' },
+  { id: 'changes', label: 'Changes to this policy' },
+  { id: 'contact', label: 'Contact' },
+];
 ---
 
-<MarketingLayout title="Privacy Policy" description="Privacy policy for gpui-starter. Learn what data is collected, how cookies are used, and your rights under GDPR and CCPA." noindex={true}>
+<Layout title={title} description={description}>
+  <!-- HERO -->
+  <section class="relative z-10 pt-32 pb-12 px-6">
+    <div class="max-w-4xl mx-auto">
+      <div class="reveal flex justify-center mb-6">
+        <a href="/" class="badge no-underline">
+          <svg
+            width="11"
+            height="11"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="text-amber rotate-180"
+            aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg
+          >
+          <span class="text-text-dim">Back to home</span>
+        </a>
+      </div>
 
-  <section class="pt-32 pb-20 px-6">
-    <div class="max-w-3xl mx-auto">
-      <span class="eyebrow">Legal</span>
-      <h1 class="mt-4 text-4xl font-extrabold tracking-tight">Privacy Policy</h1>
-      <p class="mt-4 text-text-dim">Last updated: May 2026</p>
+      <div class="reveal text-center">
+        <span class="eyebrow">// Legal</span>
+        <h1
+          class="mt-5 text-5xl sm:text-6xl font-extrabold tracking-[-0.03em] leading-[1.05] headline-glow"
+        >
+          Privacy <span class="gradient-text">Policy.</span>
+        </h1>
+        <p class="mt-5 font-mono text-sm text-text-mute">
+          Last updated <time datetime={updated}>{updated}</time>
+        </p>
+        <p class="mt-6 text-lg text-text-dim max-w-2xl mx-auto leading-relaxed">
+          We respect your data because we'd want the same. This page explains
+          what this website (gpui-starter.hmziq.xyz) collects, what it doesn't,
+          and your rights.
+        </p>
+      </div>
     </div>
   </section>
 
-  <section class="pb-20 px-6">
-    <div class="max-w-3xl mx-auto space-y-8">
+  <!-- TWO COLUMN: TOC + CONTENT -->
+  <section class="relative z-10 px-6 pb-24">
+    <div
+      class="max-w-5xl mx-auto grid lg:grid-cols-[16rem_1fr] gap-10 items-start"
+    >
+      <!-- Sticky TOC -->
+      <aside class="reveal lg:sticky lg:top-24 self-start">
+        <div class="glass rounded-2xl p-5">
+          <h2
+            class="text-[11px] font-mono uppercase tracking-[0.12em] text-amber mb-3"
+          >
+            // Contents
+          </h2>
+          <nav>
+            <ol class="space-y-1.5 list-none p-0 m-0 mono">
+              {
+                sections.map((s, i) => (
+                  <li>
+                    <a
+                      href={`#${s.id}`}
+                      class="flex items-baseline gap-3 px-2 py-1.5 rounded-md text-sm text-text-dim hover:text-amber hover:bg-amber/[0.04] no-underline transition-colors"
+                    >
+                      <span class="font-mono text-xs text-text-mute w-5 flex-shrink-0">
+                        {String(i + 1).padStart(2, '0')}
+                      </span>
+                      <span class="font-sans">{s.label}</span>
+                    </a>
+                  </li>
+                ))
+              }
+            </ol>
+          </nav>
+        </div>
+      </aside>
 
-      <div class="glass rounded-2xl p-6 md:p-8">
-        <h2 class="text-xl font-bold mb-3">Scope</h2>
-        <p class="text-text-dim leading-relaxed">
-          This policy covers the gpui-starter website at
-          <code class="text-sm bg-amber/10 text-amber px-1.5 py-0.5 rounded border border-amber/20">gpui-starter.hmziq.xyz</code>.
-          The desktop application itself runs entirely locally on your machine and does not
-          communicate with any servers.
-        </p>
-      </div>
+      <!-- Content -->
+      <article class="reveal space-y-5">
+        <div class="glass rounded-2xl p-7 sm:p-9">
+          <h2
+            id="scope"
+            class="scroll-mt-24 text-xl sm:text-2xl font-bold tracking-tight mb-3"
+          >
+            <span class="font-mono text-amber mr-2">01</span>Scope
+          </h2>
+          <div class="space-y-3 text-text-dim leading-relaxed text-[0.95rem]">
+            <p>
+              This privacy policy covers <strong class="text-text"
+                >the gpui-starter marketing website</strong
+              > hosted at <code
+                class="font-mono text-amber bg-amber/10 px-1.5 py-0.5 rounded text-[0.85em]"
+                >gpui-starter.hmziq.xyz</code
+              >.
+            </p>
+            <p>
+              It also covers the gpui-starter desktop application. The app runs
+              entirely on your machine, makes no outbound connections of its own,
+              and collects no telemetry.
+            </p>
+          </div>
+        </div>
 
-      <div class="glass rounded-2xl p-6 md:p-8">
-        <h2 class="text-xl font-bold mb-3">Data we collect</h2>
-        <p class="text-text-dim leading-relaxed">
-          <strong class="text-text">None.</strong> This website does not use analytics, tracking
-          scripts, cookies, or any form of data collection. We don't track page views, clicks,
-          or user behavior.
-        </p>
-      </div>
+        <div class="glass rounded-2xl p-7 sm:p-9">
+          <h2
+            id="data-we-collect"
+            class="scroll-mt-24 text-xl sm:text-2xl font-bold tracking-tight mb-3"
+          >
+            <span class="font-mono text-amber mr-2">02</span>Data we collect
+          </h2>
+          <p class="text-text-dim leading-relaxed text-[0.95rem]">
+            <strong class="text-text">None.</strong> This website does not use
+            analytics, tracking scripts, cookies, or any form of data collection.
+            We don't track page views, clicks, or user behavior.
+          </p>
+        </div>
 
-      <div class="glass rounded-2xl p-6 md:p-8">
-        <h2 class="text-xl font-bold mb-3">Data we don't collect</h2>
-        <ul class="text-text-dim leading-relaxed space-y-2">
-          <li>No personal information</li>
-          <li>No usage or analytics data</li>
-          <li>No IP addresses or location data</li>
-          <li>No cookies or local storage tracking</li>
-          <li>No cross-site tracking</li>
-          <li>No third-party advertising</li>
-        </ul>
-      </div>
+        <div class="glass rounded-2xl p-7 sm:p-9">
+          <h2
+            id="data-we-dont"
+            class="scroll-mt-24 text-xl sm:text-2xl font-bold tracking-tight mb-3"
+          >
+            <span class="font-mono text-amber mr-2">03</span>Data we don't
+            collect
+          </h2>
+          <ul class="space-y-2 list-none p-0 m-0">
+            <li class="flex gap-3 text-[0.93rem] text-text-dim">
+              <span
+                class="flex-shrink-0 mt-2 w-1.5 h-1.5 rounded-full bg-cyan-400"
+              ></span>Your name, email, or any personally identifiable
+              information
+            </li>
+            <li class="flex gap-3 text-[0.93rem] text-text-dim">
+              <span
+                class="flex-shrink-0 mt-2 w-1.5 h-1.5 rounded-full bg-cyan-400"
+              ></span>No usage or analytics data
+            </li>
+            <li class="flex gap-3 text-[0.93rem] text-text-dim">
+              <span
+                class="flex-shrink-0 mt-2 w-1.5 h-1.5 rounded-full bg-cyan-400"
+              ></span>No IP addresses or location data
+            </li>
+            <li class="flex gap-3 text-[0.93rem] text-text-dim">
+              <span
+                class="flex-shrink-0 mt-2 w-1.5 h-1.5 rounded-full bg-cyan-400"
+              ></span>No cookies or local storage tracking
+            </li>
+            <li class="flex gap-3 text-[0.93rem] text-text-dim">
+              <span
+                class="flex-shrink-0 mt-2 w-1.5 h-1.5 rounded-full bg-cyan-400"
+              ></span>No cross-site tracking or third-party advertising
+            </li>
+          </ul>
+        </div>
 
-      <div class="glass rounded-2xl p-6 md:p-8">
-        <h2 class="text-xl font-bold mb-3">Third-party services</h2>
-        <p class="text-text-dim leading-relaxed">
-          This website loads fonts from <strong class="text-text">Google Fonts</strong>
-          (fonts.googleapis.com). Google may collect your IP address when loading these fonts.
-          See <a href="https://policies.google.com/privacy" target="_blank" rel="noopener" class="text-amber hover:text-amber-bright transition-colors">Google's Privacy Policy</a>.
-        </p>
-        <p class="text-text-dim leading-relaxed mt-3">
-          The source code is hosted on <strong class="text-text">GitHub</strong>. Their privacy policy applies when visiting github.com.
-        </p>
-      </div>
+        <div class="glass rounded-2xl p-7 sm:p-9">
+          <h2
+            id="third-party"
+            class="scroll-mt-24 text-xl sm:text-2xl font-bold tracking-tight mb-3"
+          >
+            <span class="font-mono text-amber mr-2">04</span>Third-party services
+          </h2>
+          <p class="text-text-dim leading-relaxed text-[0.95rem] mb-4">
+            This site loads resources from a small number of external services:
+          </p>
+          <div class="space-y-3">
+            <div
+              class="flex gap-4 items-start p-4 rounded-xl border border-edge bg-amber/[0.03]"
+            >
+              <div class="font-mono text-xs text-amber mt-0.5">→</div>
+              <div>
+                <div class="font-semibold text-text">Google Fonts</div>
+                <p class="text-sm text-text-dim mt-1">
+                  We load Inter and JetBrains Mono from Google's CDN. See the <a
+                    href="https://developers.google.com/fonts/faq/privacy"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="text-amber no-underline hover:underline"
+                    >Google Fonts privacy FAQ</a
+                  >.
+                </p>
+              </div>
+            </div>
+            <div
+              class="flex gap-4 items-start p-4 rounded-xl border border-edge bg-amber/[0.03]"
+            >
+              <div class="font-mono text-xs text-amber mt-0.5">→</div>
+              <div>
+                <div class="font-semibold text-text">GitHub</div>
+                <p class="text-sm text-text-dim mt-1">
+                  External links to <a
+                    href="https://github.com/hmziqrs/gpui-boilerplate"
+                    target="_blank"
+                    rel="noopener"
+                    class="text-amber no-underline hover:underline">github.com</a
+                  > redirect there; GitHub's privacy practices apply once you
+                  leave this site.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
 
-      <div class="glass rounded-2xl p-6 md:p-8">
-        <h2 class="text-xl font-bold mb-3">Your rights</h2>
-        <p class="text-text-dim leading-relaxed">
-          Under GDPR, CCPA, and similar regulations, you have the right to access, correct,
-          and delete your personal data. Since we collect no data, there is nothing to access
-          or delete.
-        </p>
-      </div>
+        <div class="glass rounded-2xl p-7 sm:p-9">
+          <h2
+            id="your-rights"
+            class="scroll-mt-24 text-xl sm:text-2xl font-bold tracking-tight mb-3"
+          >
+            <span class="font-mono text-amber mr-2">05</span>Your rights
+          </h2>
+          <p class="text-text-dim leading-relaxed text-[0.95rem]">
+            Under GDPR (EU/EEA), CCPA (California), and similar regulations, you
+            have the right to access, correct, and delete your personal data.
+            Since we collect no data, there is nothing to access or delete.
+          </p>
+        </div>
 
-      <div class="glass rounded-2xl p-6 md:p-8">
-        <h2 class="text-xl font-bold mb-3">Changes to this policy</h2>
-        <p class="text-text-dim leading-relaxed">
-          We may update this page from time to time. The "Last updated" date at the top
-          reflects the most recent revision.
-        </p>
-      </div>
+        <div class="glass rounded-2xl p-7 sm:p-9">
+          <h2
+            id="changes"
+            class="scroll-mt-24 text-xl sm:text-2xl font-bold tracking-tight mb-3"
+          >
+            <span class="font-mono text-amber mr-2">06</span>Changes to this
+            policy
+          </h2>
+          <p class="text-text-dim leading-relaxed text-[0.95rem]">
+            If we change this policy materially, we'll update the "last updated"
+            date at the top of this page. The full version history lives in the
+            GitHub repository, so you can <a
+              href="https://github.com/hmziqrs/gpui-boilerplate/commits/master/web/pages/privacy.astro"
+              target="_blank"
+              rel="noopener"
+              class="text-amber no-underline hover:underline"
+              >audit every change</a
+            >.
+          </p>
+        </div>
 
-      <div class="glass rounded-2xl p-6 md:p-8">
-        <h2 class="text-xl font-bold mb-3">Contact</h2>
-        <p class="text-text-dim leading-relaxed">
-          Questions? Open an issue at
-          <a href="https://github.com/hmziqrs/gpui-boilerplate/issues" target="_blank" rel="noopener" class="text-amber hover:text-amber-bright transition-colors">github.com/hmziqrs/gpui-boilerplate/issues</a>.
-        </p>
-      </div>
-
+        <div class="glass rounded-2xl p-7 sm:p-9">
+          <h2
+            id="contact"
+            class="scroll-mt-24 text-xl sm:text-2xl font-bold tracking-tight mb-3"
+          >
+            <span class="font-mono text-amber mr-2">07</span>Contact
+          </h2>
+          <p class="text-text-dim leading-relaxed text-[0.95rem]">
+            Questions, concerns, or takedown requests? Open an <a
+              href="https://github.com/hmziqrs/gpui-boilerplate/issues"
+              target="_blank"
+              rel="noopener"
+              class="text-amber no-underline hover:underline">issue on GitHub</a
+            >. It's the fastest channel and produces a public record we can act on.
+          </p>
+          <div class="mt-7 flex flex-wrap gap-3">
+            <a
+              href="https://github.com/hmziqrs/gpui-boilerplate/issues"
+              target="_blank"
+              rel="noopener"
+              class="btn-primary"
+            >
+              Open an issue
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+                ><path d="M7 17 17 7"></path><path d="M7 7h10v10"></path></svg
+              >
+            </a>
+            <a href="/terms/" class="btn-secondary">Read the terms</a>
+          </div>
+        </div>
+      </article>
     </div>
   </section>
-
-</MarketingLayout>
+</Layout>
