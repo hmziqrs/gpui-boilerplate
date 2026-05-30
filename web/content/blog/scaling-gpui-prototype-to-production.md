@@ -1,7 +1,7 @@
 ---
 title: "From prototype to production: scaling a GPUI app"
 description: "The architectural decisions that matter when your GPUI side project becomes something people actually use."
-date: 2025-06-15
+date: 2026-05-31
 tags: [GPUI, Rust, architecture]
 draft: false
 ---

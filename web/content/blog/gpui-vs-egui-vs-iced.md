@@ -1,7 +1,7 @@
 ---
 title: "GPUI vs egui vs iced: Rust GUI frameworks compared"
 description: "An honest comparison of the three main Rust GUI frameworks for desktop applications, with strengths, weaknesses, and when to pick each."
-date: 2025-06-12
+date: 2026-05-29
 tags: [Rust, GPUI, comparison]
 draft: false
 ---

@@ -1,7 +1,7 @@
 ---
 title: "Building a custom title bar in GPUI"
 description: "How to replace the native window chrome with a custom title bar that matches your app design, including drag regions and traffic lights."
-date: 2025-05-15
+date: 2026-05-13
 tags: [GPUI, Rust, design]
 draft: false
 ---

@@ -1,7 +1,7 @@
 ---
 title: "Storing secrets in desktop apps: the keyring approach"
 description: "Why you should never put secrets in your database, and how gpui-starter uses the OS keyring for secure credential storage."
-date: 2025-05-25
+date: 2026-05-19
 tags: [Rust, security, desktop]
 draft: false
 ---

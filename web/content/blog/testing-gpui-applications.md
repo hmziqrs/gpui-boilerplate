@@ -1,7 +1,7 @@
 ---
 title: "Testing GPUI applications"
 description: "Strategies for testing Rust desktop apps built with GPUI, from unit tests to integration harnesses."
-date: 2025-05-12
+date: 2026-05-11
 tags: [Rust, GPUI, testing]
 draft: false
 ---

@@ -1,7 +1,7 @@
 ---
 title: "Form validation in Rust with koruma and gpui-form"
 description: "A practical guide to building validated forms in GPUI apps using derive macros and composable validation rules."
-date: 2025-05-28
+date: 2026-05-21
 tags: [Rust, GPUI, forms]
 draft: false
 ---

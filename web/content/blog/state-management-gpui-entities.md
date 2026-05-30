@@ -1,7 +1,7 @@
 ---
 title: "State management in GPUI: entities, globals, and context"
 description: "How GPUI handles application state through entities, global singletons, and the context system."
-date: 2025-05-22
+date: 2026-05-17
 tags: [GPUI, Rust, architecture]
 draft: false
 ---

@@ -1,7 +1,7 @@
 ---
 title: "Single-instance apps in Rust: preventing duplicate windows"
 description: "How to ensure only one instance of your Rust desktop app runs at a time, with IPC forwarding for deep links."
-date: 2025-06-02
+date: 2026-05-23
 tags: [Rust, desktop, architecture]
 draft: false
 ---

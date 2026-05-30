@@ -1,7 +1,7 @@
 ---
 title: "Getting started with GPUI: a new paradigm for Rust desktop apps"
 description: "A walkthrough of building your first desktop application with GPUI, Zed's GPU-accelerated UI framework for Rust."
-date: 2025-05-10
+date: 2026-05-09
 tags: [GPUI, Rust, desktop]
 draft: false
 ---

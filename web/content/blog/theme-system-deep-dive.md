@@ -1,7 +1,7 @@
 ---
 title: "Deep dive: the 21-theme system"
 description: "How gpui-starter's theme system works, from color tokens to live hot-reloading."
-date: 2025-04-28
+date: 2026-05-03
 tags: [GPUI, themes, design]
 draft: false
 ---

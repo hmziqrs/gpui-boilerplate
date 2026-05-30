@@ -1,7 +1,7 @@
 ---
 title: "Undo and redo in Rust desktop apps"
 description: "Building an undo/redo stack for GPUI applications with command pattern and type-safe state snapshots."
-date: 2025-05-18
+date: 2026-05-15
 tags: [Rust, GPUI, desktop]
 draft: false
 ---

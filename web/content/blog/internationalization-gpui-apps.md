@@ -1,7 +1,7 @@
 ---
 title: "Internationalization in GPUI apps with es-fluent"
 description: "How gpui-starter handles multi-language support using Mozilla's Fluent system and the es-fluent Rust crate."
-date: 2025-04-20
+date: 2026-05-01
 tags: [GPUI, i18n, Rust]
 draft: false
 ---

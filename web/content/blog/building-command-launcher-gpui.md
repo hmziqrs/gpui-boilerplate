@@ -1,7 +1,7 @@
 ---
 title: "Building a command launcher (Cmd+K) in GPUI"
 description: "How gpui-starter implements a VS Code-style command palette as a floating popup window in GPUI."
-date: 2025-06-08
+date: 2026-05-27
 tags: [GPUI, Rust, desktop]
 draft: false
 ---

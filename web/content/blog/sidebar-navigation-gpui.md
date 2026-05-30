@@ -1,7 +1,7 @@
 ---
 title: "Sidebar navigation in GPUI: routing without a router"
 description: "How gpui-starter implements multi-page navigation using Rust enums and pattern matching instead of a web-style router."
-date: 2025-05-08
+date: 2026-05-07
 tags: [GPUI, Rust, desktop]
 draft: false
 ---

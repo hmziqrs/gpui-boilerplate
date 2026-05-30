@@ -1,7 +1,7 @@
 ---
 title: "Why Rust + GPUI for desktop apps"
 description: "The case for building desktop applications with Rust and GPUI instead of Electron, Tauri, or Qt."
-date: 2025-05-05
+date: 2026-05-05
 tags: [Rust, desktop, architecture]
 draft: false
 ---

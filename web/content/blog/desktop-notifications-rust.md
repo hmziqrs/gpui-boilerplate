@@ -1,7 +1,7 @@
 ---
 title: "Desktop notifications in Rust: a fallback strategy"
 description: "How gpui-starter handles native OS notifications with automatic backend selection and graceful degradation."
-date: 2025-06-05
+date: 2026-05-25
 tags: [Rust, desktop, notifications]
 draft: false
 ---
