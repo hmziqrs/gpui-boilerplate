@@ -35,7 +35,7 @@ gpui-form = { git = "file:///Users/hmziq/os/gpui-app/vendor/gpui-form", rev = "0
 
 [package]
 name = "gpui-starter"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 publish = false
 
