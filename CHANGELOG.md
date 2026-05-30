@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2025-06-15
+
+### Added
+
+- Desktop notification system with native OS backends, in-app toast fallback, and persistent inbox
+- Diagnostics page showing live app state, subsystem status, and debug actions
+- Telemetry module with disabled/local/remote modes and consent gate
+- Secure storage module with OS keyring integration (macOS Keychain, Windows Credential Manager, Linux Secret Service)
+- Single-instance guard with IPC forwarding for deep links
+- First-run detection and setup experience
+- Undo/redo stack with command pattern and keyboard shortcuts (Cmd+Z/Cmd+Y)
+- Custom title bar replacing native window chrome with drag regions and traffic light support
+- Global keyboard shortcuts (Alt+Space hotkey, Cmd+K launcher)
+- Background task manager for async operations
+- Connectivity state monitoring with network probes
+- File logging with tracing-appender
+- Capabilities registry for runtime feature detection
+- Lifecycle state machine for app startup/shutdown/crash handling
+- Configuration migration system for schema changes
+
+### Changed
+
+- Expanded documentation site with 5 new reference pages (command launcher, notifications, secure storage, routing, testing)
+- Added 12 new blog posts covering GPUI development topics
+- Added 8 new FAQ entries across Features and Advanced categories
+- Updated llms.txt with comprehensive feature coverage
+
 ## [0.1.0] - 2025-05-15
 
 ### Added

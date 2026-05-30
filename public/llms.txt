@@ -4,7 +4,7 @@
 
 ## What it is
 
-gpui-starter is a boilerplate project for building desktop apps with [GPUI](https://github.com/zed-industries/zed), the GPU-accelerated UI framework by the Zed team. It includes multi-page navigation, 21 built-in themes, internationalization, form validation, and a command launcher — everything you need to skip the boilerplate and start building.
+gpui-starter is a boilerplate project for building desktop apps with [GPUI](https://github.com/zed-industries/zed), the GPU-accelerated UI framework by the Zed team. It includes multi-page navigation, 21 built-in themes, internationalization, form validation, a command launcher, desktop notifications, secure credential storage, and undo/redo. Everything you need to skip the boilerplate and start building.
 
 ## Installation
 
@@ -14,7 +14,7 @@ cd gpui-app
 cargo run
 ```
 
-Requires Rust (2024 edition) and on macOS: Xcode Command Line Tools. On Linux: Vulkan headers.
+Requires Rust (2024 edition). macOS: Xcode Command Line Tools. Linux: Vulkan + X11/Wayland headers. Windows: in progress.
 
 ## Features
 
@@ -23,12 +23,13 @@ Requires Rust (2024 edition) and on macOS: Xcode Command Line Tools. On Linux: V
 - **Internationalization** — English and Chinese (zh-CN) via es-fluent / Mozilla Fluent
 - **Form validation** — derive macros via gpui-form + koruma validation rules
 - **Command launcher** — Cmd+K fuzzy search across all app actions
+- **Desktop notifications** — native OS notifications with automatic backend selection and in-app toast fallback
+- **Secure storage** — OS keychain integration via keyring crate (macOS Keychain, Windows Credential Manager, Linux Secret Service)
+- **Undo/redo** — command-pattern undo/redo stack with keyboard shortcuts
 - **macOS system tray** — icon with quick-access menu
-- **Secure storage** — OS keychain integration via keyring crate
-- **SQLite** — local data persistence via rusqlite
-- **Notifications** — inbox and service system
-- **Single instance** — prevents multiple app instances
-- **Diagnostics** — built-in diagnostics page
+- **Single instance** — prevents multiple app instances with IPC forwarding
+- **SQLite** — local data persistence via rusqlite in WAL mode
+- **Diagnostics** — built-in diagnostics page showing app state, logs, and system info
 
 ## Tech stack
 
@@ -40,6 +41,9 @@ Requires Rust (2024 edition) and on macOS: Xcode Command Line Tools. On Linux: V
 - koruma (validation)
 - rusqlite (SQLite)
 - keyring (OS credential store)
+- single-instance (single app instance)
+- undo (undo/redo stack)
+- accesskit (accessibility)
 
 ## Project structure
 
@@ -53,12 +57,75 @@ src/
 ├── launcher.rs         # Cmd+K command launcher
 ├── sidebar.rs          # Sidebar navigation
 ├── routes.rs           # Page routing
-└── ...                 # Storage, tray, menus, shortcuts, etc.
+├── undo_stack.rs       # Undo/redo stack
+└── ...                 # Storage, tray, menus, shortcuts, notifications, etc.
 themes/                 # 21 JSON theme files (not Rust code)
 ```
+
+## Documentation
+
+Docs at https://gpui-starter.hmziq.xyz/docs/
+
+- **Getting Started** — install, run, prerequisites
+- **Architecture** — GPUI patterns, entities, globals, context
+- **Forms** — validated forms with gpui-form and koruma
+- **Themes** — 21 built-in themes, hot-reload, runtime switching
+- **Internationalization** — es-fluent setup, translation files
+- **Performance** — preventing render loops, idle CPU
+- **Command Launcher** — Cmd+K fuzzy search overlay
+- **Notifications** — native OS notifications with fallback
+- **Secure Storage** — OS keychain via keyring
+- **Routing & Navigation** — sidebar navigation, enum-based routing
+- **Testing** — unit tests and integration harnesses
+
+## Blog
+
+16 posts at https://gpui-starter.hmziq.xyz/blog/
+
+- Why Rust + GPUI for desktop apps
+- Getting started with GPUI
+- Sidebar navigation in GPUI: routing without a router
+- Internationalization in GPUI apps with es-fluent
+- Deep dive: the 21-theme system
+- State management in GPUI: entities, globals, and context
+- Form validation in Rust with koruma and gpui-form
+- Storing secrets in desktop apps: the keyring approach
+- Desktop notifications in Rust: a fallback strategy
+- Building a command launcher (Cmd+K) in GPUI
+- GPUI vs egui vs iced: Rust GUI frameworks compared
+- From prototype to production: scaling a GPUI app
+- Undo and redo in Rust desktop apps
+- Building a custom title bar in GPUI
+- Single-instance apps in Rust: preventing duplicate windows
+- Testing GPUI applications
+
+## FAQ
+
+18 entries at https://gpui-starter.hmziq.xyz/faq/
+
+- What is GPUI?
+- Why use gpui-starter?
+- How do I install and run gpui-starter?
+- Which platforms are supported?
+- How does the theme system work?
+- How do I add a custom theme?
+- How does internationalization work?
+- How does form validation work?
+- What is the command launcher?
+- How does the macOS tray icon work?
+- How do keyboard shortcuts work?
+- Does gpui-starter support undo and redo?
+- How are secrets and credentials stored?
+- How do desktop notifications work?
+- Is there a first-run or onboarding experience?
+- Where does gpui-starter store app data?
+- Is there a diagnostics or debug page?
+- Does gpui-starter collect any telemetry?
 
 ## Links
 
 - Docs: https://gpui-starter.hmziq.xyz/docs/
+- Blog: https://gpui-starter.hmziq.xyz/blog/
+- FAQ: https://gpui-starter.hmziq.xyz/faq/
 - GitHub: https://github.com/hmziqrs/gpui-boilerplate
 - Issues: https://github.com/hmziqrs/gpui-boilerplate/issues
