@@ -206,7 +206,6 @@ impl Render for AppRoot {
         let notification_layer = Root::render_notification_layer(window, cx);
         let page_title = self.active_route.title();
         let active_page = self.active_route.page_for_render();
-        let is_focused = self.focus_handle.is_focused(window);
         let rtl = is_rtl_locale(&crate::app::current_locale(cx));
 
         let sidebar = Sidebar::new("app-sidebar")
@@ -306,10 +305,6 @@ impl Render for AppRoot {
 
         let content_area = div()
             .track_focus(&self.focus_handle)
-            // Visible focus ring on the root content area for keyboard users.
-            .when(is_focused, |el| {
-                el.border_2().border_color(cx.theme().ring)
-            })
             .on_action(cx.listener(|_, _: &ToggleSearch, _, cx| {
                 crate::launcher::open_launcher(cx);
             }))
