@@ -120,7 +120,6 @@ if (customJsonLd) jsonLdArray.push(customJsonLd);
     <meta name="twitter:image" content={ogImageUrl} />
     <meta name="twitter:image:alt" content={title} />
     <meta property="pinterest:media" content={ogImageUrl} />
-    <link rel="alternate" type="application/rss+xml" title="gpui-starter Blog" href={`${SITE}/feed.xml`} />
     {jsonLdArray.map((schema) => (
       <script type="application/ld+json" set:html={JSON.stringify(schema)} />
     ))}

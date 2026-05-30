@@ -36,10 +36,11 @@ export async function GET(context: APIContext) {
 <feed xmlns="http://www.w3.org/2005/Atom">
   <title>gpui-starter Blog</title>
   <subtitle>A production-ready Rust boilerplate for GPUI desktop apps. Build notes, tutorials, and deep dives.</subtitle>
-  <link href="${site}/feed.atom/" rel="self" type="application/atom+xml"/>
+  <link href="${site}/feed.atom" rel="self" type="application/atom+xml"/>
   <link href="${site}/" rel="alternate" type="text/html"/>
-  <id>${site}/feed.atom/</id>
+  <id>${site}/feed.atom</id>
   <updated>${updated}</updated>
+  <author><name>hmziqrs</name></author>
   <generator uri="https://astro.build/">Astro</generator>
 ${entries}
 </feed>`;
