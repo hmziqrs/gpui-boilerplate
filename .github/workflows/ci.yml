@@ -80,4 +80,4 @@ jobs:
           components: rustfmt
 
       - name: Check formatting
-        run: cargo fmt --check --check
+        run: cargo fmt --check
