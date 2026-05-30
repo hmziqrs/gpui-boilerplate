@@ -57,7 +57,7 @@ Look at `themes/tokyonight.json` for a full example with all available tokens.
 
 1. Create a new `.json` file in the `themes/` directory
 2. Follow the JSON structure from an existing theme
-3. The theme is automatically picked up by hot-reload — no restart needed
+3. The theme is automatically picked up by hot-reload with no restart needed
 
 ```bash
 # Create a new theme

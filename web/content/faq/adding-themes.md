@@ -7,7 +7,7 @@ order: 6
 
 ## Creating a custom theme
 
-1. **Create a new file** in `src/theme/`:
+1. Create a new file in `src/theme/`:
 
 ```rust
 // src/theme/my_theme.rs
@@ -34,13 +34,13 @@ impl Theme for MyTheme {
 }
 ```
 
-2. **Register it** in `src/theme/mod.rs` by adding it to the theme registry.
+2. Register it in `src/theme/mod.rs` by adding it to the theme registry.
 
-3. **Run the app** and select your theme from the command launcher (Cmd+K).
+3. Run the app and select your theme from the command launcher (Cmd+K).
 
 ## Tips
 
-- Use the **semantic token names** — don't hardcode colors in components
+- Use the semantic token names, do not hardcode colors in components
 - Test your theme with both light and dark content
 - The `accent` color is used for buttons, links, and highlighted elements
 - `surface` is the card/panel background color

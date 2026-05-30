@@ -5,7 +5,7 @@ category: "Features"
 order: 5
 ---
 
-The theme system uses **semantic color tokens** — every color in the app references a named token like `background`, `foreground`, or `accent`, not a raw hex value.
+The theme system uses **semantic color tokens**: every color in the app references a named token like `background`, `foreground`, or `accent`, not a raw hex value.
 
 ## How themes are defined
 
@@ -27,7 +27,7 @@ impl Theme for Nord {
 
 ## Switching themes
 
-Themes can be switched at runtime through the command launcher (Cmd+K). The change takes effect in a single frame — no restart needed.
+Themes can be switched at runtime through the command launcher (Cmd+K). The change takes effect in a single frame: no restart needed.
 
 ## Built-in themes
 

@@ -9,8 +9,8 @@ Yes. The `undo_stack` module provides a command-pattern undo/redo system built o
 
 ## Keyboard shortcuts
 
-- **Cmd+Z** (macOS) / **Ctrl+Z** (Linux) undoes the last entry.
-- **Cmd+Y** (macOS) / **Ctrl+Y** (Linux) redoes it.
+- Cmd+Z (macOS) / Ctrl+Z (Linux) undoes the last entry.
+- Cmd+Y (macOS) / Ctrl+Y (Linux) redoes it.
 
 The Edit menu updates its Undo and Redo items dynamically based on whether the stacks are non-empty.
 

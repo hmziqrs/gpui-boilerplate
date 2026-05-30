@@ -10,7 +10,7 @@ draft: false
 
 The answer is to test the things that matter and skip the things that don't. GPUI's architecture makes this easier than you'd think.
 
-## what you can test without rendering
+## What you can test without rendering
 
 Most of the logic in a well-structured GPUI app lives outside `render()`. State, routing, config migrations, undo history, event queues. None of these need a window or a GPU context. They are plain Rust structs and functions, and you test them with plain `#[test]`.
 
@@ -47,7 +47,7 @@ fn record_clears_redo_history() {
 
 These tests run fast, compose well, and catch real bugs. The config migration tests in gpui-starter caught a regression where a legacy config with `version: 0` would fail to enable the global shortcut flag. That's a behavioral bug, not a rendering bug, and you don't need a GPU to find it.
 
-## when you need the GPUI test harness
+## When you need the GPUI test harness
 
 Some code depends on GPUI's context system: entities, globals, subscriptions, async tasks. For that, GPUI provides `#[gpui::test]` and `TestAppContext`.
 
@@ -79,7 +79,7 @@ test-support = ["gpui/test-support"]
 
 Then run with `cargo test --features test-support`.
 
-## the testing module
+## The testing module
 
 gpui-starter includes a `src/testing.rs` module with fake implementations of external services: telemetry, connectivity, notifications, and secure storage. These are not mocks in the mocking-framework sense. They are hand-written fakes with real state and real behavior.
 
@@ -118,7 +118,7 @@ fn fake_notification_backend_success_and_failure() {
 
 Why hand-written fakes instead of a mocking library? Because Rust's type system makes fakes cheap to write, and they compose better. A `FakeSecureStorage` that round-trips values through `set`/`get`/`delete` is more useful than a mock that verifies `set` was called with the right argument. You test behavior, not call counts.
 
-## testing globals and state transitions
+## Testing globals and state transitions
 
 GPUI globals are test-friendly by design. You can `set_global`, `update` it, then `read_with` to assert. And since `set_global` replaces the previous value, tests can reset state between runs without cleanup hooks.
 
@@ -126,7 +126,7 @@ The event queue in gpui-starter uses a `Global` to accumulate events, then drain
 
 For state machines like `TaskStatus` (Queued, Running, Succeeded, Failed, Cancelled), test each transition explicitly. The `tasks` module in gpui-starter has a `mutate_task` helper that finds a task by ID, applies a mutation, and re-emits the global. Testing that `succeed` sets progress to 100% and clears the error field is a few lines of setup with a `TestAppContext`.
 
-## form validation, command handling, and actions
+## Form validation, command handling, and actions
 
 Form validation in GPUI is logic. A field validator is a function that takes a string and returns `Result<(), ValidationError>`. Test it like any other pure function.
 
@@ -134,7 +134,7 @@ Command handling maps to GPUI actions. You register action handlers with `on_act
 
 The `AppRoute::parse_deep_link` tests show the pattern well: parse input, assert output, assert errors on bad input. Your command handler tests should do the same.
 
-## why integration tests matter more for UI
+## Why integration tests matter more for UI
 
 Unit tests cover pure logic. But the bugs that hurt are the ones where logic meets rendering: a state transition that should trigger a re-render but doesn't, a subscription that fires for the wrong entity, a theme change that breaks layout.
 
@@ -142,7 +142,7 @@ GPUI's `VisualTestContext` lets you open a real window, render a component, disp
 
 My rule of thumb: if a function signature includes `&mut Context<Self>`, it probably deserves an integration test. If it only takes `&self` or owned values, a unit test suffices.
 
-## what gpui-starter's tests look like in practice
+## What gpui-starter's tests look like in practice
 
 The project has around 20 tests across modules like `app_state`, `routes`, `undo_stack`, `events`, `storage`, `config_migrations`, and `testing`. Most are plain `#[test]` functions. A few use `tempfile::tempdir()` for filesystem operations. None require a GPU context because the architecture separates state from rendering.
 
@@ -168,7 +168,7 @@ fn initializes_schema_and_migration_table() {
 }
 ```
 
-## the strategy in summary
+## The strategy in summary
 
 Test pure logic with plain `#[test]`. Test entity state and async behavior with `#[gpui::test]` and `TestAppContext`. Test rendering and action dispatch with `VisualTestContext` when you need to. Write hand-written fakes for external services. Don't test pixels.
 

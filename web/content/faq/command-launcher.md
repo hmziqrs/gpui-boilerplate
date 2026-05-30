@@ -9,10 +9,10 @@ The command launcher is a Spotlight-style search overlay activated with **Cmd+K*
 
 ## Built-in actions
 
-- **Navigate** to any page in the app
-- **Switch themes** by name
-- **Change language** between available locales
-- **Toggle settings** like dark mode
+- Navigate to any page in the app
+- Switch themes by name
+- Change language between available locales
+- Toggle settings like dark mode
 
 ## Registering custom actions
 

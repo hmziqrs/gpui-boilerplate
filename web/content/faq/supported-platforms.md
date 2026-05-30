@@ -15,4 +15,4 @@ order: 4
 
 macOS is the primary development platform and has the best-tested support. Linux support is stable with a Vulkan-capable GPU. Windows support is actively being developed by the Zed team.
 
-gpui-starter itself works on all platforms that GPUI supports — no platform-specific configuration needed.
+gpui-starter itself works on all platforms that GPUI supports with no platform-specific configuration needed.

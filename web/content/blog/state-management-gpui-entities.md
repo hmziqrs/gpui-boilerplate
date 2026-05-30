@@ -8,7 +8,7 @@ draft: false
 
 State management in most UI frameworks means choosing between state management libraries. Redux, MobX, Zustand, Signals, Recoil. GPUI has none of that. It has three mechanisms: `Entity<T>`, `Global`, and `Context`. That's the whole story. The hard part is knowing which one to reach for and when.
 
-## the three mechanisms
+## The three mechanisms
 
 `Entity<T>` is a window-scoped reference to a Rust struct. It is how you hold state that a component or a window owns and mutates. You create one with `cx.new()`, read it with `entity.read(cx)`, and mutate it with `entity.update(cx, |state, cx| ...)`. Every entity lives as long as something holds a strong reference to it. When the last reference drops, the entity is gone.
 
@@ -16,7 +16,7 @@ State management in most UI frameworks means choosing between state management l
 
 `Context<T>` is not state itself. It is the handle that GPUI gives you when it calls into your code. `App` at the top level. `Window` for window-specific operations. `Context<T>` inside a component's methods. The context is where you call `cx.notify()`, `cx.spawn()`, `cx.subscribe()`, and `cx.observe()`. It is the control plane for side effects and lifecycle.
 
-## hot, warm, and cold state
+## Hot, warm, and cold state
 
 Not all state deserves the same treatment. The [architecture guide](/docs/architecture/) defines three tiers.
 
@@ -28,7 +28,7 @@ Cold state is large, archived, or disk-backed. Full response bodies. Stream logs
 
 The common mistake is treating everything as hot. Every item in a list gets its own entity. Every cached response gets held in memory. This works fine in a prototype. It falls apart at scale.
 
-## why Vec<Entity<Item>> is a trap
+## Why Vec<Entity<Item>> is a trap
 
 Here is the pattern that causes the most pain in GPUI apps:
 
@@ -52,7 +52,7 @@ struct AppState {
 
 `CollectionCatalog` is just a `HashMap<CollectionId, Collection>` or a `Vec<Collection>` with an index. It has no entity overhead. When the user opens a collection for editing, you create an `Entity<CollectionEditor>` from the relevant data. When they close it, the entity drops and everything cleans up.
 
-## cx.notify() and when not to call it
+## Cx.notify() and when not to call it
 
 `cx.notify()` tells GPUI that something changed and the component needs to re-render. GPUI calls `render()` on the next frame. This is the only re-render trigger. There is no diffing, no dependency tracking, no proxy object that notices mutations. You call `cx.notify()` yourself, or you don't get a new frame.
 
@@ -102,7 +102,7 @@ fn fetch_data(&mut self, cx: &mut Context<Self>) {
 
 Strong `Entity<T>` is acceptable in short-lived scoped flows where you can guarantee the entity outlives the closure. Anywhere else, use `WeakEntity`.
 
-## subscription lifecycle and the detach() trap
+## Subscription lifecycle and the detach() trap
 
 Subscriptions connect entity events to handler closures. You create one with `cx.subscribe(&entity, handler)`. The return value is a `Subscription` handle. As long as that handle exists, the subscription is active. When the handle drops, the subscription cancels.
 
@@ -148,7 +148,7 @@ fn setup(&mut self, cx: &mut Context<Self>) {
 
 The trap is calling `.detach()` and then wanting to cancel the subscription later. You can't. There is no handle to hold. If you need cancellation, store the `Subscription` and drop it manually.
 
-## putting it together
+## Putting it together
 
 State in GPUI is just Rust structs. There is no magic runtime, no proxy layer intercepting your reads and writes. You own a struct, you mutate it through `entity.update()`, and you tell GPUI to re-render with `cx.notify()`. The framework does not try to be clever on your behalf.
 

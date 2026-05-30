@@ -7,9 +7,9 @@ description: Validated forms with gpui-form and koruma
 
 gpui-starter includes a working registration form that demonstrates:
 
-- **gpui-form** — derive macros that generate form UI and state management
-- **koruma** — validation rules with composable builders
-- **es-fluent** — localized error messages
+- **gpui-form**: derive macros that generate form UI and state management
+- **koruma**: validation rules with composable builders
+- **es-fluent**: localized error messages
 
 The form is in `src/views/form_page.rs`.
 

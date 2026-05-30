@@ -61,7 +61,7 @@ gpui-app/
 
 ## Next steps
 
-- [Theme system](/docs/themes/) — customize or add themes
-- [Internationalization](/docs/i18n/) — add new languages
-- [Forms](/docs/forms/) — build validated forms
-- [Architecture](/docs/architecture/) — understand GPUI patterns
+- [Theme system](/docs/themes/): customize or add themes
+- [Internationalization](/docs/i18n/): add new languages
+- [Forms](/docs/forms/): build validated forms
+- [Architecture](/docs/architecture/): understand GPUI patterns

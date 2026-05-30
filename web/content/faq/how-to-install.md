@@ -7,9 +7,9 @@ order: 3
 
 ## Prerequisites
 
-- **Rust** (2024 edition) — [install via rustup](https://rustup.rs)
-- **macOS** — Xcode Command Line Tools (`xcode-select --install`)
-- **Linux** — Vulkan headers and a compatible GPU driver
+- Rust (2024 edition): [install via rustup](https://rustup.rs)
+- macOS: Xcode Command Line Tools (`xcode-select --install`)
+- Linux: Vulkan headers and a compatible GPU driver
 
 ## Quick start
 

@@ -5,7 +5,7 @@ category: "Features"
 order: 7
 ---
 
-gpui-starter uses **Mozilla's Fluent** localization system through the `es-fluent` Rust crate. Fluent handles the complexities of natural language — plural rules, gender agreement, and grammatical cases.
+gpui-starter uses **Mozilla's Fluent** localization system through the `es-fluent` Rust crate. Fluent handles plural rules, gender agreement, and grammatical cases that simpler key-value systems cannot.
 
 ## Translation files
 

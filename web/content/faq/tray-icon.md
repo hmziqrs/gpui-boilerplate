@@ -9,13 +9,13 @@ gpui-starter includes a **macOS system tray** icon with a context menu. When the
 
 ## Tray menu options
 
-- **Show** — bring the app window to front
-- **Hide** — minimize to tray
-- **Quit** — exit the app
+- Show: bring the app window to front
+- Hide: minimize to tray
+- Quit: exit the app
 
 ## How it works
 
-The tray icon is registered during app initialization using GPUI's platform APIs. The icon and menu are defined in Rust — no separate native code or plugins needed.
+The tray icon is registered during app initialization using GPUI's platform APIs. The icon and menu are defined in Rust: no separate native code or plugins needed.
 
 ```rust
 fn setup_tray(cx: &mut AppContext) {
@@ -27,4 +27,4 @@ fn setup_tray(cx: &mut AppContext) {
 }
 ```
 
-The tray icon is optional — you can remove it by removing the `setup_tray` call in `app.rs`.
+The tray icon is optional: you can remove it by removing the `setup_tray` call in `app.rs`.

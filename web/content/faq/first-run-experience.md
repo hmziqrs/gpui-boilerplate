@@ -19,8 +19,8 @@ When `is_pending` returns true, the home page renders an inline setup panel abov
 
 You can modify the setup panel in `views/home.rs` to add your own steps, such as theme selection, data import, or a feature walkthrough. The `first_run` module exposes three functions:
 
-- **`is_pending(cx)`** checks whether the onboarding should show
-- **`complete(cx)`** marks the flow as done and saves the config
-- **`reset(cx)`** sets the flag back to false for testing
+- `is_pending(cx)` checks whether the onboarding should show
+- `complete(cx)` marks the flow as done and saves the config
+- `reset(cx)` sets the flag back to false for testing
 
 To retrigger the flow during development, call `first_run::reset` from a debug action or the diagnostics page.

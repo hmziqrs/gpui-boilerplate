@@ -11,25 +11,25 @@ description: GPUI architecture patterns for scale-ready state design
 // CORRECT
 pub trait Global: 'static {}
 
-// WRONG — Send + Sync are not required
+// WRONG: Send + Sync are not required
 pub trait Global: 'static + Send + Sync {}
 ```
 
-`set_global` can replace and `remove_global` can remove a global — they are not permanent
+`set_global` can replace and `remove_global` can remove a global: they are not permanent
 for the app lifetime. Tests can clear globals between runs.
 
 ### Subscription::detach()
 `detach()` consumes the `Subscription` and returns `()`. It cannot be stored:
 
 ```rust
-// WRONG — detach() returns (), not Subscription
+// WRONG: detach() returns (), not Subscription
 let s: Subscription = cx.subscribe(&entity, handler).detach();
 
-// CORRECT — store the Subscription handle if you need to cancel it later
+// CORRECT: store the Subscription handle if you need to cancel it later
 let s: Subscription = cx.subscribe(&entity, handler);
 self.subs.push(s); // dropped = cancelled
 
-// CORRECT — detach if it should live forever
+// CORRECT: detach if it should live forever
 cx.subscribe(&entity, handler).detach();
 ```
 
@@ -47,13 +47,13 @@ Strong `Entity<T>` is valid only in short-lived scoped flows where ownership cyc
 
 ## 2. State Tiers
 
-Use a three-tier model — do not flatten everything into a single entity or a single global:
+Use a three-tier model: do not flatten everything into a single entity or a single global:
 
 | Tier | Mechanism | Examples |
 |------|-----------|---------|
-| **Hot** — rapidly changing, currently visible | `Entity<T>` owned by a window | Active editor draft, in-flight request state, selected list row |
-| **Warm** — medium churn, potentially large cardinality | Normalized value store with typed IDs | Item catalogs, history index rows, environment metadata |
-| **Cold** — large/archived, disk-backed | SQLite + blob files | Response bodies, stream logs, full history |
+| **Hot**: rapidly changing, currently visible | `Entity<T>` owned by a window | Active editor draft, in-flight request state, selected list row |
+| **Warm**: medium churn, potentially large cardinality | Normalized value store with typed IDs | Item catalogs, history index rows, environment metadata |
+| **Cold**: large/archived, disk-backed | SQLite + blob files | Response bodies, stream logs, full history |
 
 ---
 
@@ -63,12 +63,12 @@ Do not keep `Vec<Entity<Item>>` as the primary long-lived store for any catalog 
 Materialize entity wrappers only for the currently active/edited item.
 
 ```rust
-// WRONG — every collection gets an entity regardless of whether it's active
+// WRONG: every collection gets an entity regardless of whether it's active
 struct AppState {
     collections: Vec<Entity<Collection>>,
 }
 
-// CORRECT — catalog is a value type; entity created only for the active editor
+// CORRECT: catalog is a value type; entity created only for the active editor
 struct AppState {
     catalog: CollectionCatalog,          // value type, ID-keyed
     active_editor: Option<Entity<CollectionEditor>>,
@@ -79,7 +79,7 @@ struct AppState {
 
 ## 4. Memory Budgets
 
-Define explicit caps and enforce them — do not let response bodies, stream buffers, or
+Define explicit caps and enforce them: do not let response bodies, stream buffers, or
 history lists grow without bound.
 
 ```rust
@@ -106,10 +106,10 @@ Keep aggregate counters (`total_received`, `dropped_count`) separately.
 
 ## 5. Streaming & Backpressure
 
-Never call `cx.notify()` per incoming message at high throughput — it saturates the render loop.
+Never call `cx.notify()` per incoming message at high throughput: it saturates the render loop.
 
 ```rust
-// WRONG — one notify per message
+// WRONG: one notify per message
 while let Some(msg) = stream.next().await {
     entity.update(cx, |this, cx| {
         this.buffer.push(msg);
@@ -117,7 +117,7 @@ while let Some(msg) = stream.next().await {
     }).ok();
 }
 
-// CORRECT — batch: drain available messages, then notify once
+// CORRECT: batch: drain available messages, then notify once
 cx.spawn(async move {
     loop {
         let msg = rx.recv().await?;
@@ -139,10 +139,10 @@ drop oldest visible messages, increment a dropped counter, and degrade gracefull
 
 Every in-flight operation needs four things:
 
-1. **Operation ID** — lets late responses identify and discard stale results
-2. **Task handle** — stored on the owning entity; dropping it cancels the task
-3. **Protocol cancellation primitive** — abort handle/token that propagates to the network layer
-4. **Lifecycle FSM** — states must be mutually exclusive:
+1. **Operation ID**: lets late responses identify and discard stale results
+2. **Task handle**: stored on the owning entity; dropping it cancels the task
+3. **Protocol cancellation primitive**: abort handle/token that propagates to the network layer
+4. **Lifecycle FSM**: states must be mutually exclusive:
 
 ```rust
 enum OpState {
@@ -161,7 +161,7 @@ Guard against stale results after cancellation by checking the operation ID, not
 ```rust
 while let Some(event) = rx.recv().await {
     if let Err(_) = entity.update(cx, |this, cx| {
-        if this.active_op_id != operation_id { return; } // stale — discard
+        if this.active_op_id != operation_id { return; } // stale: discard
         this.process(event, cx);
     }) {
         break; // entity dropped
@@ -204,7 +204,7 @@ PRAGMA busy_timeout = 5000;
 
 Required: schema versioning + migrations, crash-safe writes, compaction/cleanup policy.
 
-Keep large bodies (response payloads, stream transcripts) out of SQLite rows — reference
+Keep large bodies (response payloads, stream transcripts) out of SQLite rows: reference
 them by blob ID instead. This keeps the database lean and queries fast.
 
 ---
@@ -212,15 +212,15 @@ them by blob ID instead. This keeps the database lean and queries fast.
 ## 9. Fallible Async
 
 All async operations that touch app/window/entity state are fallible by design.
-A dropped app, window, or entity is a normal shutdown path — not an error.
+A dropped app, window, or entity is a normal shutdown path: not an error.
 
 ```rust
 cx.spawn(async move |mut cx| {
     let result = do_work().await;
-    // update() returns Err if the entity was dropped — handle it, don't unwrap
+    // update() returns Err if the entity was dropped: handle it, don't unwrap
     cx.update(|this, cx| {
         this.on_result(result, cx);
-    }).ok(); // .ok() is intentional — drop is expected on shutdown
+    }).ok(); // .ok() is intentional: drop is expected on shutdown
 })
 ```
 
@@ -234,10 +234,10 @@ Secrets must never land in the SQLite database or blob store. Store them in the 
 credential store (macOS Keychain, Linux Secret Service, Windows Credential Manager).
 
 ```rust
-// WRONG — secret value in the database
+// WRONG: secret value in the database
 INSERT INTO environments (key, value) VALUES ('API_TOKEN', 'sk-...');
 
-// CORRECT — opaque reference in the database, value in the keyring
+// CORRECT: opaque reference in the database, value in the keyring
 INSERT INTO secret_refs (id, keyring_key) VALUES (?, ?);
 // actual value lives in the OS keyring under `keyring_key`
 ```
@@ -249,7 +249,7 @@ raw secret values.
 
 ## 11. Virtualization
 
-Large list-based UI surfaces must use virtualization — not optional:
+Large list-based UI surfaces must use virtualization: not optional:
 
 - History/activity lists
 - Collection/folder/request trees with large node counts
@@ -266,12 +266,12 @@ Validate with a performance test under target maximum dataset size.
 Do not re-enter a mutable update on the same entity from within its own active update path.
 
 ```rust
-// WRONG — nested update on the same entity
+// WRONG: nested update on the same entity
 entity.update(cx, |this, cx| {
     this.helper(cx); // if helper calls entity.update() on the same entity → panic/no-op
 });
 
-// CORRECT — mutate state and let the next render or a new update handle follow-up
+// CORRECT: mutate state and let the next render or a new update handle follow-up
 entity.update(cx, |this, cx| {
     this.state = next_state;
     cx.notify();
@@ -304,4 +304,4 @@ another render, creating a feedback loop.
 - [ ] Secrets stored in platform credential store; only opaque references in the DB
 - [ ] Large list UIs use virtualization; validated by a performance test
 - [ ] No re-entrant mutable updates on the same entity
-- [ ] `render()` is a pure projection — see [Performance](/docs/performance/) checklist
+- [ ] `render()` is a pure projection: see [Performance](/docs/performance/) checklist
