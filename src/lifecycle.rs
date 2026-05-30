@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+use std::fs;
+use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 
 use gpui::{App, Global};
@@ -119,4 +121,65 @@ pub fn install_panic_hook() {
         );
         previous(info);
     }));
+}
+
+// ---------------------------------------------------------------------------
+// Crash marker (file-based crash detection)
+// ---------------------------------------------------------------------------
+
+fn crash_marker_path() -> PathBuf {
+    std::env::temp_dir().join("gpui-starter.crash-marker")
+}
+
+/// Write a crash marker file at startup. If the process crashes, this file
+/// will remain on disk so the next launch can detect it.
+pub fn write_crash_marker() {
+    let path = crash_marker_path();
+    let pid = std::process::id();
+    let timestamp = chrono::Utc::now().to_rfc3339();
+    if let Err(err) = fs::write(&path, format!("pid={pid}\nstarted_at={timestamp}\n")) {
+        tracing::warn!(
+            target: "gpui_starter::lifecycle",
+            path = %path.display(),
+            error = %err,
+            "failed to write crash marker"
+        );
+    }
+}
+
+/// Check whether a crash marker from a previous run exists. Returns `Some`
+/// with the marker contents if found, `None` otherwise.
+pub fn check_previous_crash() -> Option<String> {
+    let path = crash_marker_path();
+    if path.exists() {
+        match fs::read_to_string(&path) {
+            Ok(contents) => Some(contents),
+            Err(err) => {
+                tracing::warn!(
+                    target: "gpui_starter::lifecycle",
+                    path = %path.display(),
+                    error = %err,
+                    "crash marker exists but could not be read"
+                );
+                Some("<unreadable>".to_string())
+            }
+        }
+    } else {
+        None
+    }
+}
+
+/// Remove the crash marker on a clean shutdown.
+pub fn remove_crash_marker() {
+    let path = crash_marker_path();
+    if path.exists() {
+        if let Err(err) = fs::remove_file(&path) {
+            tracing::warn!(
+                target: "gpui_starter::lifecycle",
+                path = %path.display(),
+                error = %err,
+                "failed to remove crash marker"
+            );
+        }
+    }
 }

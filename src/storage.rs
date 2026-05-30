@@ -20,6 +20,14 @@ pub trait StorageBackend: Send + Sync {
     fn schema_version(&self) -> rusqlite::Result<i64>;
     fn health_check(&self) -> rusqlite::Result<()>;
     fn maintenance(&self) -> rusqlite::Result<()>;
+    fn persist_error_record(
+        &self,
+        error: &crate::error_surface::ErrorRecord,
+    ) -> rusqlite::Result<()>;
+    fn load_error_history(
+        &self,
+        limit: usize,
+    ) -> rusqlite::Result<Vec<crate::error_surface::ErrorRecord>>;
 }
 
 #[derive(Clone, Debug)]
@@ -29,6 +37,13 @@ struct SqliteStorage {
 
 impl SqliteStorage {
     fn new(path: PathBuf) -> Self {
+        Self { path }
+    }
+
+    /// Constructor for unit tests that need a `SqliteStorage` pointing at an
+    /// arbitrary path (bypasses the normal app-state path resolution).
+    #[cfg(test)]
+    pub fn new_for_test(path: PathBuf) -> Self {
         Self { path }
     }
 
@@ -57,11 +72,87 @@ impl StorageBackend for SqliteStorage {
         let conn = self.open()?;
         conn.execute_batch("PRAGMA optimize;")
     }
+
+    fn persist_error_record(
+        &self,
+        error: &crate::error_surface::ErrorRecord,
+    ) -> rusqlite::Result<()> {
+        let conn = self.open()?;
+        let actions_json = serde_json::to_string(&error.actions)
+            .map_err(|err| rusqlite::Error::ToSqlConversionFailure(Box::new(err)))?;
+        conn.execute(
+            "INSERT OR IGNORE INTO error_log (id, occurred_at, severity, category, message, actions)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            rusqlite::params![
+                error.id.to_string(),
+                error.occurred_at.to_rfc3339(),
+                serde_json::to_string(&error.severity)
+                    .map_err(|err| rusqlite::Error::ToSqlConversionFailure(Box::new(err)))?
+                    .trim_matches('"'),
+                error.category.label(),
+                error.message,
+                actions_json,
+            ],
+        )?;
+        Ok(())
+    }
+
+    fn load_error_history(
+        &self,
+        limit: usize,
+    ) -> rusqlite::Result<Vec<crate::error_surface::ErrorRecord>> {
+        let conn = self.open()?;
+        let mut stmt = conn.prepare(
+            "SELECT id, occurred_at, severity, category, message, actions
+             FROM error_log
+             ORDER BY occurred_at DESC
+             LIMIT ?1",
+        )?;
+        let rows = stmt
+            .query_map([limit], |row| {
+                let id_str: String = row.get(0)?;
+                let occurred_at_str: String = row.get(1)?;
+                let severity_str: String = row.get(2)?;
+                let category_str: String = row.get(3)?;
+                let message: String = row.get(4)?;
+                let actions_json: String = row.get(5)?;
+                Ok((id_str, occurred_at_str, severity_str, category_str, message, actions_json))
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+
+        let mut records = Vec::with_capacity(rows.len());
+        for (id_str, occurred_at_str, severity_str, category_str, message, actions_json) in rows {
+            let id = uuid::Uuid::parse_str(&id_str)
+                .map(|u| crate::ids::EventId(u))
+                .map_err(|err| rusqlite::Error::InvalidParameterName(err.to_string()))?;
+            let occurred_at = chrono::DateTime::parse_from_rfc3339(&occurred_at_str)
+                .map(|dt| crate::time::AppTimestamp(dt.to_utc()))
+                .map_err(|err| rusqlite::Error::InvalidParameterName(err.to_string()))?;
+            let severity: crate::errors::AppErrorSeverity =
+                serde_json::from_str(&format!("\"{severity_str}\""))
+                    .map_err(|err| rusqlite::Error::InvalidParameterName(err.to_string()))?;
+            let category: crate::error_surface::ErrorCategory =
+                serde_json::from_str(&format!("\"{category_str}\""))
+                    .map_err(|err| rusqlite::Error::InvalidParameterName(err.to_string()))?;
+            let actions: Vec<crate::error_surface::ErrorAction> =
+                serde_json::from_str(&actions_json)
+                    .map_err(|err| rusqlite::Error::InvalidParameterName(err.to_string()))?;
+            records.push(crate::error_surface::ErrorRecord {
+                id,
+                occurred_at,
+                severity,
+                category,
+                message,
+                actions,
+            });
+        }
+        Ok(records)
+    }
 }
 
 #[derive(Clone)]
 pub struct StorageRuntime {
-    backend: Arc<dyn StorageBackend>,
+    pub(crate) backend: Arc<dyn StorageBackend>,
 }
 
 impl Global for StorageRuntime {}
@@ -202,10 +293,20 @@ fn init_db(path: &PathBuf) -> rusqlite::Result<i64> {
             value TEXT NOT NULL,
             updated_at TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS error_log (
+            id TEXT PRIMARY KEY,
+            occurred_at TEXT NOT NULL,
+            severity TEXT NOT NULL,
+            category TEXT NOT NULL,
+            message TEXT NOT NULL,
+            actions TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_error_log_occurred_at
+            ON error_log (occurred_at DESC);
     "#,
     )?;
 
-    let current_version = 1_i64;
+    let current_version = 2_i64;
     conn.execute(
         "INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (?1, datetime('now'))",
         [current_version],
@@ -224,12 +325,12 @@ mod tests {
         let dir = tempdir().expect("tempdir");
         let db_path = dir.path().join("app.db");
         let version = init_db(&db_path).expect("init db");
-        assert_eq!(version, 1);
+        assert_eq!(version, 2);
 
         let conn = rusqlite::Connection::open(&db_path).expect("open db");
         let count: i64 = conn
             .query_row(
-                "SELECT COUNT(*) FROM schema_migrations WHERE version = 1",
+                "SELECT COUNT(*) FROM schema_migrations WHERE version = 2",
                 [],
                 |row| row.get(0),
             )
@@ -245,6 +346,6 @@ mod tests {
         let backend = SqliteStorage::new(db_path);
         backend.health_check().expect("health check");
         backend.maintenance().expect("maintenance");
-        assert_eq!(backend.schema_version().expect("schema version"), 1);
+        assert_eq!(backend.schema_version().expect("schema version"), 2);
     }
 }

@@ -20,7 +20,7 @@ tracing-subscriber = { version = "0.3", features = [
     "fmt",
     "registry",
 ], default-features = false }
-tokio = { version = "1", features = ["rt", "sync", "time"] }
+tokio = { version = "1", features = ["rt", "sync", "time", "io-util", "net"] }
 async-trait = "0.1"
 rust-i18n = "3"
 regex = "1"
@@ -38,6 +38,12 @@ name = "gpui-starter"
 version = "0.2.0"
 edition = "2024"
 publish = false
+
+[features]
+# Enable OTLP export over HTTP/Protobuf for the telemetry module.
+# See src/telemetry.rs for the full list of optional dependencies this pulls in.
+otlp = ["dep:opentelemetry-otlp", "dep:opentelemetry_sdk"]
+websocket = []
 
 [dependencies]
 gpui.workspace = true
@@ -72,19 +78,32 @@ atomic-write-file = "0.3.0"
 semver = "1.0.28"
 tempfile = "3.27.0"
 single-instance = "0.3.3"
-interprocess = "2.4.2"
+interprocess = { version = "2.4.2", features = ["tokio"] }
 reqwest = { version = "0.12.24", default-features = false, features = ["blocking", "rustls-tls"] }
 network-interface = "2.0.3"
 keyring = { version = "3.6.3", features = ["apple-native"] }
 rusqlite = { version = "0.32.1", features = ["bundled"] }
 opentelemetry = "0.24.0"
 tracing-opentelemetry = "0.25.0"
+# Optional: OTLP HTTP exporter for remote telemetry (enable with --features otlp)
+opentelemetry-otlp = { version = "0.17.0", optional = true, features = [
+    "http-proto",
+    "reqwest-client",
+] }
+opentelemetry_sdk = { version = "0.24.1", optional = true, features = [
+    "rt-tokio",
+    "trace",
+] }
 open = "5.3.2"
 arboard = "3.6.1"
 rfd = "0.15.4"
 notify = "8.2.0"
 undo = "0.52.0"
 accesskit = "0.21.1"
+sys-locale = "0.3"
+
+[dev-dependencies]
+insta = { version = "1", features = ["yaml"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 tray-icon = { version = "0.24", default-features = false }

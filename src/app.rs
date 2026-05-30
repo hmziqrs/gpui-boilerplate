@@ -88,18 +88,42 @@ pub fn set_theme_mode_with_record(mode: gpui_component::ThemeMode, record: bool,
 // ---------------------------------------------------------------------------
 
 pub fn init(cx: &mut App) {
+    let startup_start = std::time::Instant::now();
+
     crate::lifecycle::install_panic_hook();
+
+    // Crash marker: write on startup, detect previous crash
+    crate::lifecycle::write_crash_marker();
+    if let Some(marker) = crate::lifecycle::check_previous_crash() {
+        tracing::warn!(
+            target: "gpui_starter::lifecycle",
+            marker = %marker,
+            "previous crash detected"
+        );
+    }
+
     crate::lifecycle::set_startup_step("component_init", cx);
 
     // Must be called before using any gpui-component features
+    let step_t = std::time::Instant::now();
     gpui_component::init(cx);
+    tracing::info!(target: "gpui_starter::startup", elapsed_ms = step_t.elapsed().as_millis() as u64, "component_init done");
+
     crate::lifecycle::set_stage(crate::lifecycle::LifecycleStage::Starting, cx);
     crate::lifecycle::set_startup_step("app_state_init", cx);
+    let step_t = std::time::Instant::now();
     crate::app_state::initialize(cx);
+    tracing::info!(target: "gpui_starter::startup", elapsed_ms = step_t.elapsed().as_millis() as u64, "app_state_init done");
+
     crate::lifecycle::set_startup_step("logging_init", cx);
+    let step_t = std::time::Instant::now();
     crate::logging::initialize(cx);
+    tracing::info!(target: "gpui_starter::startup", elapsed_ms = step_t.elapsed().as_millis() as u64, "logging_init done");
+
     crate::lifecycle::set_startup_step("capabilities_init", cx);
+    let step_t = std::time::Instant::now();
     crate::capabilities::initialize(cx);
+    tracing::info!(target: "gpui_starter::startup", elapsed_ms = step_t.elapsed().as_millis() as u64, "capabilities_init done");
     crate::capabilities::set(
         "app_state",
         crate::capabilities::CapabilityStatus::supported_enabled(),
@@ -162,12 +186,23 @@ pub fn init(cx: &mut App) {
     );
 
     // Initialize es-fluent i18n for app and form text
+    let system_locale = crate::i18n::detect_system_locale();
+    tracing::info!(
+        target: "gpui_starter::startup",
+        system_locale = %system_locale,
+        "detected system locale"
+    );
     let _ = crate::i18n::init_i18n(
         <_ as Into<es_fluent::unic_langid::LanguageIdentifier>>::into(Languages::default()),
     );
 
     let persisted = crate::app_state::config(cx);
-    set_locale(&persisted.locale, cx);
+    let locale_to_use = if persisted.locale.is_empty() {
+        system_locale
+    } else {
+        persisted.locale.clone()
+    };
+    set_locale(&locale_to_use, cx);
 
     // Load extra themes from the themes/ directory (with hot-reload)
     let persisted_theme = persisted.theme.clone();
@@ -225,6 +260,7 @@ pub fn init(cx: &mut App) {
     cx.set_global(crate::events::AppEventQueue::default());
     cx.set_global(crate::launcher::LauncherOpen(false));
     crate::lifecycle::set_startup_step("runtime_services_init", cx);
+    let step_t = std::time::Instant::now();
     crate::tasks::initialize(cx);
     crate::error_surface::initialize(cx);
     crate::undo_stack::initialize(cx);
@@ -235,7 +271,48 @@ pub fn init(cx: &mut App) {
     crate::secure_storage::initialize(cx);
     crate::session::initialize(cx);
     crate::storage::initialize(cx);
+
+    // Run database migrations after storage is initialized
+    crate::lifecycle::set_startup_step("db_migrations", cx);
+    let migrations_t = std::time::Instant::now();
+    if let Some(snapshot) = cx.try_global::<crate::storage::StorageSnapshot>() {
+        if snapshot.available {
+            let db_path = std::path::PathBuf::from(snapshot.db_path.clone());
+            match rusqlite::Connection::open(&db_path) {
+                Ok(conn) => match crate::db_migrations::run_migrations(&conn) {
+                    Ok(version) => {
+                        tracing::info!(
+                            target: "gpui_starter::startup",
+                            version,
+                            elapsed_ms = migrations_t.elapsed().as_millis() as u64,
+                            "db_migrations complete"
+                        );
+                    }
+                    Err(err) => {
+                        tracing::error!(
+                            target: "gpui_starter::startup",
+                            error = %err,
+                            "db_migrations failed"
+                        );
+                        crate::lifecycle::set_startup_error(
+                            format!("migration failed: {err}"),
+                            cx,
+                        );
+                    }
+                },
+                Err(err) => {
+                    tracing::error!(
+                        target: "gpui_starter::startup",
+                        error = %err,
+                        "failed to open db for migrations"
+                    );
+                }
+            }
+        }
+    }
+
     crate::telemetry::initialize(cx);
+    tracing::info!(target: "gpui_starter::startup", elapsed_ms = step_t.elapsed().as_millis() as u64, "runtime_services_init done");
     crate::telemetry::record_event("app_runtime_initialized", cx);
     crate::notifications::inbox::initialize(cx);
     crate::notifications::initialize(cx);
@@ -278,6 +355,8 @@ pub fn init(cx: &mut App) {
                 crate::telemetry::shutdown(cx);
                 crate::lifecycle::set_shutdown_step("flush_logs", cx);
                 crate::logging::shutdown(cx);
+                crate::lifecycle::set_shutdown_step("remove_crash_marker", cx);
+                crate::lifecycle::remove_crash_marker();
                 crate::lifecycle::set_shutdown_step("quit", cx);
                 cx.quit();
             });
@@ -337,6 +416,12 @@ pub fn init(cx: &mut App) {
     cx.activate(true);
     crate::lifecycle::set_startup_step("running", cx);
     crate::lifecycle::set_stage(crate::lifecycle::LifecycleStage::Running, cx);
+
+    tracing::info!(
+        target: "gpui_starter::startup",
+        total_elapsed_ms = startup_start.elapsed().as_millis() as u64,
+        "startup complete"
+    );
 }
 
 // ---------------------------------------------------------------------------

@@ -17,6 +17,35 @@ use crate::{
     routes::AppRoute,
 };
 
+// ---------------------------------------------------------------------------
+// RTL locale detection
+// ---------------------------------------------------------------------------
+
+/// Returns `true` when the given locale string corresponds to an RTL script.
+///
+/// Recognized RTL locales: Arabic (ar*), Hebrew (he*), Farsi (fa*), Urdu (ur*).
+fn is_rtl_locale(locale: &str) -> bool {
+    locale
+        .split('-')
+        .next()
+        .map(|primary| matches!(primary, "ar" | "he" | "fa" | "ur"))
+        .unwrap_or(false)
+}
+
+// ---------------------------------------------------------------------------
+// Keyboard navigation action
+// ---------------------------------------------------------------------------
+
+/// Navigate directly to a sidebar page by index (0-based).
+#[derive(Action, Clone, PartialEq, Eq, serde::Deserialize)]
+#[action(namespace = app, no_json)]
+pub struct NavigateToPage(pub usize);
+
+/// Re-navigate to the current page (triggers a route refresh).
+#[derive(Action, Clone, PartialEq, Eq, serde::Deserialize)]
+#[action(namespace = app, no_json)]
+pub struct RefreshPage;
+
 pub struct AppRoot {
     focus_handle: FocusHandle,
     title_bar: Entity<AppTitleBar>,
@@ -58,6 +87,7 @@ impl AppRoot {
                         crate::error_surface::report(
                             message,
                             severity,
+                            crate::error_surface::ErrorCategory::System,
                             vec![crate::error_surface::ErrorAction::Dismiss],
                             cx,
                         );
@@ -103,6 +133,27 @@ impl AppRoot {
         .detach();
 
         let config = crate::app_state::config(cx);
+
+        // Keyboard shortcuts: Cmd+1..9 to jump to sidebar pages.
+        let pages = Page::all();
+        cx.bind_keys(
+            pages
+                .iter()
+                .enumerate()
+                .filter_map(|(i, _)| {
+                    if i < 9 {
+                        Some(KeyBinding::new(
+                            &format!("cmd-{}", i + 1),
+                            NavigateToPage(i),
+                            None,
+                        ))
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>(),
+        );
+
         Self {
             focus_handle: cx.focus_handle(),
             title_bar,
@@ -155,6 +206,8 @@ impl Render for AppRoot {
         let notification_layer = Root::render_notification_layer(window, cx);
         let page_title = self.active_route.title();
         let active_page = self.active_route.page_for_render();
+        let is_focused = self.focus_handle.is_focused(window);
+        let rtl = is_rtl_locale(&crate::app::current_locale(cx));
 
         let sidebar = Sidebar::new("app-sidebar")
             .w(relative(1.))
@@ -179,65 +232,110 @@ impl Render for AppRoot {
             .child(
                 SidebarGroup::new("Navigation").child(SidebarMenu::new().children(
                     Page::all().iter().map(|page| {
+                        let page = *page;
                         SidebarMenuItem::new(page.title())
                             .icon(Icon::new(page.icon()).small())
-                            .active(active_page == *page)
+                            .active(active_page == page)
                             .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                                this.set_route(AppRoute::page(*page), cx);
+                                this.set_route(AppRoute::page(page), cx);
                             }))
+                            // Context menu: right-click on sidebar items.
+                            .context_menu(move |menu, _window, _cx| {
+                                menu.menu_with_icon(
+                                    "Navigate",
+                                    Icon::new(IconName::ArrowRight),
+                                    Box::new(NavigateToPage(page as usize)),
+                                )
+                                .separator()
+                                .menu_with_icon(
+                                    "Refresh",
+                                    Icon::new(IconName::Redo2),
+                                    Box::new(RefreshPage),
+                                )
+                                .separator()
+                                .menu_with_icon(
+                                    "Settings",
+                                    Icon::new(IconName::Settings2),
+                                    Box::new(NavigateToPage(Page::Settings as usize)),
+                                )
+                            })
                     }),
                 )),
             );
 
+        // RTL: reverse sidebar position and flex direction
+        let sidebar_panel = resizable_panel()
+            .size(px(255.))
+            .size_range(px(60.)..px(320.))
+            .child(sidebar);
+
+        let content_panel = resizable_panel().child(
+            v_flex()
+                .flex_1()
+                .h_full()
+                .overflow_x_hidden()
+                .child(
+                    div()
+                        .id("header")
+                        .p_4()
+                        .border_b_1()
+                        .border_color(cx.theme().border)
+                        .child(
+                            div()
+                                .text_xl()
+                                .font_weight(FontWeight::BOLD)
+                                .child(page_title),
+                        ),
+                )
+                .child(
+                    div()
+                        .id("page")
+                        .flex_1()
+                        .overflow_y_scroll()
+                        .child(self.active_page_view()),
+                ),
+        );
+
+        // In RTL locales the sidebar appears on the right; swap panel order.
+        let mut layout = h_resizable("app-layout");
+        if rtl {
+            layout = layout.child(content_panel).child(sidebar_panel);
+        } else {
+            layout = layout.child(sidebar_panel).child(content_panel);
+        }
+
+        let content_area = div()
+            .track_focus(&self.focus_handle)
+            // Visible focus ring on the root content area for keyboard users.
+            .when(is_focused, |el| {
+                el.border_2().border_color(cx.theme().ring)
+            })
+            .on_action(cx.listener(|_, _: &ToggleSearch, _, cx| {
+                crate::launcher::open_launcher(cx);
+            }))
+            // Cmd+1..9 → NavigateToPage handler
+            .on_action(cx.listener(|this, action: &NavigateToPage, _, cx| {
+                let pages = Page::all();
+                if let Some(&page) = pages.get(action.0) {
+                    this.set_route(AppRoute::page(page), cx);
+                }
+            }))
+            // Context menu action handlers
+            .on_action(cx.listener(|this, _: &RefreshPage, _, cx| {
+                let current = this.active_route.page_for_render();
+                // Force a re-render by calling notify, since set_route
+                // no-ops when the route is unchanged.
+                cx.notify();
+                tracing::info!(target: "gpui_starter::root", page = ?current, "page refreshed");
+            }))
+            .flex_1()
+            .overflow_hidden()
+            .child(layout);
+
         v_flex()
             .size_full()
             .child(self.title_bar.clone())
-            .child(
-                div()
-                    .track_focus(&self.focus_handle)
-                    .on_action(cx.listener(|_, _: &ToggleSearch, _, cx| {
-                        crate::launcher::open_launcher(cx);
-                    }))
-                    .flex_1()
-                    .overflow_hidden()
-                    .child(
-                        h_resizable("app-layout")
-                            .child(
-                                resizable_panel()
-                                    .size(px(255.))
-                                    .size_range(px(60.)..px(320.))
-                                    .child(sidebar),
-                            )
-                            .child(
-                                resizable_panel().child(
-                                    v_flex()
-                                        .flex_1()
-                                        .h_full()
-                                        .overflow_x_hidden()
-                                        .child(
-                                            div()
-                                                .id("header")
-                                                .p_4()
-                                                .border_b_1()
-                                                .border_color(cx.theme().border)
-                                                .child(
-                                                    div()
-                                                        .text_xl()
-                                                        .font_weight(FontWeight::BOLD)
-                                                        .child(page_title),
-                                                ),
-                                        )
-                                        .child(
-                                            div()
-                                                .id("page")
-                                                .flex_1()
-                                                .overflow_y_scroll()
-                                                .child(self.active_page_view()),
-                                        ),
-                                ),
-                            ),
-                    ),
-            )
+            .child(content_area)
             .child(crate::status_bar::render(&self.active_route, cx))
             .children(sheet_layer)
             .children(dialog_layer)

@@ -263,6 +263,7 @@ fn update_result(action: &str, error: Option<String>, cx: &mut App) {
         crate::error_surface::report(
             format!("Desktop action `{action}` failed: {error}"),
             crate::errors::AppErrorSeverity::Warning,
+            crate::error_surface::ErrorCategory::System,
             vec![
                 crate::error_surface::ErrorAction::Retry,
                 crate::error_surface::ErrorAction::Dismiss,

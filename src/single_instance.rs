@@ -18,6 +18,8 @@ use std::sync::mpsc;
 use std::time::Duration;
 
 use crate::events::{self, AppEventKind};
+#[allow(unused_imports)] // Bridge to the generalised async IPC abstraction (src/ipc.rs).
+use crate::ipc;
 
 const INSTANCE_NAME: &str = "com.gpui-starter.app.instance";
 const LOG: &str = "gpui_starter::single_instance";
@@ -240,6 +242,8 @@ fn append_forwarded_link(path: &PathBuf, link: &str) {
     }
 }
 
+/// Send a single deep-link to the primary instance over a local socket.
+/// Synchronous counterpart of `crate::ipc::IpcEndpoint::send`.
 fn send_forwarded_link_via_ipc(ipc_name: &str, link: &str) -> Result<(), String> {
     let name = resolve_ipc_name(ipc_name).map_err(|err| err.to_string())?;
     let mut stream = Stream::connect(name).map_err(|err| err.to_string())?;
@@ -270,6 +274,9 @@ fn queue_file_path() -> PathBuf {
     std::env::temp_dir().join("gpui-starter-forwarded-deep-links.queue")
 }
 
+/// Resolve a platform-appropriate local-socket name.
+/// Mirrors `crate::ipc::IpcEndpoint::resolve_name`; kept here for the
+/// synchronous code path. Prefer `IpcEndpoint` for async callers.
 fn resolve_ipc_name<'a>(
     ipc_name: &'a str,
 ) -> std::io::Result<interprocess::local_socket::Name<'a>> {

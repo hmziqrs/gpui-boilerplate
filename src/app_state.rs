@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+use std::collections::HashSet;
 use std::{io::Write, path::Path};
 
 use atomic_write_file::AtomicWriteFile;
@@ -41,6 +42,10 @@ pub struct AppConfig {
     pub first_run_completed: bool,
     pub notification_inbox: Vec<NotificationInboxItem>,
     pub window_bounds: Option<PersistedWindowBounds>,
+    #[serde(default)]
+    pub granted_permissions: HashSet<String>,
+    #[serde(default)]
+    pub denied_permissions: HashSet<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -65,6 +70,8 @@ impl Default for AppConfig {
             first_run_completed: false,
             notification_inbox: Vec::new(),
             window_bounds: None,
+            granted_permissions: HashSet::new(),
+            denied_permissions: HashSet::new(),
         }
     }
 }

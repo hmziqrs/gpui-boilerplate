@@ -198,6 +198,7 @@ pub fn execute(id: CommandId, cx: &mut App) {
                 crate::error_surface::report(
                     format!("Copy diagnostics failed: {error}"),
                     crate::errors::AppErrorSeverity::Error,
+                    crate::error_surface::ErrorCategory::System,
                     vec![
                         crate::error_surface::ErrorAction::Retry,
                         crate::error_surface::ErrorAction::Dismiss,
@@ -212,6 +213,7 @@ pub fn execute(id: CommandId, cx: &mut App) {
                 crate::error_surface::report(
                     format!("Open logs folder failed: {error}"),
                     crate::errors::AppErrorSeverity::Error,
+                    crate::error_surface::ErrorCategory::Storage,
                     vec![
                         crate::error_surface::ErrorAction::OpenSettings,
                         crate::error_surface::ErrorAction::Dismiss,
@@ -226,6 +228,7 @@ pub fn execute(id: CommandId, cx: &mut App) {
                 crate::error_surface::report(
                     format!("Open config folder failed: {error}"),
                     crate::errors::AppErrorSeverity::Error,
+                    crate::error_surface::ErrorCategory::Config,
                     vec![
                         crate::error_surface::ErrorAction::OpenSettings,
                         crate::error_surface::ErrorAction::Dismiss,

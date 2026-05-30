@@ -1,0 +1,157 @@
+{
+  "$schema": "https://github.com/longbridge/gpui-component/raw/refs/heads/main/.theme-schema.json",
+  "name": "High Contrast Dark",
+  "author": "gpui-app",
+  "themes": [
+    {
+      "name": "High Contrast Dark",
+      "mode": "dark",
+      "colors": {
+        "accent.background": "#002266",
+        "accent.foreground": "#FFFFFF",
+        "background": "#000000",
+        "border": "#FFFFFF",
+        "danger.background": "#FF4444",
+        "danger.active.background": "#FF6666",
+        "danger.foreground": "#000000",
+        "foreground": "#FFFFFF",
+        "input.border": "#FFFFFF",
+        "link.active.foreground": "#66BBFF",
+        "link.foreground": "#66BBFF",
+        "link.hover.foreground": "#99DDFF",
+        "list.active.background": "#FFFFFF22",
+        "list.hover.background": "#1A1A1A",
+        "list.active.border": "#FFFFFF",
+        "list.even.background": "#0A0A0A",
+        "muted.background": "#FFFFFF22",
+        "muted.foreground": "#B0B0B0",
+        "panel.background": "#111111",
+        "popover.background": "#000000",
+        "popover.foreground": "#FFFFFF",
+        "primary.active.background": "#3377FF",
+        "primary.background": "#4488FF",
+        "primary.foreground": "#000000",
+        "primary.hover.background": "#66AAFF",
+        "ring": "#4488FF",
+        "scrollbar.background": "#00000000",
+        "scrollbar.thumb.background": "#FFFFFF",
+        "secondary.background": "#222222",
+        "secondary.active.background": "#444444",
+        "secondary.foreground": "#FFFFFF",
+        "secondary.hover.background": "#333333",
+        "tab.active.background": "#000000",
+        "tab.active.foreground": "#FFFFFF",
+        "tab.background": "#11111100",
+        "tab.foreground": "#B0B0B0",
+        "tab_bar.background": "#111111",
+        "title_bar.background": "#111111",
+        "title_bar.border": "#FFFFFF",
+        "base.magenta.light": "#FF66FF66",
+        "base.red": "#FF4444",
+        "base.green": "#44DD44",
+        "base.yellow": "#FFDD44",
+        "base.blue": "#4488FF",
+        "base.magenta": "#FF66FF",
+        "base.cyan": "#44DDDD"
+      },
+      "highlight": {
+        "editor.foreground": "#FFFFFF",
+        "editor.background": "#000000",
+        "editor.active_line.background": "#1A1A1A",
+        "editor.line_number": "#999999",
+        "editor.active_line_number": "#FFFFFF",
+        "editor.invisible": "#99999966",
+        "conflict": "#FF4444",
+        "created": "#44DD44",
+        "deleted": "#FF4444",
+        "error": "#FF4444",
+        "hidden": "#B0B0B0",
+        "hint": "#66BBFF",
+        "ignored": "#B0B0B0",
+        "info": "#4488FF",
+        "modified": "#FFDD44",
+        "predictive": "#B0B0B0",
+        "renamed": "#FFDD44",
+        "success": "#44DD44",
+        "unreachable": "#B0B0B0",
+        "warning": "#FFDD44",
+        "syntax": {
+          "attribute": {
+            "color": "#FFDD44"
+          },
+          "boolean": {
+            "color": "#FF66FF"
+          },
+          "comment": {
+            "color": "#B0B0B0",
+            "font_style": "italic"
+          },
+          "comment.doc": {
+            "color": "#B0B0B0",
+            "font_style": "italic"
+          },
+          "constant": {
+            "color": "#FF66FF"
+          },
+          "constructor": {
+            "color": "#FFDD44"
+          },
+          "embedded": {
+            "color": "#FFFFFF"
+          },
+          "function": {
+            "color": "#4488FF"
+          },
+          "keyword": {
+            "color": "#FF4444"
+          },
+          "link_text": {
+            "color": "#66BBFF",
+            "font_style": "normal"
+          },
+          "link_uri": {
+            "color": "#66BBFF",
+            "font_style": "italic"
+          },
+          "number": {
+            "color": "#FF66FF"
+          },
+          "string": {
+            "color": "#44DD44"
+          },
+          "string.escape": {
+            "color": "#44DD44"
+          },
+          "string.regex": {
+            "color": "#44DD44"
+          },
+          "string.special": {
+            "color": "#FF66FF"
+          },
+          "string.special.symbol": {
+            "color": "#FF66FF"
+          },
+          "tag": {
+            "color": "#FFDD44"
+          },
+          "text.literal": {
+            "color": "#FF66FF"
+          },
+          "title": {
+            "color": "#FFFFFF",
+            "font_weight": 600
+          },
+          "type": {
+            "color": "#FFDD44"
+          },
+          "property": {
+            "color": "#FFFFFF"
+          },
+          "variable.special": {
+            "color": "#FF4444"
+          }
+        }
+      }
+    }
+  ]
+}
