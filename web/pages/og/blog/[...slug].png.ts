@@ -10,13 +10,109 @@ export async function getStaticPaths() {
   }));
 }
 
+// Each shape gets a full-card composition: one hero wireframe + constellation dots + accent
+const SHAPES = [
+  // 0 — Hexagon (top-right) + triangle (bottom-left)
+  `<g transform="translate(960, 30)" opacity="0.35">
+    <polygon points="70,0 140,40 140,120 70,160 0,120 0,40" fill="none" stroke="#f59e0b" stroke-width="1.5"/>
+    <polygon points="70,28 112,48 112,112 70,132 28,112 28,48" fill="none" stroke="#f59e0b" stroke-width="1" opacity="0.45"/>
+    <line x1="70" y1="0" x2="70" y2="160" stroke="#f59e0b" stroke-width="0.5" opacity="0.3"/>
+    <line x1="0" y1="40" x2="140" y2="120" stroke="#f59e0b" stroke-width="0.5" opacity="0.3"/>
+    <line x1="140" y1="40" x2="0" y2="120" stroke="#f59e0b" stroke-width="0.5" opacity="0.3"/>
+    <circle cx="70" cy="80" r="3" fill="#f59e0b" opacity="0.6"/>
+    <circle cx="70" cy="0" r="2" fill="#f59e0b" opacity="0.5"/><circle cx="140" cy="40" r="2" fill="#f59e0b" opacity="0.5"/>
+    <circle cx="140" cy="120" r="2" fill="#f59e0b" opacity="0.5"/><circle cx="70" cy="160" r="2" fill="#f59e0b" opacity="0.5"/>
+    <circle cx="0" cy="120" r="2" fill="#f59e0b" opacity="0.5"/><circle cx="0" cy="40" r="2" fill="#f59e0b" opacity="0.5"/>
+  </g>
+  <g transform="translate(55, 540)" opacity="0.25">
+    <polygon points="35,0 70,60 0,60" fill="none" stroke="#f59e0b" stroke-width="1.2"/>
+    <polygon points="35,12 58,52 12,52" fill="none" stroke="#f59e0b" stroke-width="0.8" opacity="0.5"/>
+  </g>`,
+
+  // 1 — Diamond (bottom-right) + constellation
+  `<g transform="translate(970, 410)" opacity="0.3">
+    <rect x="10" y="10" width="110" height="110" fill="none" stroke="#f59e0b" stroke-width="1.5" transform="rotate(45, 65, 65)"/>
+    <rect x="30" y="30" width="70" height="70" fill="none" stroke="#f59e0b" stroke-width="1" opacity="0.5" transform="rotate(45, 65, 65)"/>
+    <line x1="65" y1="0" x2="65" y2="130" stroke="#f59e0b" stroke-width="0.5" opacity="0.4"/>
+    <line x1="0" y1="65" x2="130" y2="65" stroke="#f59e0b" stroke-width="0.5" opacity="0.4"/>
+    <circle cx="65" cy="65" r="4" fill="#f59e0b" opacity="0.5"/>
+    <circle cx="65" cy="0" r="2" fill="#f59e0b" opacity="0.4"/>
+    <circle cx="130" cy="65" r="2" fill="#f59e0b" opacity="0.4"/>
+    <circle cx="65" cy="130" r="2" fill="#f59e0b" opacity="0.4"/>
+    <circle cx="0" cy="65" r="2" fill="#f59e0b" opacity="0.4"/>
+  </g>`,
+
+  // 2 — Octagon (right-center)
+  `<g transform="translate(960, 220)" opacity="0.3">
+    <polygon points="47,0 113,0 160,47 160,113 113,160 47,160 0,113 0,47" fill="none" stroke="#f59e0b" stroke-width="1.5"/>
+    <polygon points="47,28 105,28 132,55 132,105 105,132 47,132 28,105 28,55" fill="none" stroke="#f59e0b" stroke-width="1" opacity="0.45"/>
+    <line x1="80" y1="0" x2="80" y2="160" stroke="#f59e0b" stroke-width="0.5" opacity="0.25"/>
+    <line x1="0" y1="80" x2="160" y2="80" stroke="#f59e0b" stroke-width="0.5" opacity="0.25"/>
+    <circle cx="80" cy="80" r="3" fill="#f59e0b" opacity="0.5"/>
+    <circle cx="47" cy="0" r="2" fill="#f59e0b" opacity="0.4"/><circle cx="113" cy="0" r="2" fill="#f59e0b" opacity="0.4"/>
+    <circle cx="160" cy="47" r="2" fill="#f59e0b" opacity="0.4"/><circle cx="160" cy="113" r="2" fill="#f59e0b" opacity="0.4"/>
+    <circle cx="113" cy="160" r="2" fill="#f59e0b" opacity="0.4"/><circle cx="47" cy="160" r="2" fill="#f59e0b" opacity="0.4"/>
+    <circle cx="0" cy="113" r="2" fill="#f59e0b" opacity="0.4"/><circle cx="0" cy="47" r="2" fill="#f59e0b" opacity="0.4"/>
+  </g>`,
+
+  // 3 — Pentagon (top-right) + small triangle
+  `<g transform="translate(975, 30)" opacity="0.35">
+    <polygon points="70,0 140,50 115,130 25,130 0,50" fill="none" stroke="#f59e0b" stroke-width="1.5"/>
+    <polygon points="70,25 110,58 93,110 47,110 30,58" fill="none" stroke="#f59e0b" stroke-width="1" opacity="0.45"/>
+    <line x1="70" y1="0" x2="70" y2="130" stroke="#f59e0b" stroke-width="0.5" opacity="0.3"/>
+    <circle cx="70" cy="65" r="3" fill="#f59e0b" opacity="0.6"/>
+    <circle cx="70" cy="0" r="2" fill="#f59e0b" opacity="0.5"/><circle cx="140" cy="50" r="2" fill="#f59e0b" opacity="0.5"/>
+    <circle cx="115" cy="130" r="2" fill="#f59e0b" opacity="0.5"/><circle cx="25" cy="130" r="2" fill="#f59e0b" opacity="0.5"/>
+    <circle cx="0" cy="50" r="2" fill="#f59e0b" opacity="0.5"/>
+  </g>
+  <g transform="translate(60, 545)" opacity="0.2">
+    <polygon points="25,0 50,44 0,44" fill="none" stroke="#f59e0b" stroke-width="1"/>
+  </g>`,
+
+  // 4 — Double triangle / Star of David (right-center)
+  `<g transform="translate(975, 200)" opacity="0.3">
+    <polygon points="65,0 130,112 0,112" fill="none" stroke="#f59e0b" stroke-width="1.5"/>
+    <polygon points="65,112 130,0 0,0" fill="none" stroke="#f59e0b" stroke-width="1.5"/>
+    <circle cx="65" cy="56" r="3" fill="#f59e0b" opacity="0.5"/>
+    <circle cx="65" cy="0" r="2" fill="#f59e0b" opacity="0.4"/>
+    <circle cx="130" cy="112" r="2" fill="#f59e0b" opacity="0.4"/>
+    <circle cx="0" cy="112" r="2" fill="#f59e0b" opacity="0.4"/>
+    <circle cx="65" cy="112" r="2" fill="#f59e0b" opacity="0.4"/>
+    <circle cx="130" cy="0" r="2" fill="#f59e0b" opacity="0.4"/>
+    <circle cx="0" cy="0" r="2" fill="#f59e0b" opacity="0.4"/>
+  </g>`,
+];
+
+// Shared constellation dots + lines (always present)
+const constellation = `
+  <g opacity="0.25">
+    <circle cx="420" cy="55" r="2" fill="#f59e0b"/>
+    <circle cx="580" cy="85" r="1.5" fill="#f59e0b"/>
+    <circle cx="730" cy="50" r="2.5" fill="#f59e0b"/>
+    <circle cx="500" cy="510" r="2" fill="#f59e0b"/>
+    <circle cx="680" cy="540" r="2.5" fill="#f59e0b"/>
+    <line x1="420" y1="55" x2="580" y2="85" stroke="#f59e0b" stroke-width="0.5" opacity="0.3"/>
+    <line x1="580" y1="85" x2="730" y2="50" stroke="#f59e0b" stroke-width="0.5" opacity="0.3"/>
+    <line x1="500" y1="510" x2="680" y2="540" stroke="#f59e0b" stroke-width="0.5" opacity="0.3"/>
+  </g>`;
+
+// Deterministic pick from slug hash (no Math.random — must be stable at build time)
+function pickShape(slug) {
+  let hash = 0;
+  for (let i = 0; i < slug.length; i++) {
+    hash = ((hash << 5) - hash + slug.charCodeAt(i)) | 0;
+  }
+  return SHAPES[Math.abs(hash) % SHAPES.length];
+}
+
 export async function GET({ props }) {
   const { post } = props;
   const title = post.data.title;
   const description = post.data.description || '';
   const tag = (post.data.tags && post.data.tags[0]) || 'GPUI';
 
-  const svg = await satori(
+  // Step 1: Generate text layout SVG via satori
+  const textSvg = await satori(
     {
       type: 'div',
       props: {
@@ -27,10 +123,9 @@ export async function GET({ props }) {
           flexDirection: 'column',
           background: 'linear-gradient(135deg, #06060a 0%, #1a1a2e 100%)',
           padding: '80px',
-          position: 'relative',
         },
         children: [
-          // ─── Left accent bar ───
+          // Left accent bar
           {
             type: 'div',
             props: {
@@ -44,47 +139,7 @@ export async function GET({ props }) {
               },
             },
           },
-          // ─── Geometric decorations ───
-          // Hexagon wireframe (top-right)
-          {
-            type: 'img',
-            props: {
-              width: 160,
-              height: 180,
-              style: { position: 'absolute', right: 80, top: 40 },
-              src: `data:image/svg+xml,${encodeURIComponent('<svg width="160" height="180" viewBox="0 0 160 180" fill="none" xmlns="http://www.w3.org/2000/svg"><polygon points="80,8 148,48 148,132 80,172 12,132 12,48" stroke="rgba(245,158,11,0.35)" stroke-width="1.5" fill="none"/><polygon points="80,32 126,56 126,124 80,148 34,124 34,56" stroke="rgba(245,158,11,0.15)" stroke-width="1" fill="none"/><line x1="80" y1="8" x2="80" y2="172" stroke="rgba(245,158,11,0.08)" stroke-width="0.5"/><line x1="12" y1="48" x2="148" y2="132" stroke="rgba(245,158,11,0.08)" stroke-width="0.5"/><line x1="148" y1="48" x2="12" y2="132" stroke="rgba(245,158,11,0.08)" stroke-width="0.5"/><circle cx="80" cy="90" r="3" fill="rgba(245,158,11,0.5)"/></svg>')}`,
-            },
-          },
-          // Icosahedron wireframe (bottom-right)
-          {
-            type: 'img',
-            props: {
-              width: 200,
-              height: 200,
-              style: { position: 'absolute', right: 30, bottom: 50 },
-              src: `data:image/svg+xml,${encodeURIComponent('<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg"><polygon points="100,12 180,58 180,142 100,188 20,142 20,58" stroke="rgba(245,158,11,0.12)" stroke-width="1" fill="none"/><polygon points="100,38 160,66 160,134 100,162 40,134 40,66" stroke="rgba(245,158,11,0.3)" stroke-width="1.5" fill="none"/><line x1="100" y1="38" x2="100" y2="162" stroke="rgba(245,158,11,0.12)" stroke-width="1"/><line x1="40" y1="66" x2="160" y2="134" stroke="rgba(245,158,11,0.12)" stroke-width="1"/><line x1="160" y1="66" x2="40" y2="134" stroke="rgba(245,158,11,0.12)" stroke-width="1"/><circle cx="100" cy="100" r="4" fill="rgba(245,158,11,0.4)"/><circle cx="100" cy="38" r="2.5" fill="rgba(245,158,11,0.35)"/><circle cx="160" cy="66" r="2.5" fill="rgba(245,158,11,0.35)"/><circle cx="160" cy="134" r="2.5" fill="rgba(245,158,11,0.35)"/><circle cx="100" cy="162" r="2.5" fill="rgba(245,158,11,0.35)"/><circle cx="40" cy="134" r="2.5" fill="rgba(245,158,11,0.35)"/><circle cx="40" cy="66" r="2.5" fill="rgba(245,158,11,0.35)"/></svg>')}`,
-            },
-          },
-          // Floating dots + constellation lines (scattered)
-          {
-            type: 'img',
-            props: {
-              width: 700,
-              height: 580,
-              style: { position: 'absolute', left: 350, top: 30 },
-              src: `data:image/svg+xml,${encodeURIComponent('<svg width="700" height="580" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="50" cy="80" r="2" fill="rgba(245,158,11,0.3)"/><circle cx="200" cy="40" r="1.5" fill="rgba(245,158,11,0.25)"/><circle cx="380" cy="100" r="2.5" fill="rgba(245,158,11,0.3)"/><circle cx="550" cy="60" r="2" fill="rgba(245,158,11,0.25)"/><circle cx="650" cy="150" r="1.5" fill="rgba(245,158,11,0.2)"/><circle cx="120" cy="450" r="2" fill="rgba(245,158,11,0.25)"/><circle cx="400" cy="500" r="2.5" fill="rgba(245,158,11,0.3)"/><circle cx="580" cy="480" r="1.5" fill="rgba(245,158,11,0.2)"/><circle cx="300" cy="300" r="1.5" fill="rgba(245,158,11,0.15)"/><circle cx="500" cy="250" r="2" fill="rgba(245,158,11,0.2)"/><line x1="50" y1="80" x2="200" y2="40" stroke="rgba(245,158,11,0.1)" stroke-width="0.5"/><line x1="200" y1="40" x2="380" y2="100" stroke="rgba(245,158,11,0.1)" stroke-width="0.5"/><line x1="380" y1="100" x2="550" y2="60" stroke="rgba(245,158,11,0.1)" stroke-width="0.5"/><line x1="120" y1="450" x2="400" y2="500" stroke="rgba(245,158,11,0.1)" stroke-width="0.5"/><line x1="400" y1="500" x2="580" y2="480" stroke="rgba(245,158,11,0.1)" stroke-width="0.5"/></svg>')}`,
-            },
-          },
-          // Triangle accent (bottom-left)
-          {
-            type: 'img',
-            props: {
-              width: 70,
-              height: 62,
-              style: { position: 'absolute', left: 60, bottom: 35 },
-              src: `data:image/svg+xml,${encodeURIComponent('<svg width="70" height="62" viewBox="0 0 70 62" fill="none" xmlns="http://www.w3.org/2000/svg"><polygon points="35,4 66,58 4,58" stroke="rgba(245,158,11,0.25)" stroke-width="1.2" fill="none"/></svg>')}`,
-            },
-          },
+          // Brand + tag
           {
             type: 'div',
             props: {
@@ -97,21 +152,11 @@ export async function GET({ props }) {
               children: [
                 {
                   type: 'span',
-                  props: {
-                    style: {
-                      fontSize: 28,
-                      fontWeight: 600,
-                      color: '#f59e0b',
-                    },
-                    children: 'gpui-starter',
-                  },
+                  props: { style: { fontSize: 28, fontWeight: 600, color: '#f59e0b' }, children: 'gpui-starter' },
                 },
                 {
                   type: 'span',
-                  props: {
-                    style: { fontSize: 20, color: '#4b4b5a' },
-                    children: '|',
-                  },
+                  props: { style: { fontSize: 20, color: '#4b4b5a' }, children: '|' },
                 },
                 {
                   type: 'span',
@@ -130,6 +175,7 @@ export async function GET({ props }) {
               ],
             },
           },
+          // Accent bar
           {
             type: 'div',
             props: {
@@ -142,6 +188,7 @@ export async function GET({ props }) {
               },
             },
           },
+          // Title
           {
             type: 'div',
             props: {
@@ -151,16 +198,12 @@ export async function GET({ props }) {
                 color: '#e7e7ed',
                 lineHeight: 1.2,
                 letterSpacing: '-0.02em',
-                maxWidth: 1040,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                display: '-webkit-box',
-                WebkitLineClamp: 3,
-                WebkitBoxOrient: 'vertical',
+                maxWidth: 850,
               },
               children: title,
             },
           },
+          // Bottom row: description + url
           {
             type: 'div',
             props: {
@@ -178,11 +221,6 @@ export async function GET({ props }) {
                       fontSize: 20,
                       color: '#a8a8b8',
                       maxWidth: 800,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      display: '-webkit-box',
-                      WebkitLineClamp: 2,
-                      WebkitBoxOrient: 'vertical',
                       lineHeight: 1.4,
                     },
                     children: description,
@@ -191,11 +229,7 @@ export async function GET({ props }) {
                 {
                   type: 'span',
                   props: {
-                    style: {
-                      fontSize: 14,
-                      fontFamily: 'monospace',
-                      color: '#4b4b5a',
-                    },
+                    style: { fontSize: 14, fontFamily: 'monospace', color: '#4b4b5a' },
                     children: 'gpui-starter.hmziq.xyz',
                   },
                 },
@@ -225,11 +259,15 @@ export async function GET({ props }) {
     },
   );
 
-  const resvg = new Resvg(svg, {
+  // Step 2: Inject one random shape + constellation into the SVG string
+  const shape = pickShape(post.id);
+  const fullSvg = textSvg.replace('</svg>', `\n  ${shape}\n  ${constellation}\n</svg>`);
+
+  // Step 3: Render to PNG via Resvg
+  const resvg = new Resvg(fullSvg, {
     fitTo: { mode: 'width', value: 1200 },
   });
-  const pngData = resvg.render();
-  const pngBuffer = pngData.asPng();
+  const pngBuffer = resvg.render().asPng();
 
   return new Response(pngBuffer, {
     headers: { 'Content-Type': 'image/png' },
