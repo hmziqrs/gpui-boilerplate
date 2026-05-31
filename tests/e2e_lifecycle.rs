@@ -1,5 +1,3 @@
-mod support;
-
 #[cfg(test)]
 mod tests {
     // -----------------------------------------------------------------------
@@ -46,8 +44,7 @@ mod tests {
 
         // A second `SingleInstance` handle with the same name should report
         // that it is *not* the sole instance, proving mutual exclusion works.
-        let second_instance =
-            single_instance::SingleInstance::new("com.gpui-starter.app.instance");
+        let second_instance = single_instance::SingleInstance::new("com.gpui-starter.app.instance");
         let second = second_instance.unwrap();
         assert!(
             !second.is_single(),
@@ -93,8 +90,7 @@ mod tests {
         let db_path = dir.path().join("app.db");
 
         let conn = rusqlite::Connection::open(&db_path).expect("open connection");
-        let version = gpui_starter::db_migrations::run_migrations(&conn)
-            .expect("run migrations");
+        let version = gpui_starter::db_migrations::run_migrations(&conn).expect("run migrations");
         assert_eq!(version, 2, "migrations should bring schema to version 2");
 
         // Health-check: simple query must succeed.

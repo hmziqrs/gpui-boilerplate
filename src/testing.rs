@@ -57,7 +57,11 @@ impl FakeNotificationBackend {
 
 impl FakeConnectivityProbe {
     pub fn probe(&self) -> Result<(), FakeConnectivityError> {
-        if self.next_ok { Ok(()) } else { Err(FakeConnectivityError::Offline) }
+        if self.next_ok {
+            Ok(())
+        } else {
+            Err(FakeConnectivityError::Offline)
+        }
     }
 }
 

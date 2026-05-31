@@ -1,50 +1,5 @@
-mod accessibility;
-pub mod app;
-mod app_menu;
-mod app_state;
-mod capabilities;
-mod commands;
-mod config_migrations;
-mod connectivity;
-mod db_migrations;
-mod desktop_actions;
-mod error_surface;
-mod errors;
-mod events;
-mod first_run;
-mod i18n;
-mod ids;
-mod input_validation;
-mod ipc;
-mod launcher;
-mod lifecycle;
-mod logging;
-mod menus;
-mod notifications;
-mod paths;
-pub mod root;
-pub mod routes;
-pub mod secure_storage;
-pub mod session;
-pub mod shortcuts;
-pub mod sidebar;
-mod single_instance;
-mod status_bar;
-mod storage;
-mod tasks;
-mod telemetry;
-#[cfg(test)]
-mod testing;
-mod time;
-mod title_bar;
-mod undo_stack;
-pub mod views;
-mod websocket;
-
-#[cfg(target_os = "macos")]
-mod tray;
-
 use gpui_component_assets::Assets;
+use gpui_starter::{app, events, single_instance};
 
 fn main() {
     let preflight = single_instance::preflight();
@@ -54,8 +9,8 @@ fn main() {
     let startup_runtime = preflight.runtime;
     let startup_deep_link = preflight.initial_deep_link;
 
-    let app = gpui_platform::application().with_assets(Assets);
-    app.run(move |cx| {
+    let app_runtime = gpui_platform::application().with_assets(Assets);
+    app_runtime.run(move |cx| {
         app::init(cx);
         if let Some(runtime) = startup_runtime {
             single_instance::install(runtime, cx);
@@ -65,7 +20,7 @@ fn main() {
         }
 
         #[cfg(target_os = "macos")]
-        tray::setup(cx);
+        gpui_starter::tray::setup(cx);
 
         cx.activate(true);
         app::create_new_window("My App", cx);

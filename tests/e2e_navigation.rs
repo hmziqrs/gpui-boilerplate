@@ -127,8 +127,10 @@ fn test_settings_page_loads() {
             // This function exists solely to prove the type is public and
             // has the expected constructor signature at compile time.
             // Runtime construction requires a full GPUI window context.
-            let _: fn(&mut gpui::Window, &mut gpui::Context<gpui_starter::views::SettingsPage>) =
-                gpui_starter::views::SettingsPage::new;
+            let _: fn(
+                &mut gpui::Window,
+                &mut gpui::Context<gpui_starter::views::SettingsPage>,
+            ) -> gpui_starter::views::SettingsPage = gpui_starter::views::SettingsPage::new;
         }
     };
 }

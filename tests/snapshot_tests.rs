@@ -61,8 +61,13 @@ fn test_config_roundtrip() {
     let restored: AppConfig = serde_json::from_str(&json).expect("deserialize config");
     assert_eq!(original, restored, "round-tripped config must be identical");
 
-    // Snapshot the intermediate JSON so future changes are visible in review.
-    insta::assert_yaml_snapshot!("config_roundtrip", &original);
+    let mut snapshot = serde_json::to_value(&original).expect("config to value");
+    for key in ["granted_permissions", "denied_permissions"] {
+        if let Some(values) = snapshot.get_mut(key).and_then(|value| value.as_array_mut()) {
+            values.sort_by(|left, right| left.as_str().cmp(&right.as_str()));
+        }
+    }
+    insta::assert_yaml_snapshot!("config_roundtrip", &snapshot);
 }
 
 // ---------------------------------------------------------------------------
@@ -78,16 +83,21 @@ fn test_route_parse_valid() {
         ("gpui-starter://notifications", "notifications"),
         ("gpui-starter://diagnostics", "diagnostics"),
         ("gpui-starter://about", "about"),
-        ("gpui-starter://settings/notifications", "settings_notifications"),
-        ("gpui-starter://home?ref=test&source=menu", "home_with_query"),
+        (
+            "gpui-starter://settings/notifications",
+            "settings_notifications",
+        ),
+        (
+            "gpui-starter://home?ref=test&source=menu",
+            "home_with_query",
+        ),
     ];
 
     let results: Vec<(&str, String)> = valid_links
         .iter()
         .map(|(url, _label)| {
-            let route = AppRoute::parse_deep_link(url).unwrap_or_else(|e| {
-                panic!("expected `{url}` to parse successfully: {e}")
-            });
+            let route = AppRoute::parse_deep_link(url)
+                .unwrap_or_else(|e| panic!("expected `{url}` to parse successfully: {e}"));
             (*url, format!("{route:?}"))
         })
         .collect();
@@ -113,8 +123,7 @@ fn test_route_parse_invalid() {
     let results: Vec<(&str, String)> = invalid_links
         .iter()
         .map(|(url, _label)| {
-            let err = AppRoute::parse_deep_link(url)
-                .unwrap_err_else(|| panic!("expected `{url}` to be rejected"));
+            let err = AppRoute::parse_deep_link(url).unwrap_err();
             (*url, err.to_string())
         })
         .collect();
@@ -148,8 +157,16 @@ fn test_theme_structure() {
 
     let themes = value.get("themes").and_then(|t| t.as_array()).unwrap();
     let summary = ThemeSummary {
-        name: value.get("name").and_then(|v| v.as_str()).unwrap().to_string(),
-        author: value.get("author").and_then(|v| v.as_str()).unwrap().to_string(),
+        name: value
+            .get("name")
+            .and_then(|v| v.as_str())
+            .unwrap()
+            .to_string(),
+        author: value
+            .get("author")
+            .and_then(|v| v.as_str())
+            .unwrap()
+            .to_string(),
         theme_count: themes.len(),
         theme_names: themes
             .iter()
