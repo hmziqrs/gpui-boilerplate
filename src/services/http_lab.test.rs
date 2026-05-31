@@ -1,7 +1,14 @@
-use super::*;
+use super::{
+    client::HTTPBIN_BASE,
+    response::{parse_json, parse_xml_preview, truncate},
+    state::ResetRequests,
+    task_tracking::{HttpTaskUpdate, cancellation_flags, register_request_flag},
+    transitions::{apply_result_to_state, begin_action, cancel_action_in_state},
+    *,
+};
 use crate::{
     ids::TaskId,
-    services::query::{QueryError, QueryStatus},
+    services::query::{QueryError, QueryResource, QueryStatus},
 };
 
 fn exchange(label: &str, status: u16, error: Option<&str>) -> HttpExchange {
