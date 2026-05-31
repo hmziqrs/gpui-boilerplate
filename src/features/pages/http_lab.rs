@@ -1,7 +1,11 @@
 use gpui::{prelude::*, *};
-use gpui_component::{ActiveTheme as _, button::Button, v_flex};
+use gpui_component::{
+    ActiveTheme as _, Disableable as _, Selectable as _,
+    button::{Button, ButtonVariants as _},
+    v_flex,
+};
 
-use crate::http_lab::{self, HttpExchange, HttpLabAction, HttpLabState};
+use crate::http_lab::{self, ApiResource, ApiStatus, HttpExchange, HttpLabAction, HttpLabState};
 
 pub struct HttpLabPage {
     _subscriptions: Vec<Subscription>,
@@ -22,19 +26,183 @@ impl HttpLabPage {
 impl Render for HttpLabPage {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let state = http_lab::snapshot(cx);
-        let current_exchange = current_exchange(&state);
+        let selected_resource = state.selected_resource();
 
         v_flex()
             .min_h_full()
             .p_6()
             .gap_5()
-            .child(header(&state, cx))
-            .child(action_grid())
-            .child(flow_panel(&state, cx))
-            .when_some(current_exchange, |this, exchange| {
-                this.child(exchange_panel(exchange, cx))
-            })
-            .when_some(state.cookies.as_ref(), |this, cookies| {
+            .child(hero(&state, cx))
+            .child(action_bar(&state))
+            .child(tab_bar(&state))
+            .child(resource_panel(&state, selected_resource, cx))
+            .child(activity_panel(&state, cx))
+    }
+}
+
+fn hero(state: &HttpLabState, cx: &App) -> Div {
+    div()
+        .p_5()
+        .rounded(cx.theme().radius_lg)
+        .border_1()
+        .border_color(cx.theme().border)
+        .bg(cx.theme().muted)
+        .child(
+            v_flex()
+                .gap_3()
+                .child(
+                    div()
+                        .text_2xl()
+                        .font_weight(FontWeight::BOLD)
+                        .child("HTTP Lab"),
+                )
+                .child(
+                    div()
+                        .max_w(px(760.))
+                        .text_sm()
+                        .text_color(cx.theme().muted_foreground)
+                        .child("A small React Query-style GPUI store: every request type has its own resource state, request policy, cache policy, active task id, cancellation guard, and response cache."),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .flex_wrap()
+                        .gap_2()
+                        .child(chip(
+                            &format!("Active tasks: {}", state.active_count()),
+                            cx.theme().background,
+                            cx,
+                        ))
+                        .child(chip(
+                            &format!("History: {}", state.history.len()),
+                            cx.theme().background,
+                            cx,
+                        ))
+                        .child(chip(
+                            "Cancellation is logical: blocking reqwest may finish, but stale task results are ignored.",
+                            cx.theme().background,
+                            cx,
+                        )),
+                ),
+        )
+}
+
+fn action_bar(state: &HttpLabState) -> Div {
+    div()
+        .flex()
+        .flex_wrap()
+        .gap_2()
+        .children(HttpLabAction::all().iter().copied().map(|action| {
+            let resource = state.resource(action);
+            action_button(action, resource)
+        }))
+        .child(
+            Button::new("http-lab-cancel-all")
+                .outline()
+                .label("Cancel all")
+                .disabled(state.active_count() == 0)
+                .on_click(|_, _, cx| {
+                    http_lab::cancel_all(cx);
+                }),
+        )
+        .child(
+            Button::new("http-lab-reset")
+                .outline()
+                .label("Reset")
+                .on_click(|_, _, cx| {
+                    http_lab::reset(cx);
+                }),
+        )
+}
+
+fn action_button(action: HttpLabAction, resource: &ApiResource) -> Button {
+    let is_loading = resource.is_loading();
+    Button::new(format!("http-lab-run-{}", action.id()))
+        .outline()
+        .label(if is_loading {
+            format!("Loading {}", action.label())
+        } else {
+            action.label().to_string()
+        })
+        .loading(is_loading)
+        .disabled(is_loading)
+        .on_click(move |_, _, cx| {
+            http_lab::run_action(action, cx);
+        })
+}
+
+fn tab_bar(state: &HttpLabState) -> Div {
+    div()
+        .flex()
+        .flex_wrap()
+        .gap_1()
+        .children(HttpLabAction::all().iter().copied().map(|action| {
+            let resource = state.resource(action);
+            Button::new(format!("http-lab-tab-{}", action.id()))
+                .ghost()
+                .selected(state.selected_action == action)
+                .label(format!(
+                    "{} {}",
+                    status_dot(resource.status),
+                    action.label()
+                ))
+                .on_click(move |_, _, cx| {
+                    http_lab::select_action(action, cx);
+                })
+        }))
+}
+
+fn resource_panel(state: &HttpLabState, resource: &ApiResource, cx: &App) -> Div {
+    let action = resource.action;
+    panel(action.label(), cx)
+        .child(
+            div()
+                .flex()
+                .flex_wrap()
+                .gap_2()
+                .child(status_chip(resource.status, cx))
+                .child(chip(action.method_label(), cx.theme().background, cx))
+                .child(chip(
+                    &resource.cache_policy.label(),
+                    cx.theme().background,
+                    cx,
+                ))
+                .child(chip(
+                    resource.request_policy.label(),
+                    cx.theme().background,
+                    cx,
+                ))
+                .when_some(resource.active_task, |this, task_id| {
+                    this.child(chip(
+                        &format!("Task #{}", task_id.value()),
+                        cx.theme().background,
+                        cx,
+                    ))
+                }),
+        )
+        .child(resource_metrics(resource, cx))
+        .when(resource.is_loading(), |this| {
+            this.child(
+                Button::new(format!("http-lab-cancel-{}", action.id()))
+                    .danger()
+                    .outline()
+                    .label("Cancel request")
+                    .on_click(move |_, _, cx| {
+                        http_lab::cancel_action(action, cx);
+                    }),
+            )
+        })
+        .when_some(resource.error.as_ref(), |this, error| {
+            this.child(callout("Error", error, cx))
+        })
+        .when_some(resource.data.as_ref(), |this, exchange| {
+            this.child(exchange_panel(exchange, cx))
+        })
+        .when(resource.data.is_none(), |this| {
+            this.child(empty_state(resource.status, cx))
+        })
+        .when(action == HttpLabAction::Cookies, |this| {
+            this.when_some(state.cookies.as_ref(), |this, cookies| {
                 this.child(
                     panel("Cookie jar", cx)
                         .child(kv(
@@ -49,91 +217,60 @@ impl Render for HttpLabPage {
                         )),
                 )
             })
-            .child(history_panel(&state, cx))
-    }
+        })
 }
 
-fn current_exchange(state: &HttpLabState) -> Option<&HttpExchange> {
-    match state.status {
-        http_lab::HttpDemoStatus::Failure | http_lab::HttpDemoStatus::LoadingWithState => {
-            state.last_error.as_ref().or(state.last_success.as_ref())
-        }
-        http_lab::HttpDemoStatus::Success => state.last_success.as_ref(),
-        http_lab::HttpDemoStatus::Idle | http_lab::HttpDemoStatus::LoadingEmpty => None,
-    }
-}
-
-fn header(state: &HttpLabState, cx: &App) -> Div {
-    panel("HTTP Lab", cx)
-        .child(
-            div()
-                .text_sm()
-                .text_color(cx.theme().muted_foreground)
-                .child("Uses https://httpbin.org with reqwest blocking calls on GPUI background executor threads."),
-        )
-        .child(kv("State", state.status.label(), cx))
+fn resource_metrics(resource: &ApiResource, cx: &App) -> Div {
+    div()
+        .grid()
+        .gap_2()
+        .child(kv("Cache hits", &resource.cache_hits.to_string(), cx))
+        .child(kv("Cancelled", &resource.cancelled_count.to_string(), cx))
         .child(kv(
-            "Active request",
-            state.active_label.as_deref().unwrap_or("None"),
+            "Ignored stale results",
+            &resource.ignored_results.to_string(),
+            cx,
+        ))
+        .child(kv(
+            "Last update",
+            &resource
+                .last_updated_at_ms
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "Never".to_string()),
             cx,
         ))
 }
 
-fn action_grid() -> Div {
-    let actions = [
-        HttpLabAction::FullFlow,
-        HttpLabAction::GetText,
-        HttpLabAction::GetJson,
-        HttpLabAction::GetXml,
-        HttpLabAction::PostJson,
-        HttpLabAction::PostForm,
-        HttpLabAction::PostMultipart,
-        HttpLabAction::Cookies,
-        HttpLabAction::Failure,
-    ];
-
+fn activity_panel(state: &HttpLabState, cx: &App) -> Div {
     div()
-        .flex()
-        .flex_wrap()
-        .gap_2()
-        .children(actions.into_iter().map(action_button))
+        .grid()
+        .gap_4()
         .child(
-            Button::new("http-lab-reset")
-                .outline()
-                .label("Reset")
-                .on_click(|_, _, cx| {
-                    http_lab::reset(cx);
-                }),
+            panel("Lifecycle trace", cx).children(state.transition_log.iter().map(|entry| {
+                div()
+                    .text_sm()
+                    .text_color(cx.theme().muted_foreground)
+                    .child(entry.clone())
+            })),
         )
-}
-
-fn action_button(action: HttpLabAction) -> Button {
-    Button::new(format!("http-lab-{:?}", action))
-        .outline()
-        .label(action.label())
-        .on_click(move |_, _, cx| {
-            http_lab::run_action(action, cx);
-        })
-}
-
-fn flow_panel(state: &HttpLabState, cx: &App) -> Div {
-    panel("Lifecycle trace", cx)
         .child(
-            div()
-                .text_sm()
-                .text_color(cx.theme().muted_foreground)
-                .child("Target sequence: IDLE -> Loading EMPTY State -> Success/Failure -> Loading with state -> Success/Failure."),
-        )
-        .children(
-            state
-                .transition_log
-                .iter()
-                .map(|entry| div().text_sm().child(entry.clone())),
+            panel("History", cx).children(state.history.iter().take(10).map(|exchange| {
+                let fields = http_lab::response_fields(exchange);
+                let summary = fields
+                    .iter()
+                    .map(|(key, value)| format!("{key}={value}"))
+                    .collect::<Vec<_>>()
+                    .join(" | ");
+                div()
+                    .text_sm()
+                    .text_color(cx.theme().muted_foreground)
+                    .child(summary)
+            })),
         )
 }
 
 fn exchange_panel(exchange: &HttpExchange, cx: &App) -> Div {
-    let mut panel = panel("Latest exchange", cx)
+    let mut panel = panel("Response", cx)
         .child(kv("Label", &exchange.label, cx))
         .child(kv("Method", &exchange.request.method, cx))
         .child(kv("URL", &exchange.request.url, cx))
@@ -169,12 +306,12 @@ fn exchange_panel(exchange: &HttpExchange, cx: &App) -> Div {
     }
 
     panel.when_some(exchange.error.as_ref(), |this, error| {
-        this.child(kv("Error", error, cx))
+        this.child(callout("Response error", error, cx))
     })
 }
 
 fn headers_block(headers: &[(String, String)], cx: &App) -> Div {
-    div().mt_2().child(section_title("Headers", cx)).children(
+    panel("Headers", cx).children(
         headers
             .iter()
             .take(16)
@@ -182,16 +319,19 @@ fn headers_block(headers: &[(String, String)], cx: &App) -> Div {
     )
 }
 
-fn history_panel(state: &HttpLabState, cx: &App) -> Div {
-    panel("History", cx).children(state.history.iter().map(|exchange| {
-        let fields = http_lab::response_fields(exchange);
-        let summary = fields
-            .iter()
-            .map(|(key, value)| format!("{key}={value}"))
-            .collect::<Vec<_>>()
-            .join(" | ");
-        div().text_sm().child(summary)
-    }))
+fn empty_state(status: ApiStatus, cx: &App) -> Div {
+    div()
+        .p_5()
+        .rounded(cx.theme().radius_lg)
+        .border_1()
+        .border_color(cx.theme().border)
+        .bg(cx.theme().background)
+        .text_color(cx.theme().muted_foreground)
+        .child(match status {
+            ApiStatus::LoadingEmpty => "Request is loading without cached data.",
+            ApiStatus::Cancelled => "Request was cancelled before a response was applied.",
+            _ => "No response captured for this tab yet.",
+        })
 }
 
 fn panel(title: &str, cx: &App) -> Div {
@@ -202,10 +342,10 @@ fn panel(title: &str, cx: &App) -> Div {
         .border_1()
         .border_color(cx.theme().border)
         .bg(cx.theme().background)
-        .child(section_title(title, cx))
+        .child(section_title(title))
 }
 
-fn section_title(title: &str, _cx: &App) -> Div {
+fn section_title(title: &str) -> Div {
     div()
         .text_lg()
         .font_weight(FontWeight::BOLD)
@@ -219,7 +359,7 @@ fn kv(label: &str, value: &str, cx: &App) -> Div {
         .text_sm()
         .child(
             div()
-                .min_w(px(140.))
+                .min_w(px(150.))
                 .font_weight(FontWeight::BOLD)
                 .child(format!("{label}:")),
         )
@@ -234,7 +374,12 @@ fn kv(label: &str, value: &str, cx: &App) -> Div {
 fn preview_block(label: &str, value: &str, cx: &App) -> Div {
     v_flex()
         .gap_1()
-        .child(section_title(label, cx).text_sm())
+        .child(
+            div()
+                .text_sm()
+                .font_weight(FontWeight::BOLD)
+                .child(label.to_string()),
+        )
         .child(
             div()
                 .p_3()
@@ -247,4 +392,57 @@ fn preview_block(label: &str, value: &str, cx: &App) -> Div {
                     value.to_string()
                 }),
         )
+}
+
+fn callout(title: &str, message: &str, cx: &App) -> Div {
+    div()
+        .p_3()
+        .rounded(cx.theme().radius_lg)
+        .border_1()
+        .border_color(cx.theme().danger)
+        .bg(cx.theme().danger.opacity(0.08))
+        .child(
+            v_flex()
+                .gap_1()
+                .child(
+                    div()
+                        .font_weight(FontWeight::BOLD)
+                        .text_color(cx.theme().danger)
+                        .child(title.to_string()),
+                )
+                .child(div().text_sm().child(message.to_string())),
+        )
+}
+
+fn chip(label: &str, background: Hsla, cx: &App) -> Div {
+    div()
+        .px_3()
+        .py_1()
+        .rounded(cx.theme().radius_lg)
+        .border_1()
+        .border_color(cx.theme().border)
+        .bg(background)
+        .text_sm()
+        .child(label.to_string())
+}
+
+fn status_chip(status: ApiStatus, cx: &App) -> Div {
+    let background = match status {
+        ApiStatus::Success => cx.theme().success.opacity(0.12),
+        ApiStatus::Failure => cx.theme().danger.opacity(0.12),
+        ApiStatus::Cancelled => cx.theme().warning.opacity(0.12),
+        ApiStatus::LoadingEmpty | ApiStatus::LoadingWithData => cx.theme().info.opacity(0.12),
+        ApiStatus::Idle => cx.theme().muted,
+    };
+    chip(status.label(), background, cx)
+}
+
+fn status_dot(status: ApiStatus) -> &'static str {
+    match status {
+        ApiStatus::Idle => "[ ]",
+        ApiStatus::LoadingEmpty | ApiStatus::LoadingWithData => "[~]",
+        ApiStatus::Success => "[+]",
+        ApiStatus::Failure => "[x]",
+        ApiStatus::Cancelled => "!",
+    }
 }

@@ -25,96 +25,185 @@ fn exchange(label: &str, status: u16, error: Option<&str>) -> HttpExchange {
 }
 
 #[test]
-fn loading_with_state_counts_prior_failure() {
-    let state = HttpLabState {
-        last_error: Some(exchange("Failure", 500, Some("HTTP 500"))),
-        ..HttpLabState::default()
-    };
-    assert_eq!(
-        loading_status_for(HttpLabAction::GetJson, &state),
-        HttpDemoStatus::LoadingWithState
-    );
+fn starts_each_action_with_its_own_resource() {
+    let state = HttpLabState::default();
+
+    for action in HttpLabAction::all() {
+        let resource = state.resource(*action);
+        assert_eq!(resource.action, *action);
+        assert_eq!(resource.status, ApiStatus::Idle);
+    }
 }
 
 #[test]
-fn full_flow_starts_from_empty_even_when_cached() {
-    let mut state = HttpLabState {
-        last_success: Some(exchange("Success", 200, None)),
-        last_error: Some(exchange("Failure", 500, Some("HTTP 500"))),
-        ..HttpLabState::default()
-    };
-    let loading_status = loading_status_for(HttpLabAction::FullFlow, &state);
-
-    begin_action(&mut state, HttpLabAction::FullFlow, loading_status);
-
-    assert_eq!(state.status, HttpDemoStatus::LoadingEmpty);
-    assert!(state.last_success.is_none());
-    assert!(state.last_error.is_none());
-    assert_eq!(state.active_label.as_deref(), Some("Run full flow"));
-}
-
-#[test]
-fn successful_exchange_clears_stale_failure() {
-    let mut state = HttpLabState {
-        last_error: Some(exchange("Failure", 500, Some("HTTP 500"))),
-        active_label: Some("GET JSON".to_string()),
-        ..HttpLabState::default()
-    };
-    let success = exchange("Success", 200, None);
-
-    apply_result_to_state(&mut state, HttpLabAction::GetJson, Ok(vec![success]));
-
-    assert_eq!(state.status, HttpDemoStatus::Success);
-    assert!(state.last_success.is_some());
-    assert!(state.last_error.is_none());
-    assert!(state.active_label.is_none());
-    assert_eq!(state.history.len(), 1);
-}
-
-#[test]
-fn failed_exchange_preserves_previous_success_as_cached_state() {
-    let previous_success = exchange("Success", 200, None);
-    let mut state = HttpLabState {
-        last_success: Some(previous_success.clone()),
-        active_label: Some("Failure".to_string()),
-        ..HttpLabState::default()
-    };
-    let failure = exchange("Failure", 500, Some("HTTP 500"));
-
-    apply_result_to_state(&mut state, HttpLabAction::Failure, Ok(vec![failure]));
-
-    assert_eq!(state.status, HttpDemoStatus::Failure);
-    assert_eq!(state.last_success, Some(previous_success));
-    assert!(state.last_error.is_some());
-    assert!(state.active_label.is_none());
-    assert_eq!(state.history.len(), 1);
-}
-
-#[test]
-fn full_flow_records_intermediate_loading_with_state_transitions() {
+fn ttl_cache_can_short_circuit_request() {
     let mut state = HttpLabState::default();
+    let now_ms = 10_000;
+    let resource = state.resources.get_mut(&HttpLabAction::GetText).unwrap();
+    resource.data = Some(exchange("GET text", 200, None));
+    resource.last_updated_at_ms = Some(now_ms - 100);
+
+    let task = begin_action(&mut state, HttpLabAction::GetText, now_ms);
+
+    assert!(task.is_none());
+    let resource = state.resource(HttpLabAction::GetText);
+    assert_eq!(resource.status, ApiStatus::Success);
+    assert_eq!(resource.cache_hits, 1);
+}
+
+#[test]
+fn stale_while_revalidate_keeps_data_and_starts_task() {
+    let mut state = HttpLabState::default();
+    let now_ms = 100_000;
+    let resource = state.resources.get_mut(&HttpLabAction::GetJson).unwrap();
+    resource.data = Some(exchange("GET JSON", 200, None));
+    resource.last_updated_at_ms = Some(now_ms - 1);
+
+    let task = begin_action(&mut state, HttpLabAction::GetJson, now_ms);
+
+    assert!(task.is_some());
+    let resource = state.resource(HttpLabAction::GetJson);
+    assert_eq!(resource.status, ApiStatus::LoadingWithData);
+    assert!(resource.data.is_some());
+}
+
+#[test]
+fn latest_wins_cancels_previous_task_for_same_action() {
+    let mut state = HttpLabState::default();
+    let first = begin_action(&mut state, HttpLabAction::GetXml, 1).expect("first task");
+    let second = begin_action(&mut state, HttpLabAction::GetXml, 2).expect("second task");
+
+    assert_ne!(first, second);
+    assert_eq!(state.task_pool.active_count(), 1);
+    assert_eq!(
+        state.resource(HttpLabAction::GetXml).active_task,
+        Some(second)
+    );
+    assert_eq!(state.resource(HttpLabAction::GetXml).cancelled_count, 1);
+}
+
+#[test]
+fn ignore_while_loading_policy_does_not_start_duplicate_task() {
+    let mut state = HttpLabState::default();
+    let first = begin_action(&mut state, HttpLabAction::PostMultipart, 1).expect("first task");
+    let duplicate = begin_action(&mut state, HttpLabAction::PostMultipart, 2);
+
+    assert!(duplicate.is_none());
+    assert_eq!(
+        state.resource(HttpLabAction::PostMultipart).active_task,
+        Some(first)
+    );
+    assert_eq!(state.task_pool.active_count(), 1);
+}
+
+#[test]
+fn stale_result_is_ignored_after_cancellation() {
+    let mut state = HttpLabState::default();
+    let task = begin_action(&mut state, HttpLabAction::GetJson, 1).expect("task");
+
+    cancel_action_in_state(&mut state, HttpLabAction::GetJson, "test cancel");
+    apply_result_to_state(
+        &mut state,
+        HttpLabAction::GetJson,
+        task,
+        Ok(vec![(
+            HttpLabAction::GetJson,
+            exchange("GET JSON", 200, None),
+        )]),
+        2,
+    );
+
+    let resource = state.resource(HttpLabAction::GetJson);
+    assert_eq!(resource.status, ApiStatus::Cancelled);
+    assert!(resource.data.is_none());
+    assert_eq!(resource.ignored_results, 1);
+}
+
+#[test]
+fn successful_exchange_updates_only_target_resource() {
+    let mut state = HttpLabState::default();
+    let task = begin_action(&mut state, HttpLabAction::GetJson, 1).expect("task");
+
+    apply_result_to_state(
+        &mut state,
+        HttpLabAction::GetJson,
+        task,
+        Ok(vec![(
+            HttpLabAction::GetJson,
+            exchange("GET JSON", 200, None),
+        )]),
+        2,
+    );
+
+    assert_eq!(
+        state.resource(HttpLabAction::GetJson).status,
+        ApiStatus::Success
+    );
+    assert!(state.resource(HttpLabAction::GetJson).data.is_some());
+    assert_eq!(
+        state.resource(HttpLabAction::GetXml).status,
+        ApiStatus::Idle
+    );
+    assert_eq!(state.history.len(), 1);
+}
+
+#[test]
+fn failed_exchange_preserves_previous_data() {
+    let mut state = HttpLabState::default();
+    let previous = exchange("Failure", 500, Some("HTTP 500"));
+    let resource = state.resources.get_mut(&HttpLabAction::Failure).unwrap();
+    resource.data = Some(previous);
+
+    let task = begin_action(&mut state, HttpLabAction::Failure, 1).expect("task");
+    apply_result_to_state(
+        &mut state,
+        HttpLabAction::Failure,
+        task,
+        Ok(vec![(
+            HttpLabAction::Failure,
+            exchange("Failure", 503, Some("HTTP 503")),
+        )]),
+        2,
+    );
+
+    let resource = state.resource(HttpLabAction::Failure);
+    assert_eq!(resource.status, ApiStatus::Failure);
+    assert!(resource.data.is_some());
+    assert_eq!(resource.error.as_deref(), Some("HTTP 503"));
+}
+
+#[test]
+fn full_flow_populates_individual_resources_and_flow_resource() {
+    let mut state = HttpLabState::default();
+    let task = begin_action(&mut state, HttpLabAction::FullFlow, 1).expect("flow task");
     let exchanges = vec![
-        exchange("Flow success empty", 200, None),
-        exchange("Flow failure with cached state", 503, Some("HTTP 503")),
-        exchange("POST JSON", 200, None),
+        (HttpLabAction::GetJson, exchange("GET JSON", 200, None)),
+        (
+            HttpLabAction::Failure,
+            exchange("Failure", 503, Some("HTTP 503")),
+        ),
+        (HttpLabAction::PostJson, exchange("POST JSON", 200, None)),
     ];
 
-    apply_result_to_state(&mut state, HttpLabAction::FullFlow, Ok(exchanges));
+    apply_result_to_state(&mut state, HttpLabAction::FullFlow, task, Ok(exchanges), 2);
 
-    assert_eq!(state.status, HttpDemoStatus::Success);
+    assert_eq!(
+        state.resource(HttpLabAction::FullFlow).status,
+        ApiStatus::Success
+    );
+    assert_eq!(
+        state.resource(HttpLabAction::GetJson).status,
+        ApiStatus::Success
+    );
+    assert_eq!(
+        state.resource(HttpLabAction::Failure).status,
+        ApiStatus::Failure
+    );
+    assert_eq!(
+        state.resource(HttpLabAction::PostJson).status,
+        ApiStatus::Success
+    );
     assert_eq!(state.history.len(), 3);
-    assert!(
-        state
-            .transition_log
-            .iter()
-            .any(|entry| entry == "Loading with state: Flow failure with cached state")
-    );
-    assert!(
-        state
-            .transition_log
-            .iter()
-            .any(|entry| entry == "Loading with state: POST JSON")
-    );
 }
 
 #[test]
@@ -126,8 +215,15 @@ fn cookies_exchange_updates_cookie_snapshot() {
         .push(("set-cookie".to_string(), "session=gpui-starter".to_string()));
     response.parsed_json = Some("{\"cookies\":{\"session\":\"gpui-starter\"}}".to_string());
     let mut state = HttpLabState::default();
+    let task = begin_action(&mut state, HttpLabAction::Cookies, 1).expect("task");
 
-    apply_result_to_state(&mut state, HttpLabAction::Cookies, Ok(vec![cookies]));
+    apply_result_to_state(
+        &mut state,
+        HttpLabAction::Cookies,
+        task,
+        Ok(vec![(HttpLabAction::Cookies, cookies)]),
+        2,
+    );
 
     let cookies = state.cookies.expect("cookie snapshot");
     assert_eq!(
