@@ -1,4 +1,7 @@
-use super::{test_support::{error_message, resource}, *};
+use super::{
+    test_support::{error_message, resource},
+    *,
+};
 
 #[test]
 fn begin_loading_uses_empty_state_without_cached_data() {

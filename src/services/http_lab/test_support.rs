@@ -1,7 +1,7 @@
 use super::{
-    *,
     client::HTTPBIN_BASE,
     transitions::{apply_result_to_state, begin_action},
+    *,
 };
 use crate::services::query::{QueryError, QueryResource};
 
