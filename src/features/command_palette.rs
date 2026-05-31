@@ -351,12 +351,14 @@ impl LauncherRoot {
         .detach();
 
         // Close the launcher when the window loses OS-level activation
-        // (e.g. user clicks outside the popup window)
-        cx.observe_window_activation(window, |this, window, cx| {
+        // (e.g. user clicks outside the popup window).
+        // Call remove_window directly to avoid a 1-frame delay — macOS
+        // changes the blur treatment on deactivation, which would flash.
+        cx.observe_window_activation(window, |_, window, cx| {
             if !window.is_window_active() {
                 tracing::debug!(target: LOG, "Launcher window deactivated — closing");
-                this.should_close = true;
-                cx.notify();
+                cx.set_global(LauncherOpen(false));
+                window.remove_window();
             }
         })
         .detach();
