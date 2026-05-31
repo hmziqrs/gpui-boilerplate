@@ -49,6 +49,9 @@ pub fn check_now(cx: &mut App) {
         let result = cx
             .background_executor()
             .spawn(async move {
+                // NOTE: Uses `reqwest::blocking` intentionally. The HTTP probe runs inside
+                // a background Tokio task (via `cx.spawn`), so blocking the task thread is
+                // acceptable and avoids the complexity of async HTTP in a non-async GPUI context.
                 reqwest::blocking::Client::new()
                     .get(&url)
                     .timeout(std::time::Duration::from_secs(10))

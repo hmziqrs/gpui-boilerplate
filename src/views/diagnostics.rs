@@ -97,36 +97,27 @@ impl Render for DiagnosticsPage {
         let undo = undo_stack::snapshot(cx);
         let latest_error = error_surface::latest(cx);
         let command_registry = commands::registry();
-        let command_titles = command_registry
-            .iter()
-            .map(|command| command.title.to_string())
-            .collect::<Vec<_>>()
-            .join(", ");
-        let command_states = command_registry
-            .iter()
-            .map(|command| {
-                let availability = commands::availability(command.id, cx);
-                let reason = availability
-                    .disabled_reason
-                    .map(|value| value.to_string())
-                    .unwrap_or_else(|| "-".to_string());
-                format!(
-                    "{}: enabled={} reason={}",
-                    command.title, availability.enabled, reason
-                )
-            })
-            .collect::<Vec<_>>()
-            .join(" | ");
-        let undo_last_label = undo
+        let mut command_titles = Vec::with_capacity(command_registry.len());
+        let mut command_states = Vec::with_capacity(command_registry.len());
+        for command in &command_registry {
+            command_titles.push(command.title.to_string());
+            let availability = commands::availability(command.id, cx);
+            let reason = availability
+                .disabled_reason
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "-".to_string());
+            command_states.push(format!(
+                "{}: enabled={} reason={}",
+                command.title, availability.enabled, reason
+            ));
+        }
+        let command_titles = command_titles.join(", ");
+        let command_states = command_states.join(" | ");
+        let (undo_last_label, undo_last_timestamp) = undo
             .past
             .last()
-            .map(|entry| entry.label.clone())
-            .unwrap_or_else(|| "None".to_string());
-        let undo_last_timestamp = undo
-            .past
-            .last()
-            .map(|entry| entry.created_at.to_rfc3339())
-            .unwrap_or_else(|| "None".to_string());
+            .map(|entry| (entry.label.clone(), entry.created_at.to_rfc3339()))
+            .unwrap_or_else(|| ("None".to_string(), "None".to_string()));
 
         let lifecycle_label = match lifecycle.stage {
             LifecycleStage::Starting => "Starting",

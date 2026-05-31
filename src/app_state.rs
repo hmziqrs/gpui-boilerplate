@@ -4,7 +4,7 @@ use std::collections::HashSet;
 use std::{io::Write, path::Path};
 
 use atomic_write_file::AtomicWriteFile;
-use gpui::{App, Global};
+use gpui::{App, BorrowAppContext, Global};
 use gpui_component::scroll::ScrollbarShow;
 use serde::{Deserialize, Serialize};
 
@@ -120,44 +120,48 @@ pub fn initialize(cx: &mut App) {
 }
 
 pub fn config(cx: &App) -> AppConfig {
-    cx.global::<AppState>().config.clone()
+    cx.try_global::<AppState>()
+        .map(|s| s.config.clone())
+        .unwrap_or_default()
 }
 
 pub fn paths(cx: &App) -> AppPaths {
-    cx.global::<AppState>().paths.clone()
+    cx.try_global::<AppState>()
+        .expect("AppState not initialized")
+        .paths
+        .clone()
 }
 
 pub fn update_config(cx: &mut App, update: impl FnOnce(&mut AppConfig)) {
-    let Some(current) = cx.try_global::<AppState>().cloned() else {
+    if cx.try_global::<AppState>().is_none() {
         tracing::warn!(target: "gpui_starter::app_state", "attempted to update app state before initialization");
         return;
-    };
-
-    let mut next = current.clone();
-    update(&mut next.config);
-    next.config = next.config.normalized();
-
-    match save_config(&next.paths.state_file, &next.config) {
-        Ok(()) => {
-            next.last_save_error = None;
-            tracing::debug!(
-                target: "gpui_starter::app_state",
-                state_file = %next.paths.state_file.display(),
-                "persisted app state"
-            );
-        }
-        Err(err) => {
-            let error = err.to_string();
-            tracing::error!(
-                target: "gpui_starter::app_state",
-                error = %error,
-                "failed to persist app state"
-            );
-            next.last_save_error = Some(error);
-        }
     }
 
-    cx.set_global(next);
+    cx.update_global::<AppState, _>(|state, _cx| {
+        update(&mut state.config);
+        state.config = state.config.clone().normalized();
+
+        match save_config(&state.paths.state_file, &state.config) {
+            Ok(()) => {
+                state.last_save_error = None;
+                tracing::debug!(
+                    target: "gpui_starter::app_state",
+                    state_file = %state.paths.state_file.display(),
+                    "persisted app state"
+                );
+            }
+            Err(err) => {
+                let error = err.to_string();
+                tracing::error!(
+                    target: "gpui_starter::app_state",
+                    error = %error,
+                    "failed to persist app state"
+                );
+                state.last_save_error = Some(error);
+            }
+        }
+    });
 }
 
 fn load_config(path: &Path) -> (AppConfig, Option<String>) {

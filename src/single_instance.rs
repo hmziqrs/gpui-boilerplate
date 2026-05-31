@@ -18,8 +18,6 @@ use std::sync::mpsc;
 use std::time::Duration;
 
 use crate::events::{self, AppEventKind};
-#[allow(unused_imports)] // Bridge to the generalised async IPC abstraction (src/ipc.rs).
-use crate::ipc;
 
 const INSTANCE_NAME: &str = "com.gpui-starter.app.instance";
 const LOG: &str = "gpui_starter::single_instance";

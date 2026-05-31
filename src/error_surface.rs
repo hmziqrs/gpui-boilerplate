@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use gpui::{App, Global};
+use gpui::{App, BorrowAppContext, Global};
 use serde::{Deserialize, Serialize};
 
 use crate::{ids::EventId, time::AppTimestamp};
@@ -74,10 +74,6 @@ pub fn report(
     actions: Vec<ErrorAction>,
     cx: &mut App,
 ) -> EventId {
-    let mut state = cx
-        .try_global::<ErrorSurfaceState>()
-        .cloned()
-        .unwrap_or_default();
     let record = ErrorRecord {
         id: EventId::new(),
         occurred_at: AppTimestamp::now(),
@@ -87,43 +83,42 @@ pub fn report(
         actions,
     };
     let id = record.id;
-    state.records.insert(0, record.clone());
-    if state.records.len() > 200 {
-        state.records.truncate(200);
-    }
-    cx.set_global(state);
+    let record_clone = record.clone();
 
-    // Persist to SQLite as secondary store (best-effort, non-blocking).
-    if let Some(runtime) = cx.try_global::<crate::storage::StorageRuntime>() {
-        if let Err(err) = persist_error(&*runtime.backend, &record) {
-            tracing::warn!(
-                target: "gpui_starter::error_surface",
-                error = %err,
-                "failed to persist error to sqlite"
-            );
+    cx.update_global::<ErrorSurfaceState, _>(|state, cx| {
+        state.records.insert(0, record);
+        if state.records.len() > 200 {
+            state.records.truncate(200);
         }
-    }
+
+        // Persist to SQLite as secondary store (best-effort, non-blocking).
+        if let Some(runtime) = cx.try_global::<crate::storage::StorageRuntime>() {
+            if let Err(err) = persist_error(&*runtime.backend, &record_clone) {
+                tracing::warn!(
+                    target: "gpui_starter::error_surface",
+                    error = %err,
+                    "failed to persist error to sqlite"
+                );
+            }
+        }
+    });
 
     id
 }
 
 pub fn snapshot(cx: &App) -> Vec<ErrorRecord> {
-    cx.try_global::<ErrorSurfaceState>()
-        .map(|state| state.records.clone())
-        .unwrap_or_default()
+    cx.global::<ErrorSurfaceState>().records.clone()
 }
 
 pub fn latest(cx: &App) -> Option<ErrorRecord> {
-    snapshot(cx).into_iter().next()
+    cx.try_global::<ErrorSurfaceState>()
+        .and_then(|state| state.records.first().cloned())
 }
 
 pub fn dismiss(id: EventId, cx: &mut App) {
-    let mut state = cx
-        .try_global::<ErrorSurfaceState>()
-        .cloned()
-        .unwrap_or_default();
-    state.records.retain(|record| record.id != id);
-    cx.set_global(state);
+    cx.update_global::<ErrorSurfaceState, _>(|state, _cx| {
+        state.records.retain(|r| r.id != id);
+    });
 }
 
 // ---------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 use std::{fmt, sync::Arc};
 
-use gpui::{AnyWindowHandle, App, AppContext as _, Global, SharedString, Window};
+use gpui::{AnyWindowHandle, App, AppContext as _, BorrowAppContext as _, Global, SharedString, Window};
 use gpui_component::WindowExt as _;
 
 use super::backend::{NotificationBackend, NotifyRustBackend, UserNotifyBackend};
@@ -603,10 +603,10 @@ fn apply_send_result(result: &NotificationSendResult, cx: &mut App) {
 }
 
 fn mutate_snapshot(cx: &mut App, f: impl FnOnce(&mut NotificationRuntimeSnapshot)) {
-    let mut state = cx.global::<NativeNotificationState>().clone();
-    f(&mut state.snapshot);
-    cx.set_global(state);
-    cx.refresh_windows();
+    cx.update_global::<NativeNotificationState, _>(|state, cx| {
+        f(&mut state.snapshot);
+        cx.refresh_windows();
+    });
 }
 
 fn push_in_app_feedback(

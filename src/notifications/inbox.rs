@@ -59,34 +59,40 @@ pub fn snapshot(cx: &App) -> Vec<NotificationInboxItem> {
 }
 
 pub fn record(item: NotificationInboxItem, cx: &mut App) {
-    let mut state = cx
-        .try_global::<NotificationInboxState>()
-        .cloned()
-        .unwrap_or_default();
-    state.items.insert(0, item);
-    if state.items.len() > MAX_INBOX_ITEMS {
-        state.items.truncate(MAX_INBOX_ITEMS);
+    {
+        let state = cx.default_global::<NotificationInboxState>();
+        state.items.insert(0, item);
+        if state.items.len() > MAX_INBOX_ITEMS {
+            state.items.truncate(MAX_INBOX_ITEMS);
+        }
     }
-    persist_state(&state, cx);
-    cx.set_global(state);
+    let items = cx.global::<NotificationInboxState>().items.clone();
+    app_state::update_config(cx, |config| {
+        config.notification_inbox = items;
+    });
 }
 
 pub fn mark_all_read(cx: &mut App) {
-    let mut state = cx
-        .try_global::<NotificationInboxState>()
-        .cloned()
-        .unwrap_or_default();
-    for item in &mut state.items {
-        item.read = true;
+    {
+        let state = cx.default_global::<NotificationInboxState>();
+        for item in &mut state.items {
+            item.read = true;
+        }
     }
-    persist_state(&state, cx);
-    cx.set_global(state);
+    let items = cx.global::<NotificationInboxState>().items.clone();
+    app_state::update_config(cx, |config| {
+        config.notification_inbox = items;
+    });
 }
 
 pub fn clear_all(cx: &mut App) {
-    let state = NotificationInboxState::default();
-    persist_state(&state, cx);
-    cx.set_global(state);
+    {
+        let state = cx.default_global::<NotificationInboxState>();
+        state.items.clear();
+    }
+    app_state::update_config(cx, |config| {
+        config.notification_inbox = Vec::new();
+    });
 }
 
 pub struct NotificationAttemptRecord {
@@ -115,11 +121,4 @@ pub fn record_attempt(record_input: NotificationAttemptRecord, cx: &mut App) {
         },
         cx,
     );
-}
-
-fn persist_state(state: &NotificationInboxState, cx: &mut App) {
-    let items = state.items.clone();
-    app_state::update_config(cx, |config| {
-        config.notification_inbox = items;
-    });
 }

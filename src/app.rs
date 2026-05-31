@@ -444,7 +444,7 @@ pub fn create_new_window(title: &str, cx: &mut App) {
     } else {
         Bounds::centered(None, window_size, cx)
     };
-    let title = SharedString::from(title.to_string());
+    let title: SharedString = title.into();
 
     cx.spawn(async move |cx| {
         let options = WindowOptions {

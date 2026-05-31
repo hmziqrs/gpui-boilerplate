@@ -172,7 +172,7 @@ mod live {
                         let (_write, mut read) = ws_stream.split();
                         {
                             let mut guard = self.inner.lock().await;
-                            // TODO: store `write` half in inner for `send()`.
+                            // TODO(github): store `write` half in inner for `send()`.
                             *guard = None;
                         }
 
