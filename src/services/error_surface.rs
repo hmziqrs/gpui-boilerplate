@@ -92,14 +92,14 @@ pub fn report(
         }
 
         // Persist to SQLite as secondary store (best-effort, non-blocking).
-        if let Some(runtime) = cx.try_global::<crate::storage::StorageRuntime>() {
-            if let Err(err) = persist_error(&*runtime.backend, &record_clone) {
-                tracing::warn!(
-                    target: "gpui_starter::error_surface",
-                    error = %err,
-                    "failed to persist error to sqlite"
-                );
-            }
+        if let Some(runtime) = cx.try_global::<crate::storage::StorageRuntime>()
+            && let Err(err) = persist_error(&*runtime.backend, &record_clone)
+        {
+            tracing::warn!(
+                target: "gpui_starter::error_surface",
+                error = %err,
+                "failed to persist error to sqlite"
+            );
         }
     });
 

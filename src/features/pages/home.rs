@@ -15,6 +15,12 @@ impl HomePage {
     }
 }
 
+impl Default for HomePage {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Render for HomePage {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let first_run_pending = crate::first_run::is_pending(cx);

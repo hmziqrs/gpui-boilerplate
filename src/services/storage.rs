@@ -130,7 +130,7 @@ impl StorageBackend for SqliteStorage {
         let mut records = Vec::with_capacity(rows.len());
         for (id_str, occurred_at_str, severity_str, category_str, message, actions_json) in rows {
             let id = uuid::Uuid::parse_str(&id_str)
-                .map(|u| crate::ids::EventId(u))
+                .map(crate::ids::EventId)
                 .map_err(|err| rusqlite::Error::InvalidParameterName(err.to_string()))?;
             let occurred_at = chrono::DateTime::parse_from_rfc3339(&occurred_at_str)
                 .map(|dt| crate::time::AppTimestamp(dt.to_utc()))

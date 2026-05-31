@@ -9,6 +9,12 @@ impl AboutPage {
     }
 }
 
+impl Default for AboutPage {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Render for AboutPage {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         v_flex()

@@ -1,14 +1,21 @@
 use std::collections::BTreeMap;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::sync::{
+    Arc, Mutex, OnceLock,
+    atomic::{AtomicBool, Ordering},
+};
+use std::time::{Duration, Instant};
 
 use gpui::{App, BorrowAppContext as _, Global};
 use reqwest::blocking::{Client, multipart};
 use reqwest::header::{CONTENT_TYPE, HeaderMap};
 use serde::{Deserialize, Serialize};
 
-use crate::query::{
-    CachePolicy, QueryKey, QueryResource, QueryStatus, RequestId, RequestPolicy, RequestSequencer,
+use crate::ids::TaskId;
+use crate::services::query::{
+    CachePolicy, QueryBeginResult, QueryError, QueryFetchMode, QueryKey, QueryResource,
+    QueryStatus, RequestGuard, RequestId, RequestPolicy, RequestSequencer,
 };
+use crate::tasks::TaskProgress;
 
 const HTTPBIN_BASE: &str = "https://httpbin.org";
 const TIMEOUT: Duration = Duration::from_secs(15);
@@ -89,8 +96,9 @@ pub struct HttpCookieSnapshot {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HttpLabState {
     pub selected_action: HttpLabAction,
-    pub resources: BTreeMap<HttpLabAction, QueryResource<HttpExchange>>,
+    resources: BTreeMap<HttpLabAction, QueryResource<HttpExchange>>,
     request_sequencer: RequestSequencer,
+    inflight_tasks: BTreeMap<RequestId, TaskId>,
     pub history: Vec<HttpExchange>,
     pub transition_log: Vec<String>,
     pub cookies: Option<HttpCookieSnapshot>,
@@ -107,6 +115,7 @@ impl Default for HttpLabState {
             selected_action: HttpLabAction::GetJson,
             resources,
             request_sequencer: RequestSequencer::new(),
+            inflight_tasks: BTreeMap::new(),
             history: Vec::new(),
             transition_log: vec!["Idle".to_string()],
             cookies: None,
@@ -132,15 +141,27 @@ impl HttpLabState {
             .count()
     }
 
-    fn reset_for_user(&mut self) {
+    fn reset_for_user(&mut self) -> ResetRequests {
+        let cancelled_requests = self.inflight_tasks.keys().copied().collect::<Vec<_>>();
+        let cancelled_tasks = self.inflight_tasks.values().copied().collect::<Vec<_>>();
         let mut request_sequencer = self.request_sequencer.clone();
         request_sequencer.advance_scope();
         *self = Self::default();
         self.request_sequencer = request_sequencer;
+        ResetRequests {
+            request_ids: cancelled_requests,
+            task_ids: cancelled_tasks,
+        }
     }
 }
 
 impl Global for HttpLabState {}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct ResetRequests {
+    request_ids: Vec<RequestId>,
+    task_ids: Vec<TaskId>,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum HttpLabAction {
@@ -258,13 +279,28 @@ pub fn snapshot(cx: &App) -> HttpLabState {
     cx.try_global::<HttpLabState>().cloned().unwrap_or_default()
 }
 
+pub fn read_state<R>(cx: &App, read: impl FnOnce(&HttpLabState) -> R) -> R {
+    if let Some(state) = cx.try_global::<HttpLabState>() {
+        read(state)
+    } else {
+        let fallback = HttpLabState::default();
+        read(&fallback)
+    }
+}
+
 pub fn reset(cx: &mut App) {
-    if cx.try_global::<HttpLabState>().is_some() {
-        cx.update_global::<HttpLabState, _>(|state, _cx| {
-            state.reset_for_user();
-        });
+    let reset_requests = if cx.try_global::<HttpLabState>().is_some() {
+        cx.update_global::<HttpLabState, _>(|state, _cx| state.reset_for_user())
     } else {
         cx.set_global(HttpLabState::default());
+        ResetRequests::default()
+    };
+
+    for request_id in reset_requests.request_ids {
+        cancel_request_flag(request_id);
+    }
+    for task_id in reset_requests.task_ids {
+        crate::tasks::cancel(task_id, "HTTP Lab reset".to_string(), cx);
     }
 }
 
@@ -283,10 +319,22 @@ pub fn run_action(action: HttpLabAction, cx: &mut App) {
         return;
     };
 
+    let task_id = TaskId::new();
+    crate::tasks::start(
+        task_id,
+        format!("HTTP Lab {}", action.label()),
+        TaskProgress::Indeterminate,
+        cx,
+    );
+    cx.update_global::<HttpLabState, _>(|state, _cx| {
+        state.inflight_tasks.insert(request_id, task_id);
+    });
+    let cancellation = register_request_flag(request_id);
+
     cx.spawn(async move |cx| {
         let result = cx
             .background_executor()
-            .spawn(async move { run_blocking_action(action) })
+            .spawn(async move { run_blocking_action(action, cancellation) })
             .await;
 
         cx.update(move |cx| {
@@ -315,26 +363,6 @@ fn begin_action(
 ) -> Option<RequestId> {
     state.selected_action = action;
 
-    let resource = state.resource(action);
-    let request_policy = resource.request_policy();
-    let current_status = resource.status();
-    if resource.should_short_circuit_cache(now_ms) {
-        let resource = state.resources.get_mut(&action)?;
-        resource.record_cache_hit();
-        record_transition(state, QueryStatus::Success, action.label(), "cache hit");
-        return None;
-    }
-
-    if resource.is_loading() && request_policy == RequestPolicy::IgnoreWhileLoading {
-        record_transition(
-            state,
-            current_status,
-            action.label(),
-            "ignored duplicate while loading",
-        );
-        return None;
-    }
-
     if action == HttpLabAction::FullFlow {
         cancel_all_in_state(state, "Cancelled by full flow");
     } else {
@@ -343,25 +371,55 @@ fn begin_action(
             HttpLabAction::FullFlow,
             "Cancelled by individual request",
         );
-        if request_policy == RequestPolicy::LatestWins {
-            cancel_action_in_state(state, action, "Cancelled by newer request");
-        }
     }
 
     let has_data = state.resource(action).has_data();
-    let request_id = next_request_id(state);
     let cache_policy = state.resource(action).cache_policy();
-    let status = state
-        .resources
-        .get_mut(&action)
-        .map(|resource| resource.begin_loading(request_id, now_ms))?;
-
-    let note = match (cache_policy, has_data) {
-        (CachePolicy::StaleWhileRevalidate { .. }, true) => "revalidating cached data",
-        _ => "request started",
+    let begin_result = {
+        let HttpLabState {
+            resources,
+            request_sequencer,
+            ..
+        } = state;
+        let resource = resources.get_mut(&action)?;
+        resource.begin_request(request_sequencer, now_ms, QueryFetchMode::Normal)
     };
-    record_transition(state, status, action.label(), note);
-    Some(request_id)
+
+    match begin_result {
+        QueryBeginResult::Started {
+            request_id,
+            status,
+            replaced_request_id,
+        } => {
+            if replaced_request_id.is_some() {
+                record_transition(
+                    state,
+                    QueryStatus::Cancelled,
+                    action.label(),
+                    "cancelled by newer request",
+                );
+            }
+            let note = match (cache_policy, has_data) {
+                (CachePolicy::StaleWhileRevalidate { .. }, true) => "revalidating cached data",
+                _ => "request started",
+            };
+            record_transition(state, status, action.label(), note);
+            Some(request_id)
+        }
+        QueryBeginResult::CacheHit => {
+            record_transition(state, QueryStatus::Success, action.label(), "cache hit");
+            None
+        }
+        QueryBeginResult::IgnoredWhileLoading { .. } => {
+            record_transition(
+                state,
+                state.resource(action).status(),
+                action.label(),
+                "ignored duplicate while loading",
+            );
+            None
+        }
+    }
 }
 
 fn apply_result(
@@ -371,9 +429,10 @@ fn apply_result(
     cx: &mut App,
 ) {
     let now_ms = now_ms();
-    cx.update_global::<HttpLabState, _>(|state, _cx| {
-        apply_result_to_state(state, action, request_id, result, now_ms);
+    let task_update = cx.update_global::<HttpLabState, _>(|state, _cx| {
+        apply_result_to_state(state, action, request_id, result, now_ms)
     });
+    apply_task_update(task_update, cx);
 }
 
 fn apply_result_to_state(
@@ -382,15 +441,27 @@ fn apply_result_to_state(
     request_id: RequestId,
     result: Result<Vec<ActionExchange>, String>,
     now_ms: u128,
-) {
+) -> Option<HttpTaskUpdate> {
+    let task_id = state.inflight_tasks.remove(&request_id);
+    remove_request_flag(request_id);
     if !state.request_sequencer.is_current_scope(request_id) {
-        return;
+        return Some(HttpTaskUpdate::cancelled(
+            task_id,
+            "ignored stale request scope".to_string(),
+        ));
     }
 
-    if !request_is_current(state, action, request_id) {
-        mark_ignored_result(state, action, request_id);
-        return;
-    }
+    let Some(request_guard) = state
+        .resources
+        .get_mut(&action)
+        .and_then(|resource| resource.accept_current_request(request_id))
+    else {
+        record_ignored_result(state, action, request_id);
+        return Some(HttpTaskUpdate::cancelled(
+            task_id,
+            format!("ignored stale request {}", request_id.label()),
+        ));
+    };
 
     match result {
         Ok(exchanges) => {
@@ -404,15 +475,17 @@ fn apply_result_to_state(
                         "full flow advanced",
                     );
                 }
-                finish_exchange(state, target_action, exchange, now_ms);
+                finish_exchange(state, target_action, exchange, &request_guard, now_ms);
             }
 
             if action == HttpLabAction::FullFlow {
-                finish_flow_resource(state, last_exchange, now_ms);
+                finish_flow_resource(state, last_exchange, &request_guard, now_ms);
             }
+            Some(HttpTaskUpdate::succeeded(task_id))
         }
         Err(error) => {
-            fail_resource(state, action, error, now_ms);
+            fail_resource(state, action, &request_guard, error.clone());
+            Some(HttpTaskUpdate::failed(task_id, error))
         }
     }
 }
@@ -421,6 +494,7 @@ fn finish_exchange(
     state: &mut HttpLabState,
     action: HttpLabAction,
     exchange: HttpExchange,
+    request_guard: &RequestGuard,
     now_ms: u128,
 ) {
     let status = if exchange.error.is_none() {
@@ -432,8 +506,14 @@ fn finish_exchange(
 
     if let Some(resource) = state.resources.get_mut(&action) {
         match error {
-            Some(error) => resource.apply_failure_with_data(exchange.clone(), error, now_ms),
-            None => resource.apply_success(exchange.clone(), now_ms),
+            Some(error) => {
+                resource.complete_failure_with_data(
+                    request_guard,
+                    exchange.clone(),
+                    QueryError::response(error),
+                );
+            }
+            None => resource.complete_success(request_guard, exchange.clone(), now_ms),
         }
     }
 
@@ -448,10 +528,11 @@ fn finish_exchange(
 fn finish_flow_resource(
     state: &mut HttpLabState,
     last_exchange: Option<HttpExchange>,
+    request_guard: &RequestGuard,
     now_ms: u128,
 ) {
     if let Some(resource) = state.resources.get_mut(&HttpLabAction::FullFlow) {
-        resource.apply_success_optional(last_exchange, now_ms);
+        resource.complete_success_optional(request_guard, last_exchange, now_ms);
     }
     record_transition(
         state,
@@ -461,7 +542,12 @@ fn finish_flow_resource(
     );
 }
 
-fn fail_resource(state: &mut HttpLabState, action: HttpLabAction, error: String, now_ms: u128) {
+fn fail_resource(
+    state: &mut HttpLabState,
+    action: HttpLabAction,
+    request_guard: &RequestGuard,
+    error: String,
+) {
     let exchange = HttpExchange {
         label: action.label().to_string(),
         request: HttpRequestSnapshot {
@@ -475,7 +561,7 @@ fn fail_resource(state: &mut HttpLabState, action: HttpLabAction, error: String,
     };
 
     if let Some(resource) = state.resources.get_mut(&action) {
-        resource.apply_failure(error, now_ms);
+        resource.complete_failure(request_guard, QueryError::transport(error));
     }
 
     record_transition(
@@ -488,28 +574,13 @@ fn fail_resource(state: &mut HttpLabState, action: HttpLabAction, error: String,
 }
 
 fn cancel_action_in_state(state: &mut HttpLabState, action: HttpLabAction, reason: &str) {
-    if state.resource(action).active_request_id().is_some() {
+    if let Some(request_id) = state.resource(action).active_request_id() {
+        cancel_request_flag(request_id);
         if let Some(resource) = state.resources.get_mut(&action) {
-            resource.cancel(reason);
+            resource.cancel(QueryError::cancelled(reason));
         }
         record_transition(state, QueryStatus::Cancelled, action.label(), reason);
     }
-}
-
-fn next_request_id(state: &mut HttpLabState) -> RequestId {
-    state.request_sequencer.next_request()
-}
-
-fn request_is_current(
-    state: &mut HttpLabState,
-    action: HttpLabAction,
-    request_id: RequestId,
-) -> bool {
-    state
-        .resources
-        .get_mut(&action)
-        .map(|resource| resource.clear_current_request(request_id))
-        .unwrap_or(false)
 }
 
 fn cancel_all_in_state(state: &mut HttpLabState, reason: &str) {
@@ -523,16 +594,90 @@ fn cancel_all_in_state(state: &mut HttpLabState, reason: &str) {
     }
 }
 
-fn mark_ignored_result(state: &mut HttpLabState, action: HttpLabAction, request_id: RequestId) {
-    if let Some(resource) = state.resources.get_mut(&action) {
-        resource.mark_ignored_result();
-    }
+fn record_ignored_result(state: &mut HttpLabState, action: HttpLabAction, request_id: RequestId) {
     record_transition(
         state,
         QueryStatus::Cancelled,
         action.label(),
-        &format!("ignored stale request #{}", request_id.value()),
+        &format!("ignored stale request {}", request_id.label()),
     );
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum HttpTaskStatus {
+    Succeeded,
+    Failed(String),
+    Cancelled(String),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct HttpTaskUpdate {
+    task_id: Option<TaskId>,
+    status: HttpTaskStatus,
+}
+
+impl HttpTaskUpdate {
+    fn succeeded(task_id: Option<TaskId>) -> Self {
+        Self {
+            task_id,
+            status: HttpTaskStatus::Succeeded,
+        }
+    }
+
+    fn failed(task_id: Option<TaskId>, error: String) -> Self {
+        Self {
+            task_id,
+            status: HttpTaskStatus::Failed(error),
+        }
+    }
+
+    fn cancelled(task_id: Option<TaskId>, reason: String) -> Self {
+        Self {
+            task_id,
+            status: HttpTaskStatus::Cancelled(reason),
+        }
+    }
+}
+
+fn apply_task_update(update: Option<HttpTaskUpdate>, cx: &mut App) {
+    let Some(HttpTaskUpdate { task_id, status }) = update else {
+        return;
+    };
+    let Some(task_id) = task_id else {
+        return;
+    };
+    match status {
+        HttpTaskStatus::Succeeded => crate::tasks::succeed(task_id, cx),
+        HttpTaskStatus::Failed(error) => crate::tasks::fail(task_id, error, cx),
+        HttpTaskStatus::Cancelled(reason) => crate::tasks::cancel(task_id, reason, cx),
+    }
+}
+
+fn cancellation_flags() -> &'static Mutex<BTreeMap<RequestId, Arc<AtomicBool>>> {
+    static FLAGS: OnceLock<Mutex<BTreeMap<RequestId, Arc<AtomicBool>>>> = OnceLock::new();
+    FLAGS.get_or_init(|| Mutex::new(BTreeMap::new()))
+}
+
+fn register_request_flag(request_id: RequestId) -> Arc<AtomicBool> {
+    let flag = Arc::new(AtomicBool::new(false));
+    if let Ok(mut flags) = cancellation_flags().lock() {
+        flags.insert(request_id, flag.clone());
+    }
+    flag
+}
+
+fn cancel_request_flag(request_id: RequestId) {
+    if let Ok(flags) = cancellation_flags().lock()
+        && let Some(flag) = flags.get(&request_id)
+    {
+        flag.store(true, Ordering::SeqCst);
+    }
+}
+
+fn remove_request_flag(request_id: RequestId) {
+    if let Ok(mut flags) = cancellation_flags().lock() {
+        flags.remove(&request_id);
+    }
 }
 
 fn record_transition(state: &mut HttpLabState, status: QueryStatus, label: &str, note: &str) {
@@ -547,9 +692,13 @@ fn push_history(state: &mut HttpLabState, exchange: HttpExchange) {
     state.history.truncate(24);
 }
 
-fn run_blocking_action(action: HttpLabAction) -> Result<Vec<ActionExchange>, String> {
+fn run_blocking_action(
+    action: HttpLabAction,
+    cancellation: Arc<AtomicBool>,
+) -> Result<Vec<ActionExchange>, String> {
+    fail_if_cancelled(&cancellation)?;
     match action {
-        HttpLabAction::FullFlow => run_full_flow(),
+        HttpLabAction::FullFlow => run_full_flow(cancellation),
         _ => run_single(action).map(|exchange| vec![(action, exchange)]),
     }
 }
@@ -598,7 +747,7 @@ fn run_single(action: HttpLabAction) -> Result<HttpExchange, String> {
     }
 }
 
-fn run_full_flow() -> Result<Vec<ActionExchange>, String> {
+fn run_full_flow(cancellation: Arc<AtomicBool>) -> Result<Vec<ActionExchange>, String> {
     let client = client()?;
     let get_json = execute_get(
         &client,
@@ -606,13 +755,19 @@ fn run_full_flow() -> Result<Vec<ActionExchange>, String> {
         &format!("{HTTPBIN_BASE}/json"),
         HttpBodyKind::Json,
     )?;
+    fail_if_shutdown_requested()?;
+    fail_if_cancelled(&cancellation)?;
     let failure = execute_get(
         &client,
         "Failure",
         &format!("{HTTPBIN_BASE}/status/503"),
         HttpBodyKind::Text,
     )?;
+    fail_if_shutdown_requested()?;
+    fail_if_cancelled(&cancellation)?;
     let post_json = execute_post_json(&client)?;
+    fail_if_shutdown_requested()?;
+    fail_if_cancelled(&cancellation)?;
     let cookies = run_cookies_with_client(&client)?;
 
     Ok(vec![
@@ -621,6 +776,22 @@ fn run_full_flow() -> Result<Vec<ActionExchange>, String> {
         (HttpLabAction::PostJson, post_json),
         (HttpLabAction::Cookies, cookies),
     ])
+}
+
+fn fail_if_cancelled(cancellation: &AtomicBool) -> Result<(), String> {
+    if cancellation.load(Ordering::SeqCst) {
+        Err("cancelled by user".to_string())
+    } else {
+        Ok(())
+    }
+}
+
+fn fail_if_shutdown_requested() -> Result<(), String> {
+    if crate::tasks::is_shutdown_requested() {
+        Err("cancelled during app shutdown".to_string())
+    } else {
+        Ok(())
+    }
 }
 
 fn execute_get(
@@ -853,10 +1024,8 @@ fn cookie_snapshot_from_exchange(exchange: &HttpExchange) -> Option<HttpCookieSn
 }
 
 fn now_ms() -> u128 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_millis())
-        .unwrap_or_default()
+    static STARTED_AT: OnceLock<Instant> = OnceLock::new();
+    STARTED_AT.get_or_init(Instant::now).elapsed().as_millis()
 }
 
 pub fn response_fields(exchange: &HttpExchange) -> BTreeMap<&'static str, String> {

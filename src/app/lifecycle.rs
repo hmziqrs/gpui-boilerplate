@@ -158,14 +158,14 @@ pub fn check_previous_crash() -> Option<String> {
 /// Remove the crash marker on a clean shutdown.
 pub fn remove_crash_marker() {
     let path = crash_marker_path();
-    if path.exists() {
-        if let Err(err) = fs::remove_file(&path) {
-            tracing::warn!(
-                target: "gpui_starter::lifecycle",
-                path = %path.display(),
-                error = %err,
-                "failed to remove crash marker"
-            );
-        }
+    if path.exists()
+        && let Err(err) = fs::remove_file(&path)
+    {
+        tracing::warn!(
+            target: "gpui_starter::lifecycle",
+            path = %path.display(),
+            error = %err,
+            "failed to remove crash marker"
+        );
     }
 }

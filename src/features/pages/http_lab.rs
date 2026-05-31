@@ -6,7 +6,7 @@ use gpui_component::{
 };
 
 use crate::http_lab::{self, HttpExchange, HttpLabAction, HttpLabState};
-use crate::query::{QueryResource, QueryStatus};
+use crate::services::query::{QueryResource, QueryStatus, RequestPolicy};
 
 pub struct HttpLabPage {
     _subscriptions: Vec<Subscription>,
@@ -26,23 +26,24 @@ impl HttpLabPage {
 
 impl Render for HttpLabPage {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let state = http_lab::snapshot(cx);
-        let selected_resource = state.selected_resource();
+        http_lab::read_state(cx, |state| {
+            let selected_resource = state.selected_resource();
 
-        v_flex()
-            .min_h_full()
-            .p_6()
-            .gap_5()
-            .child(hero(&state, cx))
-            .child(action_bar(&state))
-            .child(tab_bar(&state))
-            .child(resource_panel(
-                &state,
-                state.selected_action,
-                selected_resource,
-                cx,
-            ))
-            .child(activity_panel(&state, cx))
+            v_flex()
+                .min_h_full()
+                .p_6()
+                .gap_5()
+                .child(hero(state, cx))
+                .child(action_bar(state))
+                .child(tab_bar(state))
+                .child(resource_panel(
+                    state,
+                    state.selected_action,
+                    selected_resource,
+                    cx,
+                ))
+                .child(activity_panel(state, cx))
+        })
     }
 }
 
@@ -123,6 +124,8 @@ fn action_bar(state: &HttpLabState) -> Div {
 
 fn action_button(action: HttpLabAction, resource: &QueryResource<HttpExchange>) -> Button {
     let is_loading = resource.is_loading();
+    let blocks_duplicate =
+        is_loading && resource.request_policy() == RequestPolicy::IgnoreWhileLoading;
     Button::new(format!("http-lab-run-{}", action.id()))
         .outline()
         .label(if is_loading {
@@ -131,7 +134,7 @@ fn action_button(action: HttpLabAction, resource: &QueryResource<HttpExchange>) 
             action.label().to_string()
         })
         .loading(is_loading)
-        .disabled(is_loading)
+        .disabled(blocks_duplicate)
         .on_click(move |_, _, cx| {
             http_lab::run_action(action, cx);
         })
@@ -184,7 +187,7 @@ fn resource_panel(
                 ))
                 .when_some(resource.active_request_id(), |this, request_id| {
                     this.child(chip(
-                        &format!("request #{}", request_id.value()),
+                        &format!("request {}", request_id.label()),
                         cx.theme().background,
                         cx,
                     ))
@@ -203,7 +206,7 @@ fn resource_panel(
             )
         })
         .when_some(resource.error(), |this, error| {
-            this.child(callout("Error", error, cx))
+            this.child(callout("Error", error.message(), cx))
         })
         .when_some(resource.data(), |this, exchange| {
             this.child(exchange_panel(exchange, cx))

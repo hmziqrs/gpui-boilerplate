@@ -1,5 +1,8 @@
 use super::*;
-use crate::query::QueryStatus;
+use crate::{
+    ids::TaskId,
+    services::query::{QueryError, QueryStatus},
+};
 
 fn exchange(label: &str, status: u16, error: Option<&str>) -> HttpExchange {
     HttpExchange {
@@ -25,14 +28,28 @@ fn exchange(label: &str, status: u16, error: Option<&str>) -> HttpExchange {
     }
 }
 
+fn seed_response(
+    state: &mut HttpLabState,
+    action: HttpLabAction,
+    response: HttpExchange,
+    now_ms: u128,
+) {
+    let request = begin_action(state, action, now_ms.saturating_sub(1)).expect("seed request");
+    apply_result_to_state(state, action, request, Ok(vec![(action, response)]), now_ms);
+}
+
+fn error_message(resource: &QueryResource<HttpExchange>) -> Option<&str> {
+    resource.error().map(QueryError::message)
+}
+
 #[test]
 fn starts_each_action_with_its_own_resource() {
     let state = HttpLabState::default();
 
     for action in HttpLabAction::all() {
         let resource = state.resource(*action);
-        assert_eq!(resource.key, action.query_key());
-        assert_eq!(resource.status, QueryStatus::Idle);
+        assert_eq!(resource.key(), &action.query_key());
+        assert_eq!(resource.status(), QueryStatus::Idle);
     }
 }
 
@@ -40,32 +57,38 @@ fn starts_each_action_with_its_own_resource() {
 fn ttl_cache_can_short_circuit_request() {
     let mut state = HttpLabState::default();
     let now_ms = 10_000;
-    let resource = state.resources.get_mut(&HttpLabAction::GetText).unwrap();
-    resource.data = Some(exchange("GET text", 200, None));
-    resource.last_updated_at_ms = Some(now_ms - 100);
+    seed_response(
+        &mut state,
+        HttpLabAction::GetText,
+        exchange("GET text", 200, None),
+        now_ms - 100,
+    );
 
     let request = begin_action(&mut state, HttpLabAction::GetText, now_ms);
 
     assert!(request.is_none());
     let resource = state.resource(HttpLabAction::GetText);
-    assert_eq!(resource.status, QueryStatus::Success);
-    assert_eq!(resource.cache_hits, 1);
+    assert_eq!(resource.status(), QueryStatus::Success);
+    assert_eq!(resource.cache_hits(), 1);
 }
 
 #[test]
 fn stale_while_revalidate_keeps_data_and_starts_request() {
     let mut state = HttpLabState::default();
     let now_ms = 100_000;
-    let resource = state.resources.get_mut(&HttpLabAction::GetJson).unwrap();
-    resource.data = Some(exchange("GET JSON", 200, None));
-    resource.last_updated_at_ms = Some(now_ms - 1);
+    seed_response(
+        &mut state,
+        HttpLabAction::GetJson,
+        exchange("GET JSON", 200, None),
+        now_ms - 1,
+    );
 
     let request = begin_action(&mut state, HttpLabAction::GetJson, now_ms);
 
     assert!(request.is_some());
     let resource = state.resource(HttpLabAction::GetJson);
-    assert_eq!(resource.status, QueryStatus::LoadingWithData);
-    assert!(resource.data.is_some());
+    assert_eq!(resource.status(), QueryStatus::LoadingWithData);
+    assert!(resource.data().is_some());
 }
 
 #[test]
@@ -77,10 +100,10 @@ fn latest_wins_cancels_previous_request_for_same_action() {
     assert_ne!(first, second);
     assert_eq!(state.active_count(), 1);
     assert_eq!(
-        state.resource(HttpLabAction::GetXml).active_request_id,
+        state.resource(HttpLabAction::GetXml).active_request_id(),
         Some(second)
     );
-    assert_eq!(state.resource(HttpLabAction::GetXml).cancelled_count, 1);
+    assert_eq!(state.resource(HttpLabAction::GetXml).cancelled_count(), 1);
 }
 
 #[test]
@@ -93,7 +116,7 @@ fn ignore_while_loading_policy_does_not_start_duplicate_request() {
     assert_eq!(
         state
             .resource(HttpLabAction::PostMultipart)
-            .active_request_id,
+            .active_request_id(),
         Some(first)
     );
     assert_eq!(state.active_count(), 1);
@@ -117,9 +140,67 @@ fn stale_result_is_ignored_after_cancellation() {
     );
 
     let resource = state.resource(HttpLabAction::GetJson);
-    assert_eq!(resource.status, QueryStatus::Cancelled);
-    assert!(resource.data.is_none());
-    assert_eq!(resource.ignored_results, 1);
+    assert_eq!(resource.status(), QueryStatus::Cancelled);
+    assert!(resource.data().is_none());
+    assert_eq!(resource.ignored_results(), 1);
+}
+
+#[test]
+fn cancelled_request_keeps_task_tracking_until_result_arrives() {
+    let mut state = HttpLabState::default();
+    let request = begin_action(&mut state, HttpLabAction::GetJson, 1).expect("request");
+    let task_id = TaskId::new();
+    state.inflight_tasks.insert(request, task_id);
+    let cancellation = register_request_flag(request);
+
+    cancel_action_in_state(&mut state, HttpLabAction::GetJson, "test cancel");
+    assert_eq!(state.inflight_tasks.get(&request), Some(&task_id));
+    assert!(cancellation.load(std::sync::atomic::Ordering::SeqCst));
+
+    let update = apply_result_to_state(
+        &mut state,
+        HttpLabAction::GetJson,
+        request,
+        Ok(vec![(
+            HttpLabAction::GetJson,
+            exchange("GET JSON", 200, None),
+        )]),
+        2,
+    );
+
+    assert_eq!(
+        update,
+        Some(HttpTaskUpdate::cancelled(
+            Some(task_id),
+            format!("ignored stale request {}", request.label()),
+        ))
+    );
+    assert!(!state.inflight_tasks.contains_key(&request));
+    assert!(cancellation_flags().lock().unwrap().get(&request).is_none());
+}
+
+#[test]
+fn successful_result_completes_tracked_task() {
+    let mut state = HttpLabState::default();
+    let request = begin_action(&mut state, HttpLabAction::GetJson, 1).expect("request");
+    let task_id = TaskId::new();
+    state.inflight_tasks.insert(request, task_id);
+    register_request_flag(request);
+
+    let update = apply_result_to_state(
+        &mut state,
+        HttpLabAction::GetJson,
+        request,
+        Ok(vec![(
+            HttpLabAction::GetJson,
+            exchange("GET JSON", 200, None),
+        )]),
+        2,
+    );
+
+    assert_eq!(update, Some(HttpTaskUpdate::succeeded(Some(task_id))));
+    assert!(!state.inflight_tasks.contains_key(&request));
+    assert!(cancellation_flags().lock().unwrap().get(&request).is_none());
 }
 
 #[test]
@@ -139,12 +220,12 @@ fn successful_exchange_updates_only_target_resource() {
     );
 
     assert_eq!(
-        state.resource(HttpLabAction::GetJson).status,
+        state.resource(HttpLabAction::GetJson).status(),
         QueryStatus::Success
     );
-    assert!(state.resource(HttpLabAction::GetJson).data.is_some());
+    assert!(state.resource(HttpLabAction::GetJson).data().is_some());
     assert_eq!(
-        state.resource(HttpLabAction::GetXml).status,
+        state.resource(HttpLabAction::GetXml).status(),
         QueryStatus::Idle
     );
     assert_eq!(state.history.len(), 1);
@@ -154,8 +235,7 @@ fn successful_exchange_updates_only_target_resource() {
 fn failed_exchange_preserves_previous_data() {
     let mut state = HttpLabState::default();
     let previous = exchange("Failure", 500, Some("HTTP 500"));
-    let resource = state.resources.get_mut(&HttpLabAction::Failure).unwrap();
-    resource.data = Some(previous);
+    seed_response(&mut state, HttpLabAction::Failure, previous, 0);
 
     let request = begin_action(&mut state, HttpLabAction::Failure, 1).expect("request");
     apply_result_to_state(
@@ -170,9 +250,9 @@ fn failed_exchange_preserves_previous_data() {
     );
 
     let resource = state.resource(HttpLabAction::Failure);
-    assert_eq!(resource.status, QueryStatus::Failure);
-    assert!(resource.data.is_some());
-    assert_eq!(resource.error.as_deref(), Some("HTTP 503"));
+    assert_eq!(resource.status(), QueryStatus::Failure);
+    assert!(resource.data().is_some());
+    assert_eq!(error_message(resource), Some("HTTP 503"));
 }
 
 #[test]
@@ -197,19 +277,19 @@ fn full_flow_populates_individual_resources_and_flow_resource() {
     );
 
     assert_eq!(
-        state.resource(HttpLabAction::FullFlow).status,
+        state.resource(HttpLabAction::FullFlow).status(),
         QueryStatus::Success
     );
     assert_eq!(
-        state.resource(HttpLabAction::GetJson).status,
+        state.resource(HttpLabAction::GetJson).status(),
         QueryStatus::Success
     );
     assert_eq!(
-        state.resource(HttpLabAction::Failure).status,
+        state.resource(HttpLabAction::Failure).status(),
         QueryStatus::Failure
     );
     assert_eq!(
-        state.resource(HttpLabAction::PostJson).status,
+        state.resource(HttpLabAction::PostJson).status(),
         QueryStatus::Success
     );
     assert_eq!(state.history.len(), 3);
@@ -234,23 +314,25 @@ fn individual_request_cancels_pending_full_flow_before_it_can_apply_results() {
     );
 
     assert_eq!(
-        state.resource(HttpLabAction::FullFlow).status,
+        state.resource(HttpLabAction::FullFlow).status(),
         QueryStatus::Cancelled
     );
-    assert_eq!(state.resource(HttpLabAction::FullFlow).ignored_results, 1);
+    assert_eq!(state.resource(HttpLabAction::FullFlow).ignored_results(), 1);
     assert_eq!(
-        state.resource(HttpLabAction::GetJson).active_request_id,
+        state.resource(HttpLabAction::GetJson).active_request_id(),
         Some(individual_request)
     );
-    assert!(state.resource(HttpLabAction::GetJson).data.is_none());
+    assert!(state.resource(HttpLabAction::GetJson).data().is_none());
 }
 
 #[test]
 fn reset_makes_in_flight_request_results_silent_stale_results() {
     let mut state = HttpLabState::default();
     let request = begin_action(&mut state, HttpLabAction::GetJson, 1).expect("request");
+    let task_id = TaskId::new();
+    state.inflight_tasks.insert(request, task_id);
 
-    state.reset_for_user();
+    let reset_requests = state.reset_for_user();
     let transition_log = state.transition_log.clone();
     apply_result_to_state(
         &mut state,
@@ -264,9 +346,16 @@ fn reset_makes_in_flight_request_results_silent_stale_results() {
     );
 
     let resource = state.resource(HttpLabAction::GetJson);
-    assert_eq!(resource.status, QueryStatus::Idle);
-    assert_eq!(resource.ignored_results, 0);
+    assert_eq!(resource.status(), QueryStatus::Idle);
+    assert_eq!(resource.ignored_results(), 0);
     assert_eq!(state.transition_log, transition_log);
+    assert_eq!(
+        reset_requests,
+        ResetRequests {
+            request_ids: vec![request],
+            task_ids: vec![task_id],
+        }
+    );
 }
 
 #[test]
@@ -274,7 +363,7 @@ fn reset_prevents_old_request_id_from_colliding_with_new_request() {
     let mut state = HttpLabState::default();
     let old_request = begin_action(&mut state, HttpLabAction::GetJson, 1).expect("old request");
 
-    state.reset_for_user();
+    let _reset_requests = state.reset_for_user();
     let new_request = begin_action(&mut state, HttpLabAction::GetJson, 2).expect("new request");
     apply_result_to_state(
         &mut state,
@@ -290,8 +379,8 @@ fn reset_prevents_old_request_id_from_colliding_with_new_request() {
     let resource = state.resource(HttpLabAction::GetJson);
     assert_eq!(old_request.value(), new_request.value());
     assert_ne!(old_request, new_request);
-    assert_eq!(resource.active_request_id, Some(new_request));
-    assert!(resource.data.is_none());
+    assert_eq!(resource.active_request_id(), Some(new_request));
+    assert!(resource.data().is_none());
 }
 
 #[test]

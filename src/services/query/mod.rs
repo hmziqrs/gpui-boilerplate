@@ -1,3 +1,10 @@
+//! Transport-agnostic query lifecycle primitives.
+//!
+//! `QueryResource` owns the cache/request state for one resource. Callers start
+//! work with `begin_request`, then complete it with the returned `RequestId`.
+//! Completion methods reject stale request ids, so cancelled or replaced async
+//! work cannot overwrite newer state.
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -25,7 +32,7 @@ impl From<String> for QueryKey {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct RequestId {
     scope_id: u64,
     sequence: u64,
@@ -42,6 +49,10 @@ impl RequestId {
 
     pub fn scope_id(self) -> u64 {
         self.scope_id
+    }
+
+    pub fn label(self) -> String {
+        format!("{}:{}", self.scope_id, self.sequence)
     }
 }
 
@@ -82,6 +93,29 @@ impl RequestSequencer {
 
     pub fn is_current_scope(&self, request_id: RequestId) -> bool {
         request_id.scope_id == self.scope_id
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct QueryTimestamp(u128);
+
+impl QueryTimestamp {
+    pub fn from_millis(value: u128) -> Self {
+        Self(value)
+    }
+
+    pub fn as_millis(self) -> u128 {
+        self.0
+    }
+
+    fn elapsed_since(self, earlier: Self) -> Option<u128> {
+        self.0.checked_sub(earlier.0)
+    }
+}
+
+impl From<u128> for QueryTimestamp {
+    fn from(value: u128) -> Self {
+        Self::from_millis(value)
     }
 }
 
@@ -157,23 +191,119 @@ impl RequestPolicy {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct QueryResource<T> {
-    pub(crate) key: QueryKey,
-    pub(crate) status: QueryStatus,
-    pub(crate) data: Option<T>,
-    pub(crate) error: Option<String>,
-    pub(crate) active_request_id: Option<RequestId>,
-    pub(crate) cache_policy: CachePolicy,
-    pub(crate) request_policy: RequestPolicy,
-    pub(crate) started_at_ms: Option<u128>,
-    pub(crate) last_updated_at_ms: Option<u128>,
-    pub(crate) cache_hits: u64,
-    pub(crate) cancelled_count: u64,
-    pub(crate) ignored_results: u64,
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum QueryFetchMode {
+    #[default]
+    Normal,
+    Force,
 }
 
-impl<T> QueryResource<T> {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum QueryBeginResult {
+    Started {
+        request_id: RequestId,
+        status: QueryStatus,
+        replaced_request_id: Option<RequestId>,
+    },
+    CacheHit,
+    IgnoredWhileLoading {
+        active_request_id: RequestId,
+    },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RequestGuard {
+    request_id: RequestId,
+}
+
+impl RequestGuard {
+    pub fn request_id(self) -> RequestId {
+        self.request_id
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum QueryErrorKind {
+    Cancelled,
+    Response,
+    Transport,
+    Unknown,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct QueryError {
+    kind: QueryErrorKind,
+    message: String,
+}
+
+impl QueryError {
+    pub fn new(kind: QueryErrorKind, message: impl Into<String>) -> Self {
+        Self {
+            kind,
+            message: message.into(),
+        }
+    }
+
+    pub fn cancelled(message: impl Into<String>) -> Self {
+        Self::new(QueryErrorKind::Cancelled, message)
+    }
+
+    pub fn response(message: impl Into<String>) -> Self {
+        Self::new(QueryErrorKind::Response, message)
+    }
+
+    pub fn transport(message: impl Into<String>) -> Self {
+        Self::new(QueryErrorKind::Transport, message)
+    }
+
+    pub fn unknown(message: impl Into<String>) -> Self {
+        Self::new(QueryErrorKind::Unknown, message)
+    }
+
+    pub fn kind(&self) -> QueryErrorKind {
+        self.kind
+    }
+
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+}
+
+impl AsRef<str> for QueryError {
+    fn as_ref(&self) -> &str {
+        self.message()
+    }
+}
+
+impl From<String> for QueryError {
+    fn from(value: String) -> Self {
+        Self::unknown(value)
+    }
+}
+
+impl From<&str> for QueryError {
+    fn from(value: &str) -> Self {
+        Self::unknown(value)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct QueryResource<T, E = QueryError> {
+    key: QueryKey,
+    status: QueryStatus,
+    data: Option<T>,
+    error: Option<E>,
+    active_request_id: Option<RequestId>,
+    cache_policy: CachePolicy,
+    request_policy: RequestPolicy,
+    started_at: Option<QueryTimestamp>,
+    last_updated_at: Option<QueryTimestamp>,
+    cache_hits: u64,
+    cancelled_count: u64,
+    ignored_results: u64,
+}
+
+impl<T, E> QueryResource<T, E> {
     pub fn new(
         key: impl Into<QueryKey>,
         cache_policy: CachePolicy,
@@ -187,8 +317,8 @@ impl<T> QueryResource<T> {
             active_request_id: None,
             cache_policy,
             request_policy,
-            started_at_ms: None,
-            last_updated_at_ms: None,
+            started_at: None,
+            last_updated_at: None,
             cache_hits: 0,
             cancelled_count: 0,
             ignored_results: 0,
@@ -211,8 +341,8 @@ impl<T> QueryResource<T> {
         self.data.as_ref()
     }
 
-    pub fn error(&self) -> Option<&str> {
-        self.error.as_deref()
+    pub fn error(&self) -> Option<&E> {
+        self.error.as_ref()
     }
 
     pub fn active_request_id(&self) -> Option<RequestId> {
@@ -228,11 +358,11 @@ impl<T> QueryResource<T> {
     }
 
     pub fn started_at_ms(&self) -> Option<u128> {
-        self.started_at_ms
+        self.started_at.map(QueryTimestamp::as_millis)
     }
 
     pub fn last_updated_at_ms(&self) -> Option<u128> {
-        self.last_updated_at_ms
+        self.last_updated_at.map(QueryTimestamp::as_millis)
     }
 
     pub fn cache_hits(&self) -> u64 {
@@ -252,8 +382,7 @@ impl<T> QueryResource<T> {
     }
 
     pub fn cache_age_ms(&self, now_ms: u128) -> Option<u128> {
-        self.last_updated_at_ms
-            .map(|updated_at| now_ms.saturating_sub(updated_at))
+        QueryTimestamp::from(now_ms).elapsed_since(self.last_updated_at?)
     }
 
     pub fn is_cache_fresh(&self, now_ms: u128) -> bool {
@@ -270,7 +399,38 @@ impl<T> QueryResource<T> {
         self.cache_policy.can_short_circuit() && self.is_cache_fresh(now_ms)
     }
 
-    pub fn begin_loading(&mut self, request_id: RequestId, now_ms: u128) -> QueryStatus {
+    pub fn begin_request(
+        &mut self,
+        sequencer: &mut RequestSequencer,
+        now_ms: u128,
+        fetch_mode: QueryFetchMode,
+    ) -> QueryBeginResult {
+        if fetch_mode == QueryFetchMode::Normal && self.should_short_circuit_cache(now_ms) {
+            self.record_cache_hit();
+            return QueryBeginResult::CacheHit;
+        }
+
+        if self.request_policy == RequestPolicy::IgnoreWhileLoading
+            && let Some(active_request_id) = self.active_request_id
+        {
+            return QueryBeginResult::IgnoredWhileLoading { active_request_id };
+        }
+
+        let replaced_request_id = self.active_request_id;
+        if replaced_request_id.is_some() {
+            self.cancelled_count += 1;
+        }
+
+        let request_id = sequencer.next_request();
+        let status = self.begin_loading(request_id, now_ms);
+        QueryBeginResult::Started {
+            request_id,
+            status,
+            replaced_request_id,
+        }
+    }
+
+    fn begin_loading(&mut self, request_id: RequestId, now_ms: u128) -> QueryStatus {
         let status = if self.has_data() {
             QueryStatus::LoadingWithData
         } else {
@@ -278,12 +438,12 @@ impl<T> QueryResource<T> {
         };
         self.status = status;
         self.active_request_id = Some(request_id);
-        self.started_at_ms = Some(now_ms);
+        self.started_at = Some(QueryTimestamp::from(now_ms));
         self.error = None;
         status
     }
 
-    pub fn record_cache_hit(&mut self) {
+    fn record_cache_hit(&mut self) {
         self.cache_hits += 1;
         self.status = QueryStatus::Success;
         self.error = None;
@@ -293,49 +453,119 @@ impl<T> QueryResource<T> {
         self.active_request_id == Some(request_id)
     }
 
-    pub fn clear_current_request(&mut self, request_id: RequestId) -> bool {
+    pub fn accept_current_request(&mut self, request_id: RequestId) -> Option<RequestGuard> {
         if self.is_current_request(request_id) {
             self.active_request_id = None;
-            true
+            Some(RequestGuard { request_id })
         } else {
-            false
+            self.mark_ignored_result();
+            None
         }
     }
 
-    pub fn apply_success(&mut self, data: T, now_ms: u128) {
+    pub fn complete_current_success(
+        &mut self,
+        request_id: RequestId,
+        data: T,
+        now_ms: u128,
+    ) -> bool {
+        let Some(guard) = self.accept_current_request(request_id) else {
+            return false;
+        };
+        self.complete_success(&guard, data, now_ms);
+        true
+    }
+
+    pub fn complete_current_failure(&mut self, request_id: RequestId, error: impl Into<E>) -> bool {
+        let Some(guard) = self.accept_current_request(request_id) else {
+            return false;
+        };
+        self.complete_failure(&guard, error);
+        true
+    }
+
+    pub fn complete_current_optional_success(
+        &mut self,
+        request_id: RequestId,
+        data: Option<T>,
+        now_ms: u128,
+    ) -> bool {
+        let Some(guard) = self.accept_current_request(request_id) else {
+            return false;
+        };
+        self.complete_success_optional(&guard, data, now_ms);
+        true
+    }
+
+    pub fn complete_current_failure_with_data(
+        &mut self,
+        request_id: RequestId,
+        data: T,
+        error: impl Into<E>,
+    ) -> bool {
+        let Some(guard) = self.accept_current_request(request_id) else {
+            return false;
+        };
+        self.complete_failure_with_data(&guard, data, error);
+        true
+    }
+
+    pub fn complete_success(&mut self, _guard: &RequestGuard, data: T, now_ms: u128) {
+        self.apply_success(data, now_ms);
+    }
+
+    pub fn complete_failure(&mut self, _guard: &RequestGuard, error: impl Into<E>) {
+        self.apply_failure(error);
+    }
+
+    pub fn complete_success_optional(
+        &mut self,
+        _guard: &RequestGuard,
+        data: Option<T>,
+        now_ms: u128,
+    ) {
+        self.apply_success_optional(data, now_ms);
+    }
+
+    pub fn complete_failure_with_data(
+        &mut self,
+        _guard: &RequestGuard,
+        data: T,
+        error: impl Into<E>,
+    ) {
+        self.apply_failure_with_data(data, error);
+    }
+
+    fn apply_success(&mut self, data: T, now_ms: u128) {
         self.status = QueryStatus::Success;
         self.data = Some(data);
         self.error = None;
         self.active_request_id = None;
-        self.last_updated_at_ms = Some(now_ms);
+        self.last_updated_at = Some(QueryTimestamp::from(now_ms));
     }
 
-    pub fn apply_failure(&mut self, error: impl Into<String>, now_ms: u128) {
+    fn apply_failure(&mut self, error: impl Into<E>) {
         self.status = QueryStatus::Failure;
         self.error = Some(error.into());
         self.active_request_id = None;
-        self.last_updated_at_ms = Some(now_ms);
     }
 
-    pub fn apply_success_optional(&mut self, data: Option<T>, now_ms: u128) {
+    fn apply_success_optional(&mut self, data: Option<T>, now_ms: u128) {
         self.status = QueryStatus::Success;
-        if let Some(data) = data {
-            self.data = Some(data);
-        }
+        self.data = data;
         self.error = None;
         self.active_request_id = None;
-        self.last_updated_at_ms = Some(now_ms);
+        self.last_updated_at = Some(QueryTimestamp::from(now_ms));
     }
 
-    pub fn apply_failure_with_data(&mut self, data: T, error: impl Into<String>, now_ms: u128) {
+    fn apply_failure_with_data(&mut self, data: T, error: impl Into<E>) {
         self.status = QueryStatus::Failure;
         self.data = Some(data);
         self.error = Some(error.into());
         self.active_request_id = None;
-        self.last_updated_at_ms = Some(now_ms);
     }
 
-    pub fn cancel(&mut self, reason: impl Into<String>) -> bool {
+    pub fn cancel(&mut self, reason: impl Into<E>) -> bool {
         if self.active_request_id.is_none() {
             return false;
         }
@@ -352,7 +582,7 @@ impl<T> QueryResource<T> {
     }
 
     pub fn invalidate(&mut self) {
-        self.last_updated_at_ms = None;
+        self.last_updated_at = None;
     }
 
     pub fn reset(&mut self) {
@@ -360,8 +590,8 @@ impl<T> QueryResource<T> {
         self.data = None;
         self.error = None;
         self.active_request_id = None;
-        self.started_at_ms = None;
-        self.last_updated_at_ms = None;
+        self.started_at = None;
+        self.last_updated_at = None;
         self.cache_hits = 0;
         self.cancelled_count = 0;
         self.ignored_results = 0;

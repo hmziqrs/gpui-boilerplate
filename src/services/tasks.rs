@@ -144,6 +144,14 @@ pub fn fail(id: TaskId, error: String, cx: &mut App) {
     });
 }
 
+pub fn cancel(id: TaskId, reason: String, cx: &mut App) {
+    mutate_task(id, cx, |task| {
+        task.status = TaskStatus::Cancelled;
+        task.finished_at = Some(AppTimestamp::now());
+        task.error = Some(reason);
+    });
+}
+
 pub fn force_cancel_remaining(cx: &mut App) {
     let registry = cx.default_global::<TaskRegistry>();
     let mut changed = false;

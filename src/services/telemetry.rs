@@ -150,10 +150,10 @@ impl TelemetrySink for LocalSink {
 /// 2. `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable.
 /// 3. [`DEFAULT_OTLP_ENDPOINT`] fallback (`http://localhost:4318`).
 fn resolve_otlp_endpoint(explicit: Option<&str>) -> String {
-    if let Some(ep) = explicit {
-        if !ep.trim().is_empty() {
-            return ep.trim().to_owned();
-        }
+    if let Some(ep) = explicit
+        && !ep.trim().is_empty()
+    {
+        return ep.trim().to_owned();
     }
     match std::env::var(ENV_OTLP_ENDPOINT) {
         Ok(v) if !v.trim().is_empty() => v.trim().to_owned(),
