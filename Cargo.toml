@@ -128,6 +128,12 @@ objc2-user-notifications = { version = "0.3.0", default-features = false, featur
     "UNNotificationSettings",
     "UNUserNotificationCenter",
 ] }
+objc2-app-kit = { version = "0.3.2", default-features = false, features = [
+    "std",
+    "NSView",
+    "NSWindow",
+] }
+raw-window-handle = "0.6"
 
 [build-dependencies]
 es-fluent-build.workspace = true
