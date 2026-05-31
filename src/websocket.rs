@@ -16,6 +16,20 @@
 
 #![allow(dead_code)]
 
+#[derive(Debug, thiserror::Error)]
+pub enum WebSocketError {
+    #[error("connection failed: {0}")]
+    Connection(String),
+    #[error("send failed: {0}")]
+    Send(String),
+    #[error("close failed: {0}")]
+    Close(String),
+    #[error("not connected")]
+    NotConnected,
+    #[error("websocket feature not enabled")]
+    FeatureDisabled,
+}
+
 // ---------------------------------------------------------------------------
 // When the `websocket` feature is enabled, pull in the real dependency.
 // Everything below compiles without it when the feature is off.
@@ -149,7 +163,7 @@ mod live {
         ///
         /// This is a self-contained async loop suitable for spawning via
         /// `cx.background_executor().spawn(...)` inside a `cx.spawn` block.
-        pub async fn connect_loop(&mut self) -> Result<(), String> {
+        pub async fn connect_loop(&mut self) -> Result<(), WebSocketError> {
             let mut attempt: u8 = 0;
 
             loop {
@@ -229,9 +243,8 @@ mod live {
                         "exceeded max retries, giving up"
                     );
                     self.state = ConnectionState::Closed;
-                    return Err(format!(
-                        "failed after {} retries",
-                        self.reconnect.max_retries
+                    return Err(WebSocketError::Connection(
+                        format!("failed after {} retries", self.reconnect.max_retries)
                     ));
                 }
 
@@ -249,22 +262,22 @@ mod live {
         /// Send a text message over the active connection.
         ///
         /// Returns an error if the socket is not currently connected.
-        pub async fn send(&self, message: &str) -> Result<(), String> {
+        pub async fn send(&self, message: &str) -> Result<(), WebSocketError> {
             let mut guard = self.inner.lock().await;
             match guard.as_mut() {
                 Some(ws) => ws
                     .send(Message::Text(message.into()))
                     .await
-                    .map_err(|e| e.to_string()),
-                None => Err("not connected".to_string()),
+                    .map_err(|e| WebSocketError::Send(e.to_string())),
+                None => Err(WebSocketError::NotConnected),
             }
         }
 
         /// Gracefully close the WebSocket connection.
-        pub async fn close(&mut self) -> Result<(), String> {
+        pub async fn close(&mut self) -> Result<(), WebSocketError> {
             let mut guard = self.inner.lock().await;
             if let Some(ws) = guard.take() {
-                ws.close(None).await.map_err(|e| e.to_string())?;
+                ws.close(None).await.map_err(|e| WebSocketError::Close(e.to_string()))?;
             }
             self.state = ConnectionState::Closed;
             Ok(())
@@ -307,18 +320,18 @@ mod stub {
         }
 
         /// No-op when the websocket feature is disabled.
-        pub async fn connect_loop(&mut self) -> Result<(), String> {
-            Err("websocket feature not enabled".to_string())
+        pub async fn connect_loop(&mut self) -> Result<(), WebSocketError> {
+            Err(WebSocketError::FeatureDisabled)
         }
 
         /// No-op when the websocket feature is disabled.
-        pub async fn send(&self, _message: &str) -> Result<(), String> {
-            Err("websocket feature not enabled".to_string())
+        pub async fn send(&self, _message: &str) -> Result<(), WebSocketError> {
+            Err(WebSocketError::FeatureDisabled)
         }
 
         /// No-op when the websocket feature is disabled.
-        pub async fn close(&mut self) -> Result<(), String> {
-            Err("websocket feature not enabled".to_string())
+        pub async fn close(&mut self) -> Result<(), WebSocketError> {
+            Err(WebSocketError::FeatureDisabled)
         }
     }
 }

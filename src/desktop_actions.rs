@@ -8,6 +8,22 @@ use arboard::Clipboard;
 use gpui::{App, BorrowAppContext as _, Global};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 
+#[derive(Debug, thiserror::Error)]
+pub enum DesktopActionError {
+    #[error("clipboard operation failed: {0}")]
+    Clipboard(#[from] arboard::Error),
+    #[error("failed to open path '{path}'")]
+    OpenPathFailed { path: String, #[source] source: std::io::Error },
+    #[error("failed to open url '{url}'")]
+    OpenUrlFailed { url: String, #[source] source: std::io::Error },
+    #[error("file dialog failed: {0}")]
+    DialogFailed(String),
+    #[error("watcher error: {0}")]
+    Watcher(#[from] notify::Error),
+    #[error("{0}")]
+    Other(String),
+}
+
 #[derive(Clone, Debug)]
 pub struct DesktopActionsSnapshot {
     pub clipboard_available: bool,
@@ -76,32 +92,33 @@ pub fn snapshot(cx: &App) -> DesktopActionsSnapshot {
         .unwrap_or_default()
 }
 
-pub fn copy_text(text: &str, cx: &mut App) -> Result<(), String> {
+pub fn copy_text(text: &str, cx: &mut App) -> Result<(), DesktopActionError> {
     let result = Clipboard::new()
         .and_then(|mut clipboard| clipboard.set_text(text.to_string()))
-        .map_err(|err| err.to_string());
-    update_result("clipboard_copy", result.as_ref().err().cloned(), cx);
+        .map_err(DesktopActionError::from);
+    update_result("clipboard_copy", result.as_ref().err().map(|e| e.to_string()), cx);
     result
 }
 
-pub fn copy_diagnostics(cx: &mut App) -> Result<(), String> {
+pub fn copy_diagnostics(cx: &mut App) -> Result<(), DesktopActionError> {
     let diagnostics = build_diagnostics_text(cx);
     copy_text(&diagnostics, cx)
 }
 
-pub fn open_logs_folder(cx: &mut App) -> Result<(), String> {
+pub fn open_logs_folder(cx: &mut App) -> Result<(), DesktopActionError> {
     let path = crate::app_state::paths(cx).log_dir;
     open_path(path, cx)
 }
 
-pub fn open_config_folder(cx: &mut App) -> Result<(), String> {
+pub fn open_config_folder(cx: &mut App) -> Result<(), DesktopActionError> {
     let path = crate::app_state::paths(cx).config_dir;
     open_path(path, cx)
 }
 
-pub fn open_url(url: &str, cx: &mut App) -> Result<(), String> {
-    let result = open::that_detached(url).map_err(|err| err.to_string());
-    update_result("open_url", result.as_ref().err().cloned(), cx);
+pub fn open_url(url: &str, cx: &mut App) -> Result<(), DesktopActionError> {
+    let result = open::that_detached(url)
+        .map_err(|source| DesktopActionError::OpenUrlFailed { url: url.to_string(), source });
+    update_result("open_url", result.as_ref().err().map(|e| e.to_string()), cx);
     result
 }
 
@@ -126,14 +143,14 @@ pub fn save_file(cx: &mut App) -> Option<PathBuf> {
     file
 }
 
-pub fn watch_path(path: PathBuf, cx: &mut App) -> Result<u64, String> {
+pub fn watch_path(path: PathBuf, cx: &mut App) -> Result<u64, DesktopActionError> {
     let state = cx
         .try_global::<DesktopActionsState>()
-        .ok_or_else(|| "desktop actions unavailable".to_string())?;
+        .ok_or_else(|| DesktopActionError::Other("desktop actions unavailable".to_string()))?;
     let mut inner = state
         .inner
         .lock()
-        .map_err(|_| "watcher lock poisoned".to_string())?;
+        .map_err(|_| DesktopActionError::Other("watcher lock poisoned".to_string()))?;
     let watcher_id = inner.next_watcher_id;
     inner.next_watcher_id += 1;
 
@@ -153,10 +170,10 @@ pub fn watch_path(path: PathBuf, cx: &mut App) -> Result<u64, String> {
                 "watch event error"
             ),
         })
-        .map_err(|err| err.to_string())?;
+        .map_err(DesktopActionError::from)?;
     watcher
         .watch(&path, RecursiveMode::NonRecursive)
-        .map_err(|err| err.to_string())?;
+        .map_err(DesktopActionError::from)?;
     inner.watchers.insert(watcher_id, watcher);
     let active_watchers = inner.watchers.len();
     drop(inner);
@@ -181,12 +198,12 @@ pub fn shutdown(cx: &mut App) {
     });
 }
 
-pub fn watch_log_dir(cx: &mut App) -> Result<u64, String> {
+pub fn watch_log_dir(cx: &mut App) -> Result<u64, DesktopActionError> {
     let path = crate::app_state::paths(cx).log_dir;
     watch_path(path, cx)
 }
 
-pub fn watch_config_dir(cx: &mut App) -> Result<u64, String> {
+pub fn watch_config_dir(cx: &mut App) -> Result<u64, DesktopActionError> {
     let path = crate::app_state::paths(cx).config_dir;
     watch_path(path, cx)
 }
@@ -245,9 +262,10 @@ fn build_diagnostics_text(cx: &App) -> String {
     )
 }
 
-pub fn open_path(path: PathBuf, cx: &mut App) -> Result<(), String> {
-    let result = open::that_detached(path.as_path()).map_err(|err| err.to_string());
-    update_result("open_path", result.as_ref().err().cloned(), cx);
+pub fn open_path(path: PathBuf, cx: &mut App) -> Result<(), DesktopActionError> {
+    let result = open::that_detached(path.as_path())
+        .map_err(|source| DesktopActionError::OpenPathFailed { path: path.display().to_string(), source });
+    update_result("open_path", result.as_ref().err().map(|e| e.to_string()), cx);
     result
 }
 

@@ -8,9 +8,9 @@ es_fluent_manager_embedded::define_i18n_module!();
 static I18N: OnceLock<EmbeddedI18n> = OnceLock::new();
 
 pub fn init_i18n(lang: es_fluent::unic_langid::LanguageIdentifier) -> Result<(), String> {
-    let i18n = EmbeddedI18n::try_new_with_language(lang).map_err(|e| e.to_string())?;
-    let _ = I18N.set(i18n);
-    Ok(())
+    EmbeddedI18n::try_new_with_language(lang).map_err(|e| e.to_string()).map(|i18n| {
+        let _ = I18N.set(i18n);
+    })
 }
 
 pub fn i18n() -> &'static EmbeddedI18n {

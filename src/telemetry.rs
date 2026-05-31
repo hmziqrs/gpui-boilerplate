@@ -83,30 +83,38 @@ impl Default for TelemetrySnapshot {
 
 impl Global for TelemetrySnapshot {}
 
+#[derive(Debug, thiserror::Error)]
+pub enum TelemetryError {
+    #[error("telemetry not available: {0}")]
+    NotAvailable(String),
+    #[error("OTLP error: {0}")]
+    Otlp(String),
+}
+
 pub trait TelemetrySink: Send + Sync {
-    fn record_event(&self, name: &str) -> Result<(), String>;
-    fn record_error(&self, error: &str) -> Result<(), String>;
-    fn set_user_properties(&self, key: &str, value: &str) -> Result<(), String>;
-    fn flush(&self) -> Result<(), String>;
+    fn record_event(&self, name: &str) -> Result<(), TelemetryError>;
+    fn record_error(&self, error: &str) -> Result<(), TelemetryError>;
+    fn set_user_properties(&self, key: &str, value: &str) -> Result<(), TelemetryError>;
+    fn flush(&self) -> Result<(), TelemetryError>;
 }
 
 #[derive(Default)]
 struct DisabledSink;
 
 impl TelemetrySink for DisabledSink {
-    fn record_event(&self, _name: &str) -> Result<(), String> {
+    fn record_event(&self, _name: &str) -> Result<(), TelemetryError> {
         Ok(())
     }
 
-    fn record_error(&self, _error: &str) -> Result<(), String> {
+    fn record_error(&self, _error: &str) -> Result<(), TelemetryError> {
         Ok(())
     }
 
-    fn set_user_properties(&self, _key: &str, _value: &str) -> Result<(), String> {
+    fn set_user_properties(&self, _key: &str, _value: &str) -> Result<(), TelemetryError> {
         Ok(())
     }
 
-    fn flush(&self) -> Result<(), String> {
+    fn flush(&self) -> Result<(), TelemetryError> {
         Ok(())
     }
 }
@@ -115,22 +123,22 @@ impl TelemetrySink for DisabledSink {
 struct LocalSink;
 
 impl TelemetrySink for LocalSink {
-    fn record_event(&self, name: &str) -> Result<(), String> {
+    fn record_event(&self, name: &str) -> Result<(), TelemetryError> {
         tracing::debug!(target: "gpui_starter::telemetry", event = %name, "local telemetry event");
         Ok(())
     }
 
-    fn record_error(&self, error: &str) -> Result<(), String> {
+    fn record_error(&self, error: &str) -> Result<(), TelemetryError> {
         tracing::warn!(target: "gpui_starter::telemetry", error = %error, "local telemetry error");
         Ok(())
     }
 
-    fn set_user_properties(&self, key: &str, value: &str) -> Result<(), String> {
+    fn set_user_properties(&self, key: &str, value: &str) -> Result<(), TelemetryError> {
         tracing::debug!(target: "gpui_starter::telemetry", key = %key, value = %value, "local telemetry user property");
         Ok(())
     }
 
-    fn flush(&self) -> Result<(), String> {
+    fn flush(&self) -> Result<(), TelemetryError> {
         Ok(())
     }
 }
@@ -160,7 +168,7 @@ fn resolve_otlp_endpoint(explicit: Option<&str>) -> String {
 /// the `otlp` feature is not enabled (no-op). Returns a human-readable
 /// error string when the exporter cannot reach the collector.
 #[cfg(feature = "otlp")]
-fn install_otlp_tracer(endpoint: &str) -> Result<(), String> {
+fn install_otlp_tracer(endpoint: &str) -> Result<(), TelemetryError> {
     use opentelemetry::KeyValue;
     use opentelemetry_sdk::Resource;
     use opentelemetry_sdk::propagation::TraceContextPropagator;
@@ -181,7 +189,7 @@ fn install_otlp_tracer(endpoint: &str) -> Result<(), String> {
                 )])),
         )
         .install_batch::<Tokio>()
-        .map_err(|e| format!("failed to install OTLP batch tracer: {e}"))?;
+        .map_err(|e| TelemetryError::Otlp(format!("failed to install OTLP batch tracer: {e}")))?;
 
     global::set_text_map_propagator(TraceContextPropagator::new());
     global::set_tracer_provider(provider);
@@ -198,7 +206,7 @@ fn install_otlp_tracer(endpoint: &str) -> Result<(), String> {
 ///
 /// Logs the endpoint for diagnostics but does not create an exporter.
 #[cfg(not(feature = "otlp"))]
-fn install_otlp_tracer(endpoint: &str) -> Result<(), String> {
+fn install_otlp_tracer(endpoint: &str) -> Result<(), TelemetryError> {
     tracing::debug!(
         target: "gpui_starter::telemetry",
         endpoint = %endpoint,
@@ -262,7 +270,7 @@ impl RemoteSink {
 }
 
 impl TelemetrySink for RemoteSink {
-    fn record_event(&self, name: &str) -> Result<(), String> {
+    fn record_event(&self, name: &str) -> Result<(), TelemetryError> {
         if !self.connected {
             tracing::warn!(
                 target: "gpui_starter::telemetry",
@@ -270,16 +278,15 @@ impl TelemetrySink for RemoteSink {
                 event = %name,
                 "remote telemetry event dropped (not connected)"
             );
-            return Err(format!(
-                "OTLP exporter not connected to {}",
-                self.endpoint
+            return Err(TelemetryError::NotAvailable(
+                format!("OTLP exporter not connected to {}", self.endpoint)
             ));
         }
         tracing::debug!(target: "gpui_starter::telemetry", endpoint = %self.endpoint, event = %name, "remote telemetry event queued");
         Ok(())
     }
 
-    fn record_error(&self, error: &str) -> Result<(), String> {
+    fn record_error(&self, error: &str) -> Result<(), TelemetryError> {
         if !self.connected {
             tracing::warn!(
                 target: "gpui_starter::telemetry",
@@ -287,16 +294,15 @@ impl TelemetrySink for RemoteSink {
                 error = %error,
                 "remote telemetry error dropped (not connected)"
             );
-            return Err(format!(
-                "OTLP exporter not connected to {}",
-                self.endpoint
+            return Err(TelemetryError::NotAvailable(
+                format!("OTLP exporter not connected to {}", self.endpoint)
             ));
         }
         tracing::warn!(target: "gpui_starter::telemetry", endpoint = %self.endpoint, error = %error, "remote telemetry error queued");
         Ok(())
     }
 
-    fn set_user_properties(&self, key: &str, value: &str) -> Result<(), String> {
+    fn set_user_properties(&self, key: &str, value: &str) -> Result<(), TelemetryError> {
         if !self.connected {
             tracing::debug!(
                 target: "gpui_starter::telemetry",
@@ -305,25 +311,23 @@ impl TelemetrySink for RemoteSink {
                 value = %value,
                 "remote telemetry user property dropped (not connected)"
             );
-            return Err(format!(
-                "OTLP exporter not connected to {}",
-                self.endpoint
+            return Err(TelemetryError::NotAvailable(
+                format!("OTLP exporter not connected to {}", self.endpoint)
             ));
         }
         tracing::debug!(target: "gpui_starter::telemetry", endpoint = %self.endpoint, key = %key, value = %value, "remote telemetry user property queued");
         Ok(())
     }
 
-    fn flush(&self) -> Result<(), String> {
+    fn flush(&self) -> Result<(), TelemetryError> {
         if !self.connected {
             tracing::debug!(
                 target: "gpui_starter::telemetry",
                 endpoint = %self.endpoint,
                 "remote telemetry flush skipped (not connected)"
             );
-            return Err(format!(
-                "OTLP exporter not connected to {}",
-                self.endpoint
+            return Err(TelemetryError::NotAvailable(
+                format!("OTLP exporter not connected to {}", self.endpoint)
             ));
         }
         tracing::debug!(target: "gpui_starter::telemetry", endpoint = %self.endpoint, "remote telemetry flush");
@@ -435,8 +439,8 @@ pub fn flush(cx: &mut App) {
     with_runtime(cx, |runtime, cx| {
         let mut snap = snapshot(cx);
         if let Err(err) = runtime.sink.flush() {
-            snap.last_export_error = Some(err.clone());
-            snap.last_error = Some(err);
+            snap.last_export_error = Some(err.to_string());
+            snap.last_error = Some(err.to_string());
         }
         cx.set_global(snap);
     });
@@ -468,7 +472,7 @@ fn with_runtime(cx: &mut App, f: impl FnOnce(TelemetryRuntime, &mut App)) {
     }
 }
 
-fn handle_record_result(result: Result<(), String>, cx: &mut App) {
+fn handle_record_result(result: Result<(), TelemetryError>, cx: &mut App) {
     let mut snap = snapshot(cx);
     match result {
         Ok(()) => {
@@ -476,8 +480,8 @@ fn handle_record_result(result: Result<(), String>, cx: &mut App) {
             snap.last_error = None;
         }
         Err(err) => {
-            snap.last_export_error = Some(err.clone());
-            snap.last_error = Some(err);
+            snap.last_export_error = Some(err.to_string());
+            snap.last_error = Some(err.to_string());
         }
     }
     cx.set_global(snap);
@@ -525,12 +529,12 @@ mod tests {
     }
 
     impl TelemetrySink for FakeSink {
-        fn record_event(&self, name: &str) -> Result<(), String> {
+        fn record_event(&self, name: &str) -> Result<(), TelemetryError> {
             self.events.lock().expect("lock").push(name.to_string());
             Ok(())
         }
 
-        fn record_error(&self, error: &str) -> Result<(), String> {
+        fn record_error(&self, error: &str) -> Result<(), TelemetryError> {
             self.events
                 .lock()
                 .expect("lock")
@@ -538,7 +542,7 @@ mod tests {
             Ok(())
         }
 
-        fn set_user_properties(&self, key: &str, value: &str) -> Result<(), String> {
+        fn set_user_properties(&self, key: &str, value: &str) -> Result<(), TelemetryError> {
             self.events
                 .lock()
                 .expect("lock")
@@ -546,7 +550,7 @@ mod tests {
             Ok(())
         }
 
-        fn flush(&self) -> Result<(), String> {
+        fn flush(&self) -> Result<(), TelemetryError> {
             Ok(())
         }
     }

@@ -242,10 +242,10 @@ fn append_forwarded_link(path: &PathBuf, link: &str) {
 
 /// Send a single deep-link to the primary instance over a local socket.
 /// Synchronous counterpart of `crate::ipc::IpcEndpoint::send`.
-fn send_forwarded_link_via_ipc(ipc_name: &str, link: &str) -> Result<(), String> {
-    let name = resolve_ipc_name(ipc_name).map_err(|err| err.to_string())?;
-    let mut stream = Stream::connect(name).map_err(|err| err.to_string())?;
-    writeln!(stream, "{link}").map_err(|err| err.to_string())
+fn send_forwarded_link_via_ipc(ipc_name: &str, link: &str) -> Result<(), std::io::Error> {
+    let name = resolve_ipc_name(ipc_name)?;
+    let mut stream = Stream::connect(name)?;
+    writeln!(stream, "{link}")
 }
 
 fn drain_forwarded_links(path: &PathBuf) -> Vec<String> {
