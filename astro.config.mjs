@@ -4,6 +4,7 @@ import tailwindcss from "@tailwindcss/vite";
 import icon from "astro-icon";
 import { readFileSync } from "fs";
 import { join } from "path";
+import sitemap from "@astrojs/sitemap";
 
 function serveLocalAudio() {
   return {
@@ -39,6 +40,9 @@ export default defineConfig({
     },
   },
   integrations: [
+    sitemap({
+      filter: (page) => !page.includes('/api/'),
+    }),
     icon({
       include: {
         "simple-icons": ["github", "rust", "x", "linkedin", "telegram", "reddit"],
@@ -86,6 +90,19 @@ export default defineConfig({
       ],
       customCss: ["/web/styles/starlight.css"],
       lastUpdated: true,
+      head: [
+        { tag: 'meta', attrs: { property: 'og:title', content: 'gpui-starter Documentation' } },
+        { tag: 'meta', attrs: { property: 'og:description', content: 'A production-ready boilerplate for building desktop apps with GPUI' } },
+        { tag: 'meta', attrs: { property: 'og:type', content: 'website' } },
+        { tag: 'meta', attrs: { property: 'og:site_name', content: 'gpui-starter' } },
+        { tag: 'meta', attrs: { property: 'og:locale', content: 'en_US' } },
+        { tag: 'meta', attrs: { property: 'og:image', content: 'https://gpui-starter.hmziq.xyz/og-image.png' } },
+        { tag: 'meta', attrs: { property: 'og:image:width', content: '1200' } },
+        { tag: 'meta', attrs: { property: 'og:image:height', content: '630' } },
+        { tag: 'meta', attrs: { name: 'twitter:card', content: 'summary_large_image' } },
+        { tag: 'meta', attrs: { name: 'twitter:site', content: '@hmziqrs' } },
+        { tag: 'meta', attrs: { name: 'twitter:creator', content: '@hmziqrs' } },
+      ],
       favicon: "/favicon.svg",
     }),
   ],

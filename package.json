@@ -10,7 +10,8 @@
     "docs:typecheck": "astro check",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "deploy": "gh workflow run deploy-docs.yml"
   },
   "keywords": [
     "gpui",
@@ -31,6 +32,7 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.9",
+    "@astrojs/sitemap": "^3.7.3",
     "@astrojs/starlight": "^0.39.2",
     "@tailwindcss/vite": "^4.3.0",
     "@types/node": "^20.0.0",

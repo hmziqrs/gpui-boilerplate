@@ -26,6 +26,7 @@ const audioSrc = post.data.audio ?? (existsSync(localAudioPath) ? `/audio/${post
   title={`${post.data.title} - gpui-starter | Rust Desktop Development Blog`}
   description={post.data.description}
   ogType="article"
+  ogImage={`/og/blog/${post.id}.png`}
   articlePublishedTime={post.data.date}
   articleTags={post.data.tags}
   jsonLd={{

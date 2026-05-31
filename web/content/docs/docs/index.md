@@ -1,5 +1,5 @@
 ---
-title: gpui-starter
+title: Documentation
 description: A production-ready boilerplate for building desktop apps with GPUI
 template: splash
 hero:
