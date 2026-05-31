@@ -246,6 +246,55 @@ fn individual_request_cancels_pending_full_flow_before_it_can_apply_results() {
 }
 
 #[test]
+fn reset_makes_in_flight_request_results_silent_stale_results() {
+    let mut state = HttpLabState::default();
+    let request = begin_action(&mut state, HttpLabAction::GetJson, 1).expect("request");
+
+    state.reset_for_user();
+    let transition_log = state.transition_log.clone();
+    apply_result_to_state(
+        &mut state,
+        HttpLabAction::GetJson,
+        request,
+        Ok(vec![(
+            HttpLabAction::GetJson,
+            exchange("GET JSON from stale scope", 200, None),
+        )]),
+        2,
+    );
+
+    let resource = state.resource(HttpLabAction::GetJson);
+    assert_eq!(resource.status, QueryStatus::Idle);
+    assert_eq!(resource.ignored_results, 0);
+    assert_eq!(state.transition_log, transition_log);
+}
+
+#[test]
+fn reset_prevents_old_request_id_from_colliding_with_new_request() {
+    let mut state = HttpLabState::default();
+    let old_request = begin_action(&mut state, HttpLabAction::GetJson, 1).expect("old request");
+
+    state.reset_for_user();
+    let new_request = begin_action(&mut state, HttpLabAction::GetJson, 2).expect("new request");
+    apply_result_to_state(
+        &mut state,
+        HttpLabAction::GetJson,
+        old_request,
+        Ok(vec![(
+            HttpLabAction::GetJson,
+            exchange("GET JSON from stale scope", 200, None),
+        )]),
+        3,
+    );
+
+    let resource = state.resource(HttpLabAction::GetJson);
+    assert_eq!(old_request.value(), new_request.value());
+    assert_ne!(old_request, new_request);
+    assert_eq!(resource.active_request_id, Some(new_request));
+    assert!(resource.data.is_none());
+}
+
+#[test]
 fn cookies_exchange_updates_cookie_snapshot() {
     let mut cookies = exchange("Cookies", 200, None);
     let response = cookies.response.as_mut().expect("response");

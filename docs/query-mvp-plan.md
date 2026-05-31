@@ -9,6 +9,7 @@ The starter should include a small, testable server-state layer, not a full Reac
 - Query keys and per-resource state.
 - Idle, loading-empty, loading-with-data, success, failure, and cancelled states.
 - Per-resource request ids so stale async results cannot overwrite newer state.
+- Request scopes so reset state cannot collide with older in-flight request ids.
 - Logical cancellation for blocking work that cannot be interrupted immediately.
 - Cache policies: no cache, TTL cache, and stale-while-revalidate.
 - Request policies: latest-wins and ignore-while-loading.

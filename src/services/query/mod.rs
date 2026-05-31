@@ -26,20 +26,28 @@ impl From<String> for QueryKey {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RequestId(u64);
+pub struct RequestId {
+    scope_id: u64,
+    sequence: u64,
+}
 
 impl RequestId {
-    pub fn new(value: u64) -> Self {
-        Self(value)
+    fn scoped(scope_id: u64, sequence: u64) -> Self {
+        Self { scope_id, sequence }
     }
 
     pub fn value(self) -> u64 {
-        self.0
+        self.sequence
+    }
+
+    pub fn scope_id(self) -> u64 {
+        self.scope_id
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RequestSequencer {
+    scope_id: u64,
     next_request_id: u64,
 }
 
@@ -51,13 +59,29 @@ impl Default for RequestSequencer {
 
 impl RequestSequencer {
     pub fn new() -> Self {
-        Self { next_request_id: 1 }
+        Self {
+            scope_id: 1,
+            next_request_id: 1,
+        }
     }
 
     pub fn next_request(&mut self) -> RequestId {
-        let request_id = RequestId::new(self.next_request_id);
-        self.next_request_id += 1;
+        let request_id = RequestId::scoped(self.scope_id, self.next_request_id);
+        if self.next_request_id == u64::MAX {
+            self.advance_scope();
+        } else {
+            self.next_request_id += 1;
+        }
         request_id
+    }
+
+    pub fn advance_scope(&mut self) {
+        self.scope_id = self.scope_id.checked_add(1).unwrap_or(1);
+        self.next_request_id = 1;
+    }
+
+    pub fn is_current_scope(&self, request_id: RequestId) -> bool {
+        request_id.scope_id == self.scope_id
     }
 }
 
@@ -245,18 +269,20 @@ impl<T> QueryResource<T> {
         self.last_updated_at_ms = Some(now_ms);
     }
 
-    pub fn apply_terminal(
-        &mut self,
-        status: QueryStatus,
-        data: Option<T>,
-        error: Option<String>,
-        now_ms: u128,
-    ) {
-        self.status = status;
+    pub fn apply_success_optional(&mut self, data: Option<T>, now_ms: u128) {
+        self.status = QueryStatus::Success;
         if let Some(data) = data {
             self.data = Some(data);
         }
-        self.error = error;
+        self.error = None;
+        self.active_request_id = None;
+        self.last_updated_at_ms = Some(now_ms);
+    }
+
+    pub fn apply_failure_with_data(&mut self, data: T, error: impl Into<String>, now_ms: u128) {
+        self.status = QueryStatus::Failure;
+        self.data = Some(data);
+        self.error = Some(error.into());
         self.active_request_id = None;
         self.last_updated_at_ms = Some(now_ms);
     }

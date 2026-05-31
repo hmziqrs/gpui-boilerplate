@@ -131,6 +131,13 @@ impl HttpLabState {
             .filter(|resource| resource.active_request_id.is_some())
             .count()
     }
+
+    fn reset_for_user(&mut self) {
+        let mut request_sequencer = self.request_sequencer.clone();
+        request_sequencer.advance_scope();
+        *self = Self::default();
+        self.request_sequencer = request_sequencer;
+    }
 }
 
 impl Global for HttpLabState {}
@@ -252,7 +259,13 @@ pub fn snapshot(cx: &App) -> HttpLabState {
 }
 
 pub fn reset(cx: &mut App) {
-    cx.set_global(HttpLabState::default());
+    if cx.try_global::<HttpLabState>().is_some() {
+        cx.update_global::<HttpLabState, _>(|state, _cx| {
+            state.reset_for_user();
+        });
+    } else {
+        cx.set_global(HttpLabState::default());
+    }
 }
 
 pub fn select_action(action: HttpLabAction, cx: &mut App) {
@@ -370,6 +383,10 @@ fn apply_result_to_state(
     result: Result<Vec<ActionExchange>, String>,
     now_ms: u128,
 ) {
+    if !state.request_sequencer.is_current_scope(request_id) {
+        return;
+    }
+
     if !request_is_current(state, action, request_id) {
         mark_ignored_result(state, action, request_id);
         return;
@@ -414,7 +431,10 @@ fn finish_exchange(
     let error = exchange.error.clone();
 
     if let Some(resource) = state.resources.get_mut(&action) {
-        resource.apply_terminal(status, Some(exchange.clone()), error, now_ms);
+        match error {
+            Some(error) => resource.apply_failure_with_data(exchange.clone(), error, now_ms),
+            None => resource.apply_success(exchange.clone(), now_ms),
+        }
     }
 
     if let Some(cookie_snapshot) = cookie_snapshot_from_exchange(&exchange) {
@@ -431,7 +451,7 @@ fn finish_flow_resource(
     now_ms: u128,
 ) {
     if let Some(resource) = state.resources.get_mut(&HttpLabAction::FullFlow) {
-        resource.apply_terminal(QueryStatus::Success, last_exchange, None, now_ms);
+        resource.apply_success_optional(last_exchange, now_ms);
     }
     record_transition(
         state,
