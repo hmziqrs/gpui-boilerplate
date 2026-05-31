@@ -7,7 +7,9 @@
 
 use gpui::Window;
 use objc2::runtime::{AnyClass, NSObjectProtocol};
+use objc2::rc::Retained;
 use objc2_app_kit::NSView;
+use objc2_foundation::NSArray;
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 
 const LOG: &str = "liquid_glass";
@@ -186,6 +188,22 @@ impl LiquidGlass {
                 glass,
                 setAutoresizingMask: NS_VIEW_WIDTH_SIZABLE | NS_VIEW_HEIGHT_SIZABLE
             ];
+
+            // Remove any existing NSVisualEffectView that GPUI created for the
+            // Blurred background — it would sit on top and hide the glass.
+            if let Some(blur_cls) = AnyClass::get(c"NSVisualEffectView") {
+                let subviews: Retained<NSArray<NSView>> =
+                    objc2::msg_send![&*content_view, subviews];
+                let count = subviews.count();
+                // Iterate in reverse so removal doesn't shift indices.
+                for i in (0..count).rev() {
+                    let sub = subviews.objectAtIndex(i);
+                    if sub.isKindOfClass(blur_cls) {
+                        tracing::debug!(target: LOG, "Removing NSVisualEffectView to make room for glass");
+                        let _: () = objc2::msg_send![&*sub, removeFromSuperview];
+                    }
+                }
+            }
 
             // Insert below all other subviews so it acts as a background.
             // NSWindowBelow = -1

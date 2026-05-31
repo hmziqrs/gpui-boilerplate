@@ -154,7 +154,7 @@ impl Render for Launcher {
 
         v_flex()
             .size_full()
-            .bg(theme.background.opacity(0.25))
+            .bg(gpui::transparent_black())
             .border_1()
             .border_color(theme.border.opacity(0.5))
             .rounded(theme.radius_lg)
