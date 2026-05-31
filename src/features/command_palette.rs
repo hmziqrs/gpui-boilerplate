@@ -350,6 +350,17 @@ impl LauncherRoot {
         })
         .detach();
 
+        // Close the launcher when the window loses OS-level activation
+        // (e.g. user clicks outside the popup window)
+        cx.observe_window_activation(window, |this, window, cx| {
+            if !window.is_window_active() {
+                tracing::debug!(target: LOG, "Launcher window deactivated — closing");
+                this.should_close = true;
+                cx.notify();
+            }
+        })
+        .detach();
+
         Self {
             launcher,
             should_close: false,
