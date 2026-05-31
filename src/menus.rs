@@ -44,12 +44,11 @@ pub fn init(title: impl Into<SharedString>, cx: &mut App) -> Entity<AppMenuBar> 
 fn update_app_menu(title: impl Into<SharedString>, app_menu_bar: Entity<AppMenuBar>, cx: &mut App) {
     let title: SharedString = title.into();
 
-    cx.set_menus(build_menus(title.clone(), cx));
-    let menus = build_menus(title, cx)
-        .into_iter()
-        .map(|menu| menu.owned())
-        .collect();
-    GlobalState::global_mut(cx).set_app_menus(menus);
+    let menus = build_menus(title.clone(), cx);
+    cx.set_menus(menus);
+    let menus2 = build_menus(title, cx);
+    let owned_menus = menus2.into_iter().map(|menu| menu.owned()).collect();
+    GlobalState::global_mut(cx).set_app_menus(owned_menus);
 
     app_menu_bar.update(cx, |menu_bar, cx| {
         menu_bar.reload(cx);

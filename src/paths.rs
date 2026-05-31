@@ -29,7 +29,7 @@ impl AppPaths {
         let state_file = config_dir.join("state.json");
 
         for dir in [&config_dir, &data_dir, &cache_dir, &log_dir, &runtime_dir] {
-            std::fs::create_dir_all(dir).map_err(AppError::io)?;
+            std::fs::create_dir_all(dir)?;
         }
 
         Ok(Self {
@@ -45,7 +45,7 @@ impl AppPaths {
 
 pub fn ensure_parent_dir(path: &Path) -> Result<(), AppError> {
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(AppError::io)?;
+        std::fs::create_dir_all(parent)?;
     }
     Ok(())
 }

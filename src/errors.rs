@@ -25,7 +25,7 @@ pub enum AppError {
     #[error("invalid deep link `{input}`: {reason}")]
     InvalidDeepLink { input: String, reason: String },
     #[error("io error: {0}")]
-    Io(String),
+    Io(#[from] io::Error),
 }
 
 impl AppError {
@@ -37,9 +37,5 @@ impl AppError {
             | Self::StateWrite { .. }
             | Self::Io(_) => AppErrorSeverity::Error,
         }
-    }
-
-    pub fn io(err: io::Error) -> Self {
-        Self::Io(err.to_string())
     }
 }

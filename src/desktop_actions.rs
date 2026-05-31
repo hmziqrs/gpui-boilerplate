@@ -5,7 +5,7 @@ use std::{
 };
 
 use arboard::Clipboard;
-use gpui::{App, Global};
+use gpui::{App, BorrowAppContext as _, Global};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 
 #[derive(Clone, Debug)]
@@ -129,7 +129,6 @@ pub fn save_file(cx: &mut App) -> Option<PathBuf> {
 pub fn watch_path(path: PathBuf, cx: &mut App) -> Result<u64, String> {
     let state = cx
         .try_global::<DesktopActionsState>()
-        .cloned()
         .ok_or_else(|| "desktop actions unavailable".to_string())?;
     let mut inner = state
         .inner
@@ -159,24 +158,27 @@ pub fn watch_path(path: PathBuf, cx: &mut App) -> Result<u64, String> {
         .watch(&path, RecursiveMode::NonRecursive)
         .map_err(|err| err.to_string())?;
     inner.watchers.insert(watcher_id, watcher);
+    let active_watchers = inner.watchers.len();
     drop(inner);
-    let mut next = state;
-    next.snapshot.active_watchers = watcher_count(&next);
-    next.snapshot.last_error = None;
-    cx.set_global(next);
+    cx.update_global::<DesktopActionsState, _>(|state, _cx| {
+        state.snapshot.active_watchers = active_watchers;
+        state.snapshot.last_error = None;
+    });
     tracing::info!(target: "gpui_starter::desktop_actions", watcher_id, path = %path.display(), "watcher registered");
     Ok(watcher_id)
 }
 
 pub fn shutdown(cx: &mut App) {
-    if let Some(state) = cx.try_global::<DesktopActionsState>().cloned() {
-        if let Ok(mut inner) = state.inner.lock() {
-            inner.watchers.clear();
-        }
-        let mut next = state;
-        next.snapshot.active_watchers = 0;
-        cx.set_global(next);
+    let Some(state) = cx.try_global::<DesktopActionsState>() else {
+        return;
+    };
+    if let Ok(mut inner) = state.inner.lock() {
+        inner.watchers.clear();
     }
+    drop(state);
+    cx.update_global::<DesktopActionsState, _>(|state, _cx| {
+        state.snapshot.active_watchers = 0;
+    });
 }
 
 pub fn watch_log_dir(cx: &mut App) -> Result<u64, String> {
@@ -190,17 +192,21 @@ pub fn watch_config_dir(cx: &mut App) -> Result<u64, String> {
 }
 
 pub fn unwatch_path(id: u64, cx: &mut App) -> bool {
-    let state = match cx.try_global::<DesktopActionsState>().cloned() {
-        Some(state) => state,
-        None => return false,
+    let Some(state) = cx.try_global::<DesktopActionsState>() else {
+        return false;
     };
     let mut removed = false;
+    let active_watchers;
     if let Ok(mut inner) = state.inner.lock() {
         removed = inner.watchers.remove(&id).is_some();
+        active_watchers = inner.watchers.len();
+    } else {
+        return false;
     }
-    let mut next = state;
-    next.snapshot.active_watchers = watcher_count(&next);
-    cx.set_global(next);
+    drop(state);
+    cx.update_global::<DesktopActionsState, _>(|state, _cx| {
+        state.snapshot.active_watchers = active_watchers;
+    });
     removed
 }
 
@@ -224,17 +230,17 @@ pub fn unwatch_all(cx: &mut App) -> usize {
 
 fn build_diagnostics_text(cx: &App) -> String {
     let app_state = crate::app_state::config(cx);
-    let lifecycle = cx
+    let stage = cx
         .try_global::<crate::lifecycle::LifecycleState>()
-        .cloned()
-        .unwrap_or_else(crate::lifecycle::LifecycleState::starting);
+        .map(|s| s.stage)
+        .unwrap_or(crate::lifecycle::LifecycleStage::Starting);
     let connectivity = crate::connectivity::snapshot(cx);
     format!(
         "app={} version={} route={} lifecycle={:?} connectivity={:?}",
         env!("CARGO_PKG_NAME"),
         env!("CARGO_PKG_VERSION"),
         app_state.active_route.to_url(),
-        lifecycle.stage,
+        stage,
         connectivity.state
     )
 }
@@ -246,13 +252,15 @@ pub fn open_path(path: PathBuf, cx: &mut App) -> Result<(), String> {
 }
 
 fn update_result(action: &str, error: Option<String>, cx: &mut App) {
-    let mut state = match cx.try_global::<DesktopActionsState>().cloned() {
-        Some(state) => state,
-        None => return,
+    let Some(state) = cx.try_global::<DesktopActionsState>() else {
+        return;
     };
-    state.snapshot.last_error = error.clone();
-    state.snapshot.active_watchers = watcher_count(&state);
-    cx.set_global(state);
+    let active_watchers = state.inner.lock().ok().map(|inner| inner.watchers.len()).unwrap_or(0);
+    drop(state);
+    cx.update_global::<DesktopActionsState, _>(|state, _cx| {
+        state.snapshot.last_error = error.clone();
+        state.snapshot.active_watchers = active_watchers;
+    });
     if let Some(error) = error {
         tracing::warn!(
             target: "gpui_starter::desktop_actions",

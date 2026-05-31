@@ -65,7 +65,9 @@ fn build_icon() -> tray_icon::Icon {
         }
     }
 
-    tray_icon::Icon::from_rgba(px, SIZE as u32, SIZE as u32).expect("tray icon pixel data is valid")
+    // SAFETY: Pixel data is generated from a compile-time constant RGBA buffer.
+    // The dimensions match the buffer length by construction.
+    tray_icon::Icon::from_rgba(px, SIZE as u32, SIZE as u32).expect("tray icon pixel data is valid: compile-time constant")
 }
 
 // ---------------------------------------------------------------------------
@@ -76,13 +78,16 @@ pub fn setup(cx: &mut App) {
     tracing::info!(target: LOG, "Setting up tray icon");
 
     let icon = build_icon();
-    let tray: TrayIcon = TrayIconBuilder::new()
+    let Ok(tray) = TrayIconBuilder::new()
         .with_icon(icon)
         .with_icon_as_template(true)
         .with_tooltip("Open Launcher  (⌥Space)")
         .with_menu_on_left_click(false)
         .build()
-        .expect("failed to create tray icon");
+    else {
+        tracing::error!("failed to create system tray icon");
+        return;
+    };
     Box::leak(Box::new(tray));
     tracing::debug!(target: LOG, "Tray icon created");
 

@@ -37,10 +37,6 @@ pub fn initialize(cx: &mut App) {
 
 pub fn set(name: impl Into<String>, status: CapabilityStatus, cx: &mut App) {
     let key = name.into();
-    let mut registry = cx
-        .try_global::<CapabilityRegistry>()
-        .cloned()
-        .unwrap_or_default();
     tracing::debug!(
         target: "gpui_starter::capabilities",
         capability = %key,
@@ -51,8 +47,7 @@ pub fn set(name: impl Into<String>, status: CapabilityStatus, cx: &mut App) {
         last_error = ?status.last_error,
         "capability updated"
     );
-    registry.entries.insert(key, status);
-    cx.set_global(registry);
+    cx.default_global::<CapabilityRegistry>().entries.insert(key, status);
 }
 
 pub fn snapshot(cx: &App) -> BTreeMap<String, CapabilityStatus> {

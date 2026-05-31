@@ -30,6 +30,12 @@ pub struct LifecycleState {
 
 impl Global for LifecycleState {}
 
+impl Default for LifecycleState {
+    fn default() -> Self {
+        Self::starting()
+    }
+}
+
 impl LifecycleState {
     pub fn starting() -> Self {
         Self {
@@ -45,57 +51,37 @@ impl LifecycleState {
 }
 
 pub fn set_stage(stage: LifecycleStage, cx: &mut App) {
-    let mut next = cx
-        .try_global::<LifecycleState>()
-        .cloned()
-        .unwrap_or_else(LifecycleState::starting);
-    next.stage = stage;
-    next.updated_at = AppTimestamp::now();
-    cx.set_global(next);
+    let state = cx.default_global::<LifecycleState>();
+    state.stage = stage;
+    state.updated_at = AppTimestamp::now();
 }
 
 pub fn set_startup_step(step: impl Into<String>, cx: &mut App) {
-    let mut next = cx
-        .try_global::<LifecycleState>()
-        .cloned()
-        .unwrap_or_else(LifecycleState::starting);
-    next.startup_step = Some(step.into());
-    next.updated_at = AppTimestamp::now();
-    cx.set_global(next);
+    let state = cx.default_global::<LifecycleState>();
+    state.startup_step = Some(step.into());
+    state.updated_at = AppTimestamp::now();
 }
 
 pub fn set_shutdown_step(step: impl Into<String>, cx: &mut App) {
-    let mut next = cx
-        .try_global::<LifecycleState>()
-        .cloned()
-        .unwrap_or_else(LifecycleState::starting);
-    next.shutdown_step = Some(step.into());
-    next.updated_at = AppTimestamp::now();
-    cx.set_global(next);
+    let state = cx.default_global::<LifecycleState>();
+    state.shutdown_step = Some(step.into());
+    state.updated_at = AppTimestamp::now();
 }
 
 pub fn set_startup_error(error: impl Into<String>, cx: &mut App) {
     let error = error.into();
-    let mut next = cx
-        .try_global::<LifecycleState>()
-        .cloned()
-        .unwrap_or_else(LifecycleState::starting);
-    next.last_startup_error = Some(error.clone());
-    next.last_error = Some(error);
-    next.updated_at = AppTimestamp::now();
-    cx.set_global(next);
+    let state = cx.default_global::<LifecycleState>();
+    state.last_startup_error = Some(error.clone());
+    state.last_error = Some(error);
+    state.updated_at = AppTimestamp::now();
 }
 
 pub fn set_shutdown_error(error: impl Into<String>, cx: &mut App) {
     let error = error.into();
-    let mut next = cx
-        .try_global::<LifecycleState>()
-        .cloned()
-        .unwrap_or_else(LifecycleState::starting);
-    next.last_shutdown_error = Some(error.clone());
-    next.last_error = Some(error);
-    next.updated_at = AppTimestamp::now();
-    cx.set_global(next);
+    let state = cx.default_global::<LifecycleState>();
+    state.last_shutdown_error = Some(error.clone());
+    state.last_error = Some(error);
+    state.updated_at = AppTimestamp::now();
 }
 
 static LAST_PANIC_SUMMARY: OnceLock<Mutex<Option<String>>> = OnceLock::new();

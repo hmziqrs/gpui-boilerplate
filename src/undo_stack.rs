@@ -58,7 +58,8 @@ pub fn record_theme_mode_change(before: ThemeMode, after: ThemeMode, cx: &mut Ap
     if before == after {
         return;
     }
-    let mut model = UndoModel::from_state(snapshot(cx));
+    let state = cx.default_global::<UndoState>();
+    let mut model = UndoModel::from_state(std::mem::take(state));
     model.record(UndoEntry {
         label: "Switch Theme".to_string(),
         undo_label: "Undo Theme Switch".to_string(),
@@ -66,39 +67,47 @@ pub fn record_theme_mode_change(before: ThemeMode, after: ThemeMode, cx: &mut Ap
         created_at: AppTimestamp::now(),
         kind: UndoKind::ThemeMode { before, after },
     });
-    cx.set_global(model.into_state());
+    *state = model.into_state();
     tracing::debug!(target: "gpui_starter::undo", "recorded theme mode change");
 }
 
 pub fn undo(cx: &mut App) -> bool {
-    let mut model = UndoModel::from_state(snapshot(cx));
+    let state = cx.default_global::<UndoState>();
+    let mut model = UndoModel::from_state(std::mem::take(state));
     let Some(entry) = model.pop_undo() else {
-        cx.set_global(model.into_state());
+        *state = model.into_state();
         return false;
     };
     model.applying = true;
-    cx.set_global(model.clone().into_state());
+    let model_clone = model.clone();
+    *state = model_clone.into_state();
+    let _ = state;
     apply_inverse(&entry.kind, cx);
-    model = UndoModel::from_state(snapshot(cx));
+    let state = cx.default_global::<UndoState>();
+    model = UndoModel::from_state(std::mem::take(state));
     model.applying = false;
     model.push_redo(entry);
-    cx.set_global(model.into_state());
+    *state = model.into_state();
     true
 }
 
 pub fn redo(cx: &mut App) -> bool {
-    let mut model = UndoModel::from_state(snapshot(cx));
+    let state = cx.default_global::<UndoState>();
+    let mut model = UndoModel::from_state(std::mem::take(state));
     let Some(entry) = model.pop_redo() else {
-        cx.set_global(model.into_state());
+        *state = model.into_state();
         return false;
     };
     model.applying = true;
-    cx.set_global(model.clone().into_state());
+    let model_clone = model.clone();
+    *state = model_clone.into_state();
+    let _ = state;
     apply_forward(&entry.kind, cx);
-    model = UndoModel::from_state(snapshot(cx));
+    let state = cx.default_global::<UndoState>();
+    model = UndoModel::from_state(std::mem::take(state));
     model.applying = false;
     model.push_undo(entry);
-    cx.set_global(model.into_state());
+    *state = model.into_state();
     true
 }
 

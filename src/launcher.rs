@@ -424,12 +424,16 @@ pub fn open_launcher(cx: &mut App) {
             ..Default::default()
         };
 
-        let window = cx
+        let Some(window) = cx
             .open_window(options, |window, cx| {
                 let launcher_root = cx.new(|cx| LauncherRoot::new(window, cx));
                 cx.new(|cx| Root::new(launcher_root, window, cx).bg(transparent_black()))
             })
-            .expect("failed to open launcher window");
+            .ok()
+        else {
+            tracing::error!("failed to open launcher window");
+            return Ok::<_, anyhow::Error>(());
+        };
 
         window
             .update(cx, |_, window, _| {

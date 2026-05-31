@@ -192,9 +192,11 @@ pub fn init(cx: &mut App) {
         system_locale = %system_locale,
         "detected system locale"
     );
-    let _ = crate::i18n::init_i18n(
+    if let Err(err) = crate::i18n::init_i18n(
         <_ as Into<es_fluent::unic_langid::LanguageIdentifier>>::into(Languages::default()),
-    );
+    ) {
+        tracing::error!("i18n initialization failed: {err}, using fallback locale");
+    }
 
     let persisted = crate::app_state::config(cx);
     let locale_to_use = if persisted.locale.is_empty() {
@@ -379,7 +381,7 @@ pub fn init(cx: &mut App) {
                             });
                         });
                     })
-                    .unwrap();
+                    .ok();
             });
         }
     });
@@ -391,6 +393,7 @@ pub fn init(cx: &mut App) {
             cx,
         );
     });
+    #[cfg(debug_assertions)]
     cx.on_action(|_: &TriggerTestPanic, _cx| {
         panic!("gpui-starter test panic action");
     });
@@ -462,7 +465,7 @@ pub fn create_new_window(title: &str, cx: &mut App) {
             ..Default::default()
         };
 
-        let window = cx
+        let Some(window) = cx
             .open_window(options, |window, cx| {
                 let root_view = cx.new(|cx| crate::root::AppRoot::new(title.clone(), window, cx));
 
@@ -473,7 +476,11 @@ pub fn create_new_window(title: &str, cx: &mut App) {
 
                 cx.new(|cx| Root::new(root_view, window, cx))
             })
-            .expect("failed to open window");
+            .ok()
+        else {
+            tracing::error!("failed to open window");
+            return Ok::<_, anyhow::Error>(());
+        };
 
         window.update(cx, |_, window, _| {
             window.activate_window();

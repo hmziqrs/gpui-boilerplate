@@ -50,12 +50,7 @@ pub fn emit(kind: AppEventKind, cx: &mut App) {
         kind = ?event.kind,
         "emitting app event"
     );
-    let mut queue = cx
-        .try_global::<AppEventQueue>()
-        .cloned()
-        .unwrap_or_default();
-    queue.0.push(event);
-    cx.set_global(queue);
+    cx.default_global::<AppEventQueue>().0.push(event);
 }
 
 pub fn emit_error(error: AppError, cx: &mut App) {
@@ -71,14 +66,7 @@ pub fn emit_error(error: AppError, cx: &mut App) {
 }
 
 pub fn drain(cx: &mut App) -> Vec<AppEvent> {
-    let events = cx
-        .try_global::<AppEventQueue>()
-        .map(|queue| queue.0.clone())
-        .unwrap_or_default();
-    if !events.is_empty() {
-        cx.set_global(AppEventQueue::default());
-    }
-    events
+    std::mem::take(&mut cx.default_global::<AppEventQueue>().0)
 }
 
 #[cfg(test)]

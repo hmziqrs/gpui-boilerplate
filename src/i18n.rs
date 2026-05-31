@@ -14,7 +14,10 @@ pub fn init_i18n(lang: es_fluent::unic_langid::LanguageIdentifier) -> Result<(),
 }
 
 pub fn i18n() -> &'static EmbeddedI18n {
-    I18N.get().expect("i18n must be initialized before use")
+    I18N.get_or_init(|| {
+        tracing::warn!("i18n not initialized, using fallback");
+        EmbeddedI18n::try_new().expect("embedded i18n fallback must succeed")
+    })
 }
 
 pub fn localize(id: &str, args: Option<&HashMap<&str, FluentValue<'_>>>) -> String {

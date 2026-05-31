@@ -105,8 +105,7 @@ pub fn start_demo_task(cx: &mut App) {
 }
 
 pub fn start(id: TaskId, label: String, progress: TaskProgress, cx: &mut App) {
-    let mut registry = cx.try_global::<TaskRegistry>().cloned().unwrap_or_default();
-    registry.tasks.insert(
+    cx.default_global::<TaskRegistry>().tasks.insert(
         0,
         BackgroundTask {
             id,
@@ -118,7 +117,6 @@ pub fn start(id: TaskId, label: String, progress: TaskProgress, cx: &mut App) {
             error: None,
         },
     );
-    cx.set_global(registry);
     events::emit(AppEventKind::BackgroundTaskChanged(id), cx);
 }
 
@@ -147,7 +145,7 @@ pub fn fail(id: TaskId, error: String, cx: &mut App) {
 }
 
 pub fn force_cancel_remaining(cx: &mut App) {
-    let mut registry = cx.try_global::<TaskRegistry>().cloned().unwrap_or_default();
+    let registry = cx.default_global::<TaskRegistry>();
     let mut changed = false;
     for task in &mut registry.tasks {
         if matches!(task.status, TaskStatus::Queued | TaskStatus::Running) {
@@ -162,7 +160,6 @@ pub fn force_cancel_remaining(cx: &mut App) {
             target: "gpui_starter::tasks",
             "force-cancelled remaining tasks after drain timeout"
         );
-        cx.set_global(registry);
     }
 }
 
@@ -204,10 +201,10 @@ pub fn shutdown(cx: &mut App) {
 }
 
 fn mutate_task(id: TaskId, cx: &mut App, mutate: impl FnOnce(&mut BackgroundTask)) {
-    let mut registry = cx.try_global::<TaskRegistry>().cloned().unwrap_or_default();
+    let registry = cx.default_global::<TaskRegistry>();
     if let Some(task) = registry.tasks.iter_mut().find(|task| task.id == id) {
         mutate(task);
-        cx.set_global(registry);
+        drop(registry);
         events::emit(AppEventKind::BackgroundTaskChanged(id), cx);
     }
 }

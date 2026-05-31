@@ -36,11 +36,11 @@ pub fn initialize(cx: &mut App) {
         )
         .with(
             tracing_subscriber::EnvFilter::from_default_env()
-                .add_directive("gpui::window=off".parse().unwrap())
-                .add_directive(format!("{}=trace", env!("CARGO_PKG_NAME")).parse().unwrap())
-                .add_directive("gpui_starter=trace".parse().unwrap())
-                .add_directive("user_notify=debug".parse().unwrap())
-                .add_directive("notify_rust=debug".parse().unwrap()),
+                .add_directive("gpui::window=off".parse().expect("hardcoded directive is valid"))
+                .add_directive(format!("{}=trace", env!("CARGO_PKG_NAME")).parse().expect("hardcoded directive is valid"))
+                .add_directive("gpui_starter=trace".parse().expect("hardcoded directive is valid"))
+                .add_directive("user_notify=debug".parse().expect("hardcoded directive is valid"))
+                .add_directive("notify_rust=debug".parse().expect("hardcoded directive is valid")),
         )
         .try_init();
 
