@@ -11,7 +11,9 @@
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
     "typecheck": "tsc --noEmit",
-    "deploy": "gh workflow run deploy-docs.yml"
+    "deploy": "gh workflow run deploy-docs.yml",
+    "og:gen": "bun scripts/generate-og.ts",
+    "og:gen:all": "bun scripts/generate-og.ts"
   },
   "keywords": [
     "gpui",

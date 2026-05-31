@@ -169,13 +169,13 @@ export async function GET({ props }) {
       fonts: [
         {
           name: 'Inter',
-          data: await fetch('https://cdn.jsdelivr.net/npm/@fontsource/inter@5/files/inter-latin-700-normal.woff2').then(r => r.arrayBuffer()),
+          data: await fetch('https://cdn.jsdelivr.net/npm/@fontsource/inter@5/files/inter-latin-700-normal.woff').then(r => r.arrayBuffer()),
           weight: 700,
           style: 'normal',
         },
         {
           name: 'Inter',
-          data: await fetch('https://cdn.jsdelivr.net/npm/@fontsource/inter@5/files/inter-latin-800-normal.woff2').then(r => r.arrayBuffer()),
+          data: await fetch('https://cdn.jsdelivr.net/npm/@fontsource/inter@5/files/inter-latin-800-normal.woff').then(r => r.arrayBuffer()),
           weight: 800,
           style: 'normal',
         },
