@@ -5,7 +5,8 @@ use gpui_component::{
     v_flex,
 };
 
-use crate::http_lab::{self, ApiResource, ApiStatus, HttpExchange, HttpLabAction, HttpLabState};
+use crate::http_lab::{self, HttpExchange, HttpLabAction, HttpLabState};
+use crate::query::{QueryResource, QueryStatus};
 
 pub struct HttpLabPage {
     _subscriptions: Vec<Subscription>,
@@ -35,7 +36,12 @@ impl Render for HttpLabPage {
             .child(hero(&state, cx))
             .child(action_bar(&state))
             .child(tab_bar(&state))
-            .child(resource_panel(&state, selected_resource, cx))
+            .child(resource_panel(
+                &state,
+                state.selected_action,
+                selected_resource,
+                cx,
+            ))
             .child(activity_panel(&state, cx))
     }
 }
@@ -115,7 +121,7 @@ fn action_bar(state: &HttpLabState) -> Div {
         )
 }
 
-fn action_button(action: HttpLabAction, resource: &ApiResource) -> Button {
+fn action_button(action: HttpLabAction, resource: &QueryResource<HttpExchange>) -> Button {
     let is_loading = resource.is_loading();
     Button::new(format!("http-lab-run-{}", action.id()))
         .outline()
@@ -152,8 +158,12 @@ fn tab_bar(state: &HttpLabState) -> Div {
         }))
 }
 
-fn resource_panel(state: &HttpLabState, resource: &ApiResource, cx: &App) -> Div {
-    let action = resource.action;
+fn resource_panel(
+    state: &HttpLabState,
+    action: HttpLabAction,
+    resource: &QueryResource<HttpExchange>,
+    cx: &App,
+) -> Div {
     panel(action.label(), cx)
         .child(
             div()
@@ -220,7 +230,7 @@ fn resource_panel(state: &HttpLabState, resource: &ApiResource, cx: &App) -> Div
         })
 }
 
-fn resource_metrics(resource: &ApiResource, cx: &App) -> Div {
+fn resource_metrics(resource: &QueryResource<HttpExchange>, cx: &App) -> Div {
     div()
         .grid()
         .gap_2()
@@ -319,7 +329,7 @@ fn headers_block(headers: &[(String, String)], cx: &App) -> Div {
     )
 }
 
-fn empty_state(status: ApiStatus, cx: &App) -> Div {
+fn empty_state(status: QueryStatus, cx: &App) -> Div {
     div()
         .p_5()
         .rounded(cx.theme().radius_lg)
@@ -328,8 +338,8 @@ fn empty_state(status: ApiStatus, cx: &App) -> Div {
         .bg(cx.theme().background)
         .text_color(cx.theme().muted_foreground)
         .child(match status {
-            ApiStatus::LoadingEmpty => "Request is loading without cached data.",
-            ApiStatus::Cancelled => "Request was cancelled before a response was applied.",
+            QueryStatus::LoadingEmpty => "Request is loading without cached data.",
+            QueryStatus::Cancelled => "Request was cancelled before a response was applied.",
             _ => "No response captured for this tab yet.",
         })
 }
@@ -426,23 +436,23 @@ fn chip(label: &str, background: Hsla, cx: &App) -> Div {
         .child(label.to_string())
 }
 
-fn status_chip(status: ApiStatus, cx: &App) -> Div {
+fn status_chip(status: QueryStatus, cx: &App) -> Div {
     let background = match status {
-        ApiStatus::Success => cx.theme().success.opacity(0.12),
-        ApiStatus::Failure => cx.theme().danger.opacity(0.12),
-        ApiStatus::Cancelled => cx.theme().warning.opacity(0.12),
-        ApiStatus::LoadingEmpty | ApiStatus::LoadingWithData => cx.theme().info.opacity(0.12),
-        ApiStatus::Idle => cx.theme().muted,
+        QueryStatus::Success => cx.theme().success.opacity(0.12),
+        QueryStatus::Failure => cx.theme().danger.opacity(0.12),
+        QueryStatus::Cancelled => cx.theme().warning.opacity(0.12),
+        QueryStatus::LoadingEmpty | QueryStatus::LoadingWithData => cx.theme().info.opacity(0.12),
+        QueryStatus::Idle => cx.theme().muted,
     };
     chip(status.label(), background, cx)
 }
 
-fn status_dot(status: ApiStatus) -> &'static str {
+fn status_dot(status: QueryStatus) -> &'static str {
     match status {
-        ApiStatus::Idle => "[ ]",
-        ApiStatus::LoadingEmpty | ApiStatus::LoadingWithData => "[~]",
-        ApiStatus::Success => "[+]",
-        ApiStatus::Failure => "[x]",
-        ApiStatus::Cancelled => "!",
+        QueryStatus::Idle => "[ ]",
+        QueryStatus::LoadingEmpty | QueryStatus::LoadingWithData => "[~]",
+        QueryStatus::Success => "[+]",
+        QueryStatus::Failure => "[x]",
+        QueryStatus::Cancelled => "!",
     }
 }

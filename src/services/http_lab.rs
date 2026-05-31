@@ -6,91 +6,14 @@ use reqwest::blocking::{Client, multipart};
 use reqwest::header::{CONTENT_TYPE, HeaderMap};
 use serde::{Deserialize, Serialize};
 
+use crate::query::{
+    CachePolicy, QueryKey, QueryResource, QueryStatus, RequestId, RequestPolicy, RequestSequencer,
+};
+
 const HTTPBIN_BASE: &str = "https://httpbin.org";
 const TIMEOUT: Duration = Duration::from_secs(15);
 const GET_CACHE_TTL_MS: u64 = 60_000;
 const REVALIDATE_TTL_MS: u64 = 30_000;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RequestId(u64);
-
-impl RequestId {
-    pub fn value(self) -> u64 {
-        self.0
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum ApiStatus {
-    Idle,
-    LoadingEmpty,
-    LoadingWithData,
-    Success,
-    Failure,
-    Cancelled,
-}
-
-impl ApiStatus {
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Idle => "Idle",
-            Self::LoadingEmpty => "Loading empty",
-            Self::LoadingWithData => "Loading with data",
-            Self::Success => "Success",
-            Self::Failure => "Failure",
-            Self::Cancelled => "Cancelled",
-        }
-    }
-
-    pub fn is_loading(self) -> bool {
-        matches!(self, Self::LoadingEmpty | Self::LoadingWithData)
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum CachePolicy {
-    NoCache,
-    Ttl { ttl_ms: u64 },
-    StaleWhileRevalidate { ttl_ms: u64 },
-}
-
-impl CachePolicy {
-    pub fn label(self) -> String {
-        match self {
-            Self::NoCache => "No cache".to_string(),
-            Self::Ttl { ttl_ms } => format!("Cache TTL {}s", ttl_ms / 1_000),
-            Self::StaleWhileRevalidate { ttl_ms } => {
-                format!("Stale-while-revalidate {}s", ttl_ms / 1_000)
-            }
-        }
-    }
-
-    fn can_short_circuit(self) -> bool {
-        matches!(self, Self::Ttl { .. })
-    }
-
-    fn ttl_ms(self) -> Option<u64> {
-        match self {
-            Self::NoCache => None,
-            Self::Ttl { ttl_ms } | Self::StaleWhileRevalidate { ttl_ms } => Some(ttl_ms),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum RequestPolicy {
-    LatestWins,
-    IgnoreWhileLoading,
-}
-
-impl RequestPolicy {
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::LatestWins => "Latest wins",
-            Self::IgnoreWhileLoading => "Ignore while loading",
-        }
-    }
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum HttpBodyKind {
@@ -164,68 +87,10 @@ pub struct HttpCookieSnapshot {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ApiResource {
-    pub action: HttpLabAction,
-    pub status: ApiStatus,
-    pub data: Option<HttpExchange>,
-    pub error: Option<String>,
-    pub active_request_id: Option<RequestId>,
-    pub cache_policy: CachePolicy,
-    pub request_policy: RequestPolicy,
-    pub started_at_ms: Option<u128>,
-    pub last_updated_at_ms: Option<u128>,
-    pub cache_hits: u64,
-    pub cancelled_count: u64,
-    pub ignored_results: u64,
-}
-
-impl ApiResource {
-    fn new(action: HttpLabAction) -> Self {
-        Self {
-            action,
-            status: ApiStatus::Idle,
-            data: None,
-            error: None,
-            active_request_id: None,
-            cache_policy: action.cache_policy(),
-            request_policy: action.request_policy(),
-            started_at_ms: None,
-            last_updated_at_ms: None,
-            cache_hits: 0,
-            cancelled_count: 0,
-            ignored_results: 0,
-        }
-    }
-
-    pub fn is_loading(&self) -> bool {
-        self.status.is_loading()
-    }
-
-    pub fn has_data(&self) -> bool {
-        self.data.is_some()
-    }
-
-    pub fn cache_age_ms(&self, now_ms: u128) -> Option<u128> {
-        self.last_updated_at_ms
-            .map(|updated_at| now_ms.saturating_sub(updated_at))
-    }
-
-    pub fn is_cache_fresh(&self, now_ms: u128) -> bool {
-        self.data.is_some()
-            && self
-                .cache_policy
-                .ttl_ms()
-                .zip(self.cache_age_ms(now_ms))
-                .map(|(ttl_ms, age_ms)| age_ms <= ttl_ms as u128)
-                .unwrap_or(false)
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HttpLabState {
     pub selected_action: HttpLabAction,
-    pub resources: BTreeMap<HttpLabAction, ApiResource>,
-    next_request_id: u64,
+    pub resources: BTreeMap<HttpLabAction, QueryResource<HttpExchange>>,
+    request_sequencer: RequestSequencer,
     pub history: Vec<HttpExchange>,
     pub transition_log: Vec<String>,
     pub cookies: Option<HttpCookieSnapshot>,
@@ -235,13 +100,13 @@ impl Default for HttpLabState {
     fn default() -> Self {
         let mut resources = BTreeMap::new();
         for action in HttpLabAction::all() {
-            resources.insert(*action, ApiResource::new(*action));
+            resources.insert(*action, resource_for_action(*action));
         }
 
         Self {
             selected_action: HttpLabAction::GetJson,
             resources,
-            next_request_id: 1,
+            request_sequencer: RequestSequencer::new(),
             history: Vec::new(),
             transition_log: vec!["Idle".to_string()],
             cookies: None,
@@ -250,13 +115,13 @@ impl Default for HttpLabState {
 }
 
 impl HttpLabState {
-    pub fn resource(&self, action: HttpLabAction) -> &ApiResource {
+    pub fn resource(&self, action: HttpLabAction) -> &QueryResource<HttpExchange> {
         self.resources
             .get(&action)
             .expect("all http lab actions must have resources")
     }
 
-    pub fn selected_resource(&self) -> &ApiResource {
+    pub fn selected_resource(&self) -> &QueryResource<HttpExchange> {
         self.resource(self.selected_action)
     }
 
@@ -334,6 +199,10 @@ impl HttpLabAction {
         }
     }
 
+    pub fn query_key(self) -> QueryKey {
+        QueryKey::new(format!("http_lab/{}", self.id()))
+    }
+
     fn cache_policy(self) -> CachePolicy {
         match self {
             Self::GetText | Self::GetXml => CachePolicy::Ttl {
@@ -357,6 +226,14 @@ impl HttpLabAction {
             _ => RequestPolicy::LatestWins,
         }
     }
+}
+
+fn resource_for_action(action: HttpLabAction) -> QueryResource<HttpExchange> {
+    QueryResource::new(
+        action.query_key(),
+        action.cache_policy(),
+        action.request_policy(),
+    )
 }
 
 type ActionExchange = (HttpLabAction, HttpExchange);
@@ -426,19 +303,19 @@ fn begin_action(
     state.selected_action = action;
 
     let resource = state.resource(action);
-    if resource.cache_policy.can_short_circuit() && resource.is_cache_fresh(now_ms) {
+    let request_policy = resource.request_policy;
+    let current_status = resource.status;
+    if resource.should_short_circuit_cache(now_ms) {
         let resource = state.resources.get_mut(&action)?;
-        resource.cache_hits += 1;
-        resource.status = ApiStatus::Success;
-        resource.error = None;
-        record_transition(state, ApiStatus::Success, action.label(), "cache hit");
+        resource.record_cache_hit();
+        record_transition(state, QueryStatus::Success, action.label(), "cache hit");
         return None;
     }
 
-    if resource.is_loading() && resource.request_policy == RequestPolicy::IgnoreWhileLoading {
+    if resource.is_loading() && request_policy == RequestPolicy::IgnoreWhileLoading {
         record_transition(
             state,
-            resource.status,
+            current_status,
             action.label(),
             "ignored duplicate while loading",
         );
@@ -447,24 +324,24 @@ fn begin_action(
 
     if action == HttpLabAction::FullFlow {
         cancel_all_in_state(state, "Cancelled by full flow");
-    } else if resource.request_policy == RequestPolicy::LatestWins {
-        cancel_action_in_state(state, action, "Cancelled by newer request");
+    } else {
+        cancel_action_in_state(
+            state,
+            HttpLabAction::FullFlow,
+            "Cancelled by individual request",
+        );
+        if request_policy == RequestPolicy::LatestWins {
+            cancel_action_in_state(state, action, "Cancelled by newer request");
+        }
     }
 
     let has_data = state.resource(action).has_data();
     let request_id = next_request_id(state);
-    let status = if has_data {
-        ApiStatus::LoadingWithData
-    } else {
-        ApiStatus::LoadingEmpty
-    };
     let cache_policy = state.resource(action).cache_policy;
-    if let Some(resource) = state.resources.get_mut(&action) {
-        resource.status = status;
-        resource.active_request_id = Some(request_id);
-        resource.started_at_ms = Some(now_ms);
-        resource.error = None;
-    }
+    let status = state
+        .resources
+        .get_mut(&action)
+        .map(|resource| resource.begin_loading(request_id, now_ms))?;
 
     let note = match (cache_policy, has_data) {
         (CachePolicy::StaleWhileRevalidate { .. }, true) => "revalidating cached data",
@@ -505,7 +382,7 @@ fn apply_result_to_state(
                 if action == HttpLabAction::FullFlow && index > 0 {
                     record_transition(
                         state,
-                        ApiStatus::LoadingWithData,
+                        QueryStatus::LoadingWithData,
                         target_action.label(),
                         "full flow advanced",
                     );
@@ -530,18 +407,14 @@ fn finish_exchange(
     now_ms: u128,
 ) {
     let status = if exchange.error.is_none() {
-        ApiStatus::Success
+        QueryStatus::Success
     } else {
-        ApiStatus::Failure
+        QueryStatus::Failure
     };
     let error = exchange.error.clone();
 
     if let Some(resource) = state.resources.get_mut(&action) {
-        resource.status = status;
-        resource.data = Some(exchange.clone());
-        resource.error = error;
-        resource.active_request_id = None;
-        resource.last_updated_at_ms = Some(now_ms);
+        resource.apply_terminal(status, Some(exchange.clone()), error, now_ms);
     }
 
     if let Some(cookie_snapshot) = cookie_snapshot_from_exchange(&exchange) {
@@ -558,15 +431,11 @@ fn finish_flow_resource(
     now_ms: u128,
 ) {
     if let Some(resource) = state.resources.get_mut(&HttpLabAction::FullFlow) {
-        resource.status = ApiStatus::Success;
-        resource.data = last_exchange;
-        resource.error = None;
-        resource.active_request_id = None;
-        resource.last_updated_at_ms = Some(now_ms);
+        resource.apply_terminal(QueryStatus::Success, last_exchange, None, now_ms);
     }
     record_transition(
         state,
-        ApiStatus::Success,
+        QueryStatus::Success,
         HttpLabAction::FullFlow.label(),
         "flow completed",
     );
@@ -586,32 +455,29 @@ fn fail_resource(state: &mut HttpLabState, action: HttpLabAction, error: String,
     };
 
     if let Some(resource) = state.resources.get_mut(&action) {
-        resource.status = ApiStatus::Failure;
-        resource.error = Some(error);
-        resource.active_request_id = None;
-        resource.last_updated_at_ms = Some(now_ms);
+        resource.apply_failure(error, now_ms);
     }
 
-    record_transition(state, ApiStatus::Failure, action.label(), "request failed");
+    record_transition(
+        state,
+        QueryStatus::Failure,
+        action.label(),
+        "request failed",
+    );
     push_history(state, exchange);
 }
 
 fn cancel_action_in_state(state: &mut HttpLabState, action: HttpLabAction, reason: &str) {
     if state.resource(action).active_request_id.is_some() {
         if let Some(resource) = state.resources.get_mut(&action) {
-            resource.active_request_id = None;
-            resource.status = ApiStatus::Cancelled;
-            resource.error = Some(reason.to_string());
-            resource.cancelled_count += 1;
+            resource.cancel(reason);
         }
-        record_transition(state, ApiStatus::Cancelled, action.label(), reason);
+        record_transition(state, QueryStatus::Cancelled, action.label(), reason);
     }
 }
 
 fn next_request_id(state: &mut HttpLabState) -> RequestId {
-    let request_id = RequestId(state.next_request_id);
-    state.next_request_id += 1;
-    request_id
+    state.request_sequencer.next_request()
 }
 
 fn request_is_current(
@@ -619,11 +485,11 @@ fn request_is_current(
     action: HttpLabAction,
     request_id: RequestId,
 ) -> bool {
-    let is_current = state.resource(action).active_request_id == Some(request_id);
-    if is_current && let Some(resource) = state.resources.get_mut(&action) {
-        resource.active_request_id = None;
-    }
-    is_current
+    state
+        .resources
+        .get_mut(&action)
+        .map(|resource| resource.clear_current_request(request_id))
+        .unwrap_or(false)
 }
 
 fn cancel_all_in_state(state: &mut HttpLabState, reason: &str) {
@@ -639,17 +505,17 @@ fn cancel_all_in_state(state: &mut HttpLabState, reason: &str) {
 
 fn mark_ignored_result(state: &mut HttpLabState, action: HttpLabAction, request_id: RequestId) {
     if let Some(resource) = state.resources.get_mut(&action) {
-        resource.ignored_results += 1;
+        resource.mark_ignored_result();
     }
     record_transition(
         state,
-        ApiStatus::Cancelled,
+        QueryStatus::Cancelled,
         action.label(),
         &format!("ignored stale request #{}", request_id.value()),
     );
 }
 
-fn record_transition(state: &mut HttpLabState, status: ApiStatus, label: &str, note: &str) {
+fn record_transition(state: &mut HttpLabState, status: QueryStatus, label: &str, note: &str) {
     state
         .transition_log
         .insert(0, format!("{}: {label} ({note})", status.label()));

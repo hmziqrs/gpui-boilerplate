@@ -8,6 +8,7 @@ pub mod http_lab;
 pub mod i18n;
 pub mod logging;
 pub mod notifications;
+pub mod query;
 pub mod secure_storage;
 pub mod session;
 pub mod storage;

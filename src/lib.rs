@@ -27,7 +27,8 @@ pub use platform::process::single_instance;
 pub use runtime::{capabilities, events};
 pub use services::{
     accessibility, commands, connectivity, desktop_actions, error_surface, first_run, http_lab,
-    i18n, logging, notifications, secure_storage, session, storage, tasks, telemetry, undo_stack,
+    i18n, logging, notifications, query, secure_storage, session, storage, tasks, telemetry,
+    undo_stack,
 };
 pub use shell::route as routes;
 pub use shell::{app_menu, menus, root, sidebar, status_bar, title_bar};

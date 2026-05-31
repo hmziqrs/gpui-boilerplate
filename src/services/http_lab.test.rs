@@ -1,4 +1,5 @@
 use super::*;
+use crate::query::QueryStatus;
 
 fn exchange(label: &str, status: u16, error: Option<&str>) -> HttpExchange {
     HttpExchange {
@@ -30,8 +31,8 @@ fn starts_each_action_with_its_own_resource() {
 
     for action in HttpLabAction::all() {
         let resource = state.resource(*action);
-        assert_eq!(resource.action, *action);
-        assert_eq!(resource.status, ApiStatus::Idle);
+        assert_eq!(resource.key, action.query_key());
+        assert_eq!(resource.status, QueryStatus::Idle);
     }
 }
 
@@ -47,7 +48,7 @@ fn ttl_cache_can_short_circuit_request() {
 
     assert!(request.is_none());
     let resource = state.resource(HttpLabAction::GetText);
-    assert_eq!(resource.status, ApiStatus::Success);
+    assert_eq!(resource.status, QueryStatus::Success);
     assert_eq!(resource.cache_hits, 1);
 }
 
@@ -63,7 +64,7 @@ fn stale_while_revalidate_keeps_data_and_starts_request() {
 
     assert!(request.is_some());
     let resource = state.resource(HttpLabAction::GetJson);
-    assert_eq!(resource.status, ApiStatus::LoadingWithData);
+    assert_eq!(resource.status, QueryStatus::LoadingWithData);
     assert!(resource.data.is_some());
 }
 
@@ -116,7 +117,7 @@ fn stale_result_is_ignored_after_cancellation() {
     );
 
     let resource = state.resource(HttpLabAction::GetJson);
-    assert_eq!(resource.status, ApiStatus::Cancelled);
+    assert_eq!(resource.status, QueryStatus::Cancelled);
     assert!(resource.data.is_none());
     assert_eq!(resource.ignored_results, 1);
 }
@@ -139,12 +140,12 @@ fn successful_exchange_updates_only_target_resource() {
 
     assert_eq!(
         state.resource(HttpLabAction::GetJson).status,
-        ApiStatus::Success
+        QueryStatus::Success
     );
     assert!(state.resource(HttpLabAction::GetJson).data.is_some());
     assert_eq!(
         state.resource(HttpLabAction::GetXml).status,
-        ApiStatus::Idle
+        QueryStatus::Idle
     );
     assert_eq!(state.history.len(), 1);
 }
@@ -169,7 +170,7 @@ fn failed_exchange_preserves_previous_data() {
     );
 
     let resource = state.resource(HttpLabAction::Failure);
-    assert_eq!(resource.status, ApiStatus::Failure);
+    assert_eq!(resource.status, QueryStatus::Failure);
     assert!(resource.data.is_some());
     assert_eq!(resource.error.as_deref(), Some("HTTP 503"));
 }
@@ -197,21 +198,51 @@ fn full_flow_populates_individual_resources_and_flow_resource() {
 
     assert_eq!(
         state.resource(HttpLabAction::FullFlow).status,
-        ApiStatus::Success
+        QueryStatus::Success
     );
     assert_eq!(
         state.resource(HttpLabAction::GetJson).status,
-        ApiStatus::Success
+        QueryStatus::Success
     );
     assert_eq!(
         state.resource(HttpLabAction::Failure).status,
-        ApiStatus::Failure
+        QueryStatus::Failure
     );
     assert_eq!(
         state.resource(HttpLabAction::PostJson).status,
-        ApiStatus::Success
+        QueryStatus::Success
     );
     assert_eq!(state.history.len(), 3);
+}
+
+#[test]
+fn individual_request_cancels_pending_full_flow_before_it_can_apply_results() {
+    let mut state = HttpLabState::default();
+    let flow_request = begin_action(&mut state, HttpLabAction::FullFlow, 1).expect("flow request");
+    let individual_request =
+        begin_action(&mut state, HttpLabAction::GetJson, 2).expect("individual request");
+
+    apply_result_to_state(
+        &mut state,
+        HttpLabAction::FullFlow,
+        flow_request,
+        Ok(vec![(
+            HttpLabAction::GetJson,
+            exchange("GET JSON from stale flow", 200, None),
+        )]),
+        3,
+    );
+
+    assert_eq!(
+        state.resource(HttpLabAction::FullFlow).status,
+        QueryStatus::Cancelled
+    );
+    assert_eq!(state.resource(HttpLabAction::FullFlow).ignored_results, 1);
+    assert_eq!(
+        state.resource(HttpLabAction::GetJson).active_request_id,
+        Some(individual_request)
+    );
+    assert!(state.resource(HttpLabAction::GetJson).data.is_none());
 }
 
 #[test]
