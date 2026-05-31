@@ -17,5 +17,20 @@ pub use types::{
 };
 
 #[cfg(test)]
-#[path = "http_lab.test.rs"]
-mod http_lab_test;
+mod test_support;
+
+#[cfg(test)]
+#[path = "http_lab/cache.test.rs"]
+mod http_lab_cache_test;
+
+#[cfg(test)]
+#[path = "http_lab/flow.test.rs"]
+mod http_lab_flow_test;
+
+#[cfg(test)]
+#[path = "http_lab/response.test.rs"]
+mod http_lab_response_test;
+
+#[cfg(test)]
+#[path = "http_lab/tasks.test.rs"]
+mod http_lab_tasks_test;

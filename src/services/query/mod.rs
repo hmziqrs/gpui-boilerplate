@@ -21,5 +21,16 @@ pub use resource::QueryResource;
 pub use status::QueryStatus;
 
 #[cfg(test)]
-#[path = "query.test.rs"]
-mod query_test;
+mod test_support;
+
+#[cfg(test)]
+#[path = "tests/cache.rs"]
+mod cache_test;
+
+#[cfg(test)]
+#[path = "tests/lifecycle.rs"]
+mod lifecycle_test;
+
+#[cfg(test)]
+#[path = "tests/request.rs"]
+mod request_test;
