@@ -28,6 +28,7 @@ The starter should include a small, testable server-state layer, not a full Reac
 
 - `services::query` is transport-agnostic and knows nothing about HTTP, reqwest, or GPUI rendering.
 - Feature services own domain keys and domain data, then store `QueryResource<T>` values.
+- External consumers read resource state through accessors; lifecycle mutation goes through query transition methods.
 - GPUI globals or entities remain responsible for reactivity and notification.
 - Async work remains explicit at the feature-service layer with GPUI `spawn` and `background_executor`.
 - UI components only read query state and dispatch feature actions.

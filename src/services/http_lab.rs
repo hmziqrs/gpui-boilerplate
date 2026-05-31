@@ -128,7 +128,7 @@ impl HttpLabState {
     pub fn active_count(&self) -> usize {
         self.resources
             .values()
-            .filter(|resource| resource.active_request_id.is_some())
+            .filter(|resource| resource.active_request_id().is_some())
             .count()
     }
 
@@ -316,8 +316,8 @@ fn begin_action(
     state.selected_action = action;
 
     let resource = state.resource(action);
-    let request_policy = resource.request_policy;
-    let current_status = resource.status;
+    let request_policy = resource.request_policy();
+    let current_status = resource.status();
     if resource.should_short_circuit_cache(now_ms) {
         let resource = state.resources.get_mut(&action)?;
         resource.record_cache_hit();
@@ -350,7 +350,7 @@ fn begin_action(
 
     let has_data = state.resource(action).has_data();
     let request_id = next_request_id(state);
-    let cache_policy = state.resource(action).cache_policy;
+    let cache_policy = state.resource(action).cache_policy();
     let status = state
         .resources
         .get_mut(&action)
@@ -488,7 +488,7 @@ fn fail_resource(state: &mut HttpLabState, action: HttpLabAction, error: String,
 }
 
 fn cancel_action_in_state(state: &mut HttpLabState, action: HttpLabAction, reason: &str) {
-    if state.resource(action).active_request_id.is_some() {
+    if state.resource(action).active_request_id().is_some() {
         if let Some(resource) = state.resources.get_mut(&action) {
             resource.cancel(reason);
         }
@@ -516,7 +516,7 @@ fn cancel_all_in_state(state: &mut HttpLabState, reason: &str) {
     let actions = HttpLabAction::all()
         .iter()
         .copied()
-        .filter(|action| state.resource(*action).active_request_id.is_some())
+        .filter(|action| state.resource(*action).active_request_id().is_some())
         .collect::<Vec<_>>();
     for action in actions {
         cancel_action_in_state(state, action, reason);

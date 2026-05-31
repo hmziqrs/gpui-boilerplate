@@ -149,7 +149,7 @@ fn tab_bar(state: &HttpLabState) -> Div {
                 .selected(state.selected_action == action)
                 .label(format!(
                     "{} {}",
-                    status_dot(resource.status),
+                    status_dot(resource.status()),
                     action.label()
                 ))
                 .on_click(move |_, _, cx| {
@@ -170,19 +170,19 @@ fn resource_panel(
                 .flex()
                 .flex_wrap()
                 .gap_2()
-                .child(status_chip(resource.status, cx))
+                .child(status_chip(resource.status(), cx))
                 .child(chip(action.method_label(), cx.theme().background, cx))
                 .child(chip(
-                    &resource.cache_policy.label(),
+                    &resource.cache_policy().label(),
                     cx.theme().background,
                     cx,
                 ))
                 .child(chip(
-                    resource.request_policy.label(),
+                    resource.request_policy().label(),
                     cx.theme().background,
                     cx,
                 ))
-                .when_some(resource.active_request_id, |this, request_id| {
+                .when_some(resource.active_request_id(), |this, request_id| {
                     this.child(chip(
                         &format!("request #{}", request_id.value()),
                         cx.theme().background,
@@ -202,14 +202,14 @@ fn resource_panel(
                     }),
             )
         })
-        .when_some(resource.error.as_ref(), |this, error| {
+        .when_some(resource.error(), |this, error| {
             this.child(callout("Error", error, cx))
         })
-        .when_some(resource.data.as_ref(), |this, exchange| {
+        .when_some(resource.data(), |this, exchange| {
             this.child(exchange_panel(exchange, cx))
         })
-        .when(resource.data.is_none(), |this| {
-            this.child(empty_state(resource.status, cx))
+        .when(resource.data().is_none(), |this| {
+            this.child(empty_state(resource.status(), cx))
         })
         .when(action == HttpLabAction::Cookies, |this| {
             this.when_some(state.cookies.as_ref(), |this, cookies| {
@@ -234,17 +234,17 @@ fn resource_metrics(resource: &QueryResource<HttpExchange>, cx: &App) -> Div {
     div()
         .grid()
         .gap_2()
-        .child(kv("Cache hits", &resource.cache_hits.to_string(), cx))
-        .child(kv("Cancelled", &resource.cancelled_count.to_string(), cx))
+        .child(kv("Cache hits", &resource.cache_hits().to_string(), cx))
+        .child(kv("Cancelled", &resource.cancelled_count().to_string(), cx))
         .child(kv(
             "Ignored stale results",
-            &resource.ignored_results.to_string(),
+            &resource.ignored_results().to_string(),
             cx,
         ))
         .child(kv(
             "Last update",
             &resource
-                .last_updated_at_ms
+                .last_updated_at_ms()
                 .map(|value| value.to_string())
                 .unwrap_or_else(|| "Never".to_string()),
             cx,

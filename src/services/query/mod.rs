@@ -159,18 +159,18 @@ impl RequestPolicy {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct QueryResource<T> {
-    pub key: QueryKey,
-    pub status: QueryStatus,
-    pub data: Option<T>,
-    pub error: Option<String>,
-    pub active_request_id: Option<RequestId>,
-    pub cache_policy: CachePolicy,
-    pub request_policy: RequestPolicy,
-    pub started_at_ms: Option<u128>,
-    pub last_updated_at_ms: Option<u128>,
-    pub cache_hits: u64,
-    pub cancelled_count: u64,
-    pub ignored_results: u64,
+    pub(crate) key: QueryKey,
+    pub(crate) status: QueryStatus,
+    pub(crate) data: Option<T>,
+    pub(crate) error: Option<String>,
+    pub(crate) active_request_id: Option<RequestId>,
+    pub(crate) cache_policy: CachePolicy,
+    pub(crate) request_policy: RequestPolicy,
+    pub(crate) started_at_ms: Option<u128>,
+    pub(crate) last_updated_at_ms: Option<u128>,
+    pub(crate) cache_hits: u64,
+    pub(crate) cancelled_count: u64,
+    pub(crate) ignored_results: u64,
 }
 
 impl<T> QueryResource<T> {
@@ -197,6 +197,54 @@ impl<T> QueryResource<T> {
 
     pub fn is_loading(&self) -> bool {
         self.status.is_loading()
+    }
+
+    pub fn key(&self) -> &QueryKey {
+        &self.key
+    }
+
+    pub fn status(&self) -> QueryStatus {
+        self.status
+    }
+
+    pub fn data(&self) -> Option<&T> {
+        self.data.as_ref()
+    }
+
+    pub fn error(&self) -> Option<&str> {
+        self.error.as_deref()
+    }
+
+    pub fn active_request_id(&self) -> Option<RequestId> {
+        self.active_request_id
+    }
+
+    pub fn cache_policy(&self) -> CachePolicy {
+        self.cache_policy
+    }
+
+    pub fn request_policy(&self) -> RequestPolicy {
+        self.request_policy
+    }
+
+    pub fn started_at_ms(&self) -> Option<u128> {
+        self.started_at_ms
+    }
+
+    pub fn last_updated_at_ms(&self) -> Option<u128> {
+        self.last_updated_at_ms
+    }
+
+    pub fn cache_hits(&self) -> u64 {
+        self.cache_hits
+    }
+
+    pub fn cancelled_count(&self) -> u64 {
+        self.cancelled_count
+    }
+
+    pub fn ignored_results(&self) -> u64 {
+        self.ignored_results
     }
 
     pub fn has_data(&self) -> bool {
