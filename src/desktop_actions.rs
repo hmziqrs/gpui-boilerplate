@@ -20,8 +20,10 @@ pub enum DesktopActionError {
     DialogFailed(String),
     #[error("watcher error: {0}")]
     Watcher(#[from] notify::Error),
-    #[error("{0}")]
-    Other(String),
+    #[error("desktop actions unavailable")]
+    Unavailable,
+    #[error("watcher lock poisoned")]
+    LockPoisoned,
 }
 
 #[derive(Clone, Debug)]
@@ -146,11 +148,11 @@ pub fn save_file(cx: &mut App) -> Option<PathBuf> {
 pub fn watch_path(path: PathBuf, cx: &mut App) -> Result<u64, DesktopActionError> {
     let state = cx
         .try_global::<DesktopActionsState>()
-        .ok_or_else(|| DesktopActionError::Other("desktop actions unavailable".to_string()))?;
+        .ok_or(DesktopActionError::Unavailable)?;
     let mut inner = state
         .inner
         .lock()
-        .map_err(|_| DesktopActionError::Other("watcher lock poisoned".to_string()))?;
+        .map_err(|_| DesktopActionError::LockPoisoned)?;
     let watcher_id = inner.next_watcher_id;
     inner.next_watcher_id += 1;
 

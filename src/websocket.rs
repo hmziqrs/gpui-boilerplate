@@ -20,10 +20,12 @@
 pub enum WebSocketError {
     #[error("connection failed: {0}")]
     Connection(String),
+    #[cfg(feature = "websocket")]
     #[error("send failed: {0}")]
-    Send(String),
+    Send(#[source] tokio_tungstenite::tungstenite::Error),
+    #[cfg(feature = "websocket")]
     #[error("close failed: {0}")]
-    Close(String),
+    Close(#[source] tokio_tungstenite::tungstenite::Error),
     #[error("not connected")]
     NotConnected,
     #[error("websocket feature not enabled")]
@@ -268,7 +270,7 @@ mod live {
                 Some(ws) => ws
                     .send(Message::Text(message.into()))
                     .await
-                    .map_err(|e| WebSocketError::Send(e.to_string())),
+                    .map_err(WebSocketError::Send),
                 None => Err(WebSocketError::NotConnected),
             }
         }
@@ -277,7 +279,7 @@ mod live {
         pub async fn close(&mut self) -> Result<(), WebSocketError> {
             let mut guard = self.inner.lock().await;
             if let Some(ws) = guard.take() {
-                ws.close(None).await.map_err(|e| WebSocketError::Close(e.to_string()))?;
+                ws.close(None).await.map_err(WebSocketError::Close)?;
             }
             self.state = ConnectionState::Closed;
             Ok(())

@@ -2,6 +2,18 @@
 
 use std::collections::VecDeque;
 
+#[derive(Debug, thiserror::Error)]
+pub enum FakeNotificationError {
+    #[error("send failed")]
+    SendFailed,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum FakeConnectivityError {
+    #[error("offline")]
+    Offline,
+}
+
 #[derive(Default)]
 pub struct FakeTelemetrySink {
     pub events: VecDeque<String>,
@@ -34,9 +46,9 @@ pub struct FakeNotificationBackend {
 }
 
 impl FakeNotificationBackend {
-    pub fn send(&mut self, title: &str) -> Result<(), &'static str> {
+    pub fn send(&mut self, title: &str) -> Result<(), FakeNotificationError> {
         if self.fail_send {
-            return Err("send failed");
+            return Err(FakeNotificationError::SendFailed);
         }
         self.sent.push_back(title.to_string());
         Ok(())
@@ -44,8 +56,8 @@ impl FakeNotificationBackend {
 }
 
 impl FakeConnectivityProbe {
-    pub fn probe(&self) -> Result<(), &'static str> {
-        if self.next_ok { Ok(()) } else { Err("offline") }
+    pub fn probe(&self) -> Result<(), FakeConnectivityError> {
+        if self.next_ok { Ok(()) } else { Err(FakeConnectivityError::Offline) }
     }
 }
 

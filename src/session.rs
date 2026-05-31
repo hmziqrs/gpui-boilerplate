@@ -1,4 +1,4 @@
-use gpui::{App, Global};
+use gpui::{App, BorrowAppContext as _, Global};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SessionState {
@@ -35,5 +35,7 @@ pub fn snapshot(cx: &App) -> SessionSnapshot {
 
 pub fn set_state(state: SessionState, cx: &mut App) {
     tracing::info!(target: "gpui_starter::session", state = ?state, "session state updated");
-    cx.set_global(SessionSnapshot { state });
+    cx.update_global::<SessionSnapshot, _>(|snapshot, _cx| {
+        snapshot.state = state;
+    });
 }

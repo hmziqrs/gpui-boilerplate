@@ -1,4 +1,4 @@
-use gpui::{App, Global};
+use gpui::{App, BorrowAppContext as _, Global};
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _};
 
@@ -112,12 +112,9 @@ pub fn shutdown(cx: &mut App) {
             enabled = runtime.enabled,
             "logging shutdown requested"
         );
-        cx.set_global(LoggingState {
-            runtime: LoggingRuntime {
-                has_guard: false,
-                ..runtime
-            },
-            guard: None,
+        cx.update_global::<LoggingState, _>(|state, _cx| {
+            state.runtime.has_guard = false;
+            state.guard = None;
         });
     }
 }

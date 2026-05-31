@@ -1,4 +1,4 @@
-use gpui::{App, Global};
+use gpui::{App, BorrowAppContext as _, Global};
 use network_interface::NetworkInterfaceConfig;
 use serde::{Deserialize, Serialize};
 
@@ -59,31 +59,31 @@ pub fn check_now(cx: &mut App) {
             })
             .await;
         cx.update(move |cx| {
-            let mut next = snapshot(cx);
-            next.interfaces = interfaces;
-            match result {
-                Ok(response) if response.status().is_success() => {
-                    next.state = ConnectivityState::Online;
-                    next.last_error = None;
+            cx.update_global::<ConnectivitySnapshot, _>(|next, _cx| {
+                next.interfaces = interfaces;
+                match result {
+                    Ok(response) if response.status().is_success() => {
+                        next.state = ConnectivityState::Online;
+                        next.last_error = None;
+                    }
+                    Ok(response) => {
+                        next.state = ConnectivityState::CaptiveOrFiltered;
+                        next.last_error = Some(format!("probe status {}", response.status()));
+                    }
+                    Err(err) => {
+                        next.state = ConnectivityState::Offline;
+                        next.last_error = Some(err.to_string());
+                    }
                 }
-                Ok(response) => {
-                    next.state = ConnectivityState::CaptiveOrFiltered;
-                    next.last_error = Some(format!("probe status {}", response.status()));
-                }
-                Err(err) => {
-                    next.state = ConnectivityState::Offline;
-                    next.last_error = Some(err.to_string());
-                }
-            }
-            tracing::info!(
-                target: "gpui_starter::connectivity",
-                state = ?next.state,
-                probe_url = %next.probe_url,
-                last_error = ?next.last_error,
-                interfaces = ?next.interfaces,
-                "connectivity probe completed"
-            );
-            cx.set_global(next);
+                tracing::info!(
+                    target: "gpui_starter::connectivity",
+                    state = ?next.state,
+                    probe_url = %next.probe_url,
+                    last_error = ?next.last_error,
+                    interfaces = ?next.interfaces,
+                    "connectivity probe completed"
+                );
+            });
         });
     })
     .detach();

@@ -1,4 +1,4 @@
-use gpui::{App, Global, SharedString};
+use gpui::{App, BorrowAppContext as _, Global, SharedString};
 
 #[derive(Debug, thiserror::Error)]
 pub enum SecureStorageError {
@@ -123,7 +123,7 @@ pub fn delete_secret(service: &str, key: &str, cx: &mut App) -> Result<(), Secur
 }
 
 fn update_last_error(last_error: Option<String>, cx: &mut App) {
-    let mut current = snapshot(cx);
-    current.last_error = last_error;
-    cx.set_global(current);
+    cx.update_global::<SecureStorageSnapshot, _>(|state, _cx| {
+        state.last_error = last_error;
+    });
 }

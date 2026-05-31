@@ -1,4 +1,4 @@
-use gpui::{App, Global};
+use gpui::{App, BorrowAppContext as _, Global};
 #[cfg(target_os = "macos")]
 use std::sync::{Mutex, OnceLock};
 
@@ -64,7 +64,9 @@ pub fn apply_enabled(enabled: bool, cx: &mut App) {
     }
 
     set_capability(&state, cx);
-    cx.set_global(state);
+    cx.update_global::<ShortcutState, _>(|s, _cx| {
+        *s = state;
+    });
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -78,7 +80,9 @@ pub fn apply_enabled(enabled: bool, cx: &mut App) {
         None
     };
     set_capability(&state, cx);
-    cx.set_global(state);
+    cx.update_global::<ShortcutState, _>(|s, _cx| {
+        *s = state;
+    });
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -111,7 +115,9 @@ pub fn shutdown(cx: &mut App) {
         state.last_error = Some("global shortcuts unregistered during shutdown".to_string());
     }
     set_capability(&state, cx);
-    cx.set_global(state);
+    cx.update_global::<ShortcutState, _>(|s, _cx| {
+        *s = state;
+    });
 }
 
 #[cfg(not(target_os = "macos"))]

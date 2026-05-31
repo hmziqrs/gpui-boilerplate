@@ -1,6 +1,6 @@
 use std::{path::PathBuf, sync::Arc};
 
-use gpui::{App, Global};
+use gpui::{App, BorrowAppContext as _, Global};
 use rusqlite::Connection;
 
 #[derive(Clone, Debug, Default)]
@@ -230,38 +230,38 @@ pub fn run_health_check(cx: &mut App) {
     let Some(runtime) = cx.try_global::<StorageRuntime>().cloned() else {
         return;
     };
-    let mut snap = snapshot(cx);
-    match runtime.backend.health_check() {
-        Ok(()) => {
-            snap.healthy = true;
-            snap.last_error = None;
-            if let Ok(version) = runtime.backend.schema_version() {
-                snap.schema_version = version;
+    cx.update_global::<StorageSnapshot, _>(|snap, _cx| {
+        match runtime.backend.health_check() {
+            Ok(()) => {
+                snap.healthy = true;
+                snap.last_error = None;
+                if let Ok(version) = runtime.backend.schema_version() {
+                    snap.schema_version = version;
+                }
+            }
+            Err(err) => {
+                snap.healthy = false;
+                snap.last_error = Some(err.to_string());
             }
         }
-        Err(err) => {
-            snap.healthy = false;
-            snap.last_error = Some(err.to_string());
-        }
-    }
-    cx.set_global(snap);
+    });
 }
 
 pub fn run_maintenance(cx: &mut App) {
     let Some(runtime) = cx.try_global::<StorageRuntime>().cloned() else {
         return;
     };
-    let mut snap = snapshot(cx);
-    match runtime.backend.maintenance() {
-        Ok(()) => {
-            snap.last_maintenance_at = Some(chrono::Utc::now().to_rfc3339());
-            snap.last_error = None;
+    cx.update_global::<StorageSnapshot, _>(|snap, _cx| {
+        match runtime.backend.maintenance() {
+            Ok(()) => {
+                snap.last_maintenance_at = Some(chrono::Utc::now().to_rfc3339());
+                snap.last_error = None;
+            }
+            Err(err) => {
+                snap.last_error = Some(err.to_string());
+            }
         }
-        Err(err) => {
-            snap.last_error = Some(err.to_string());
-        }
-    }
-    cx.set_global(snap);
+    });
 }
 
 pub fn shutdown(cx: &mut App) {

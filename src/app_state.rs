@@ -127,9 +127,11 @@ pub fn config(cx: &App) -> AppConfig {
 
 pub fn paths(cx: &App) -> AppPaths {
     cx.try_global::<AppState>()
-        .expect("AppState not initialized")
-        .paths
-        .clone()
+        .map(|s| s.paths.clone())
+        .unwrap_or_else(|| {
+            tracing::error!(target: "gpui_starter::app_state", "AppState not initialized, using fallback paths");
+            AppPaths::new().expect("failed to initialize fallback app paths")
+        })
 }
 
 pub fn update_config(cx: &mut App, update: impl FnOnce(&mut AppConfig)) {

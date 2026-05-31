@@ -2,7 +2,7 @@ use std::sync::Arc;
 #[cfg(test)]
 use std::sync::Mutex;
 
-use gpui::{App, Global};
+use gpui::{App, BorrowAppContext as _, Global};
 use opentelemetry::global;
 use tracing_opentelemetry as _;
 
@@ -88,7 +88,7 @@ pub enum TelemetryError {
     #[error("telemetry not available: {0}")]
     NotAvailable(String),
     #[error("OTLP error: {0}")]
-    Otlp(String),
+    Otlp(#[source] Box<dyn std::error::Error + Send + Sync>),
 }
 
 pub trait TelemetrySink: Send + Sync {
@@ -189,7 +189,7 @@ fn install_otlp_tracer(endpoint: &str) -> Result<(), TelemetryError> {
                 )])),
         )
         .install_batch::<Tokio>()
-        .map_err(|e| TelemetryError::Otlp(format!("failed to install OTLP batch tracer: {e}")))?;
+        .map_err(|e| TelemetryError::Otlp(Box::new(e)))?;
 
     global::set_text_map_propagator(TraceContextPropagator::new());
     global::set_tracer_provider(provider);
@@ -410,7 +410,9 @@ pub fn set_mode(mode: TelemetryMode, consented: bool, endpoint: Option<&str>, cx
     );
 
     set_capability(&next, cx);
-    cx.set_global(next);
+    cx.update_global::<TelemetrySnapshot, _>(|snap, _cx| {
+        *snap = next;
+    });
     cx.set_global(TelemetryRuntime { sink });
 }
 
@@ -437,12 +439,12 @@ pub fn set_user_property(key: &str, value: &str, cx: &mut App) {
 
 pub fn flush(cx: &mut App) {
     with_runtime(cx, |runtime, cx| {
-        let mut snap = snapshot(cx);
-        if let Err(err) = runtime.sink.flush() {
-            snap.last_export_error = Some(err.to_string());
-            snap.last_error = Some(err.to_string());
-        }
-        cx.set_global(snap);
+        cx.update_global::<TelemetrySnapshot, _>(|snap, _cx| {
+            if let Err(err) = runtime.sink.flush() {
+                snap.last_export_error = Some(err.to_string());
+                snap.last_error = Some(err.to_string());
+            }
+        });
     });
 }
 
@@ -473,18 +475,18 @@ fn with_runtime(cx: &mut App, f: impl FnOnce(TelemetryRuntime, &mut App)) {
 }
 
 fn handle_record_result(result: Result<(), TelemetryError>, cx: &mut App) {
-    let mut snap = snapshot(cx);
-    match result {
-        Ok(()) => {
-            snap.events_recorded = snap.events_recorded.saturating_add(1);
-            snap.last_error = None;
+    cx.update_global::<TelemetrySnapshot, _>(|snap, _cx| {
+        match result {
+            Ok(()) => {
+                snap.events_recorded = snap.events_recorded.saturating_add(1);
+                snap.last_error = None;
+            }
+            Err(err) => {
+                snap.last_export_error = Some(err.to_string());
+                snap.last_error = Some(err.to_string());
+            }
         }
-        Err(err) => {
-            snap.last_export_error = Some(err.to_string());
-            snap.last_error = Some(err.to_string());
-        }
-    }
-    cx.set_global(snap);
+    });
 }
 
 fn set_capability(snapshot: &TelemetrySnapshot, cx: &mut App) {
