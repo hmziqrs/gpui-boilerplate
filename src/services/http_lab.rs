@@ -175,16 +175,10 @@ pub fn reset(cx: &mut App) {
 }
 
 pub fn run_action(action: HttpLabAction, cx: &mut App) {
-    let loading_status = if snapshot(cx).last_success.is_some() {
-        HttpDemoStatus::LoadingWithState
-    } else {
-        HttpDemoStatus::LoadingEmpty
-    };
+    let snapshot = snapshot(cx);
+    let loading_status = loading_status_for(action, &snapshot);
     cx.update_global::<HttpLabState, _>(|state, _cx| {
-        state.status = loading_status;
-        state.active_label = Some(action.label().to_string());
-        state.last_error = None;
-        record_transition(state, loading_status, action.label());
+        begin_action(state, action, loading_status);
     });
 
     cx.spawn(async move |cx| {
@@ -200,50 +194,78 @@ pub fn run_action(action: HttpLabAction, cx: &mut App) {
     .detach();
 }
 
+fn loading_status_for(action: HttpLabAction, state: &HttpLabState) -> HttpDemoStatus {
+    if action == HttpLabAction::FullFlow {
+        HttpDemoStatus::LoadingEmpty
+    } else if state.last_success.is_some() || state.last_error.is_some() {
+        HttpDemoStatus::LoadingWithState
+    } else {
+        HttpDemoStatus::LoadingEmpty
+    }
+}
+
+fn begin_action(state: &mut HttpLabState, action: HttpLabAction, loading_status: HttpDemoStatus) {
+    if action == HttpLabAction::FullFlow {
+        *state = HttpLabState::default();
+    }
+    state.status = loading_status;
+    state.active_label = Some(action.label().to_string());
+    record_transition(state, loading_status, action.label());
+}
+
 fn apply_result(action: HttpLabAction, result: Result<Vec<HttpExchange>, String>, cx: &mut App) {
     cx.update_global::<HttpLabState, _>(|state, _cx| {
-        state.active_label = None;
-        match result {
-            Ok(exchanges) => {
-                for (index, exchange) in exchanges.into_iter().enumerate() {
-                    if action == HttpLabAction::FullFlow && index > 0 {
-                        record_transition(state, HttpDemoStatus::LoadingWithState, &exchange.label);
-                    }
-                    let is_success = exchange.error.is_none();
-                    if is_success {
-                        state.status = HttpDemoStatus::Success;
-                        state.last_success = Some(exchange.clone());
-                        record_transition(state, HttpDemoStatus::Success, &exchange.label);
-                        if let Some(cookie_snapshot) = cookie_snapshot_from_exchange(&exchange) {
-                            state.cookies = Some(cookie_snapshot);
-                        }
-                    } else {
-                        state.status = HttpDemoStatus::Failure;
-                        state.last_error = Some(exchange.clone());
-                        record_transition(state, HttpDemoStatus::Failure, &exchange.label);
-                    }
-                    push_history(state, exchange);
+        apply_result_to_state(state, action, result);
+    });
+}
+
+fn apply_result_to_state(
+    state: &mut HttpLabState,
+    action: HttpLabAction,
+    result: Result<Vec<HttpExchange>, String>,
+) {
+    state.active_label = None;
+    match result {
+        Ok(exchanges) => {
+            for (index, exchange) in exchanges.into_iter().enumerate() {
+                if action == HttpLabAction::FullFlow && index > 0 {
+                    record_transition(state, HttpDemoStatus::LoadingWithState, &exchange.label);
                 }
-            }
-            Err(error) => {
-                let exchange = HttpExchange {
-                    label: action.label().to_string(),
-                    request: HttpRequestSnapshot {
-                        method: "-".to_string(),
-                        url: HTTPBIN_BASE.to_string(),
-                        request_body_kind: HttpRequestBodyKind::None,
-                        request_body_preview: String::new(),
-                    },
-                    response: None,
-                    error: Some(error),
-                };
-                state.status = HttpDemoStatus::Failure;
-                state.last_error = Some(exchange.clone());
-                record_transition(state, HttpDemoStatus::Failure, action.label());
+                let is_success = exchange.error.is_none();
+                if is_success {
+                    state.status = HttpDemoStatus::Success;
+                    state.last_success = Some(exchange.clone());
+                    state.last_error = None;
+                    record_transition(state, HttpDemoStatus::Success, &exchange.label);
+                    if let Some(cookie_snapshot) = cookie_snapshot_from_exchange(&exchange) {
+                        state.cookies = Some(cookie_snapshot);
+                    }
+                } else {
+                    state.status = HttpDemoStatus::Failure;
+                    state.last_error = Some(exchange.clone());
+                    record_transition(state, HttpDemoStatus::Failure, &exchange.label);
+                }
                 push_history(state, exchange);
             }
         }
-    });
+        Err(error) => {
+            let exchange = HttpExchange {
+                label: action.label().to_string(),
+                request: HttpRequestSnapshot {
+                    method: "-".to_string(),
+                    url: HTTPBIN_BASE.to_string(),
+                    request_body_kind: HttpRequestBodyKind::None,
+                    request_body_preview: String::new(),
+                },
+                response: None,
+                error: Some(error),
+            };
+            state.status = HttpDemoStatus::Failure;
+            state.last_error = Some(exchange.clone());
+            record_transition(state, HttpDemoStatus::Failure, action.label());
+            push_history(state, exchange);
+        }
+    }
 }
 
 fn record_transition(state: &mut HttpLabState, status: HttpDemoStatus, label: &str) {
@@ -270,6 +292,7 @@ fn client() -> Result<Client, String> {
     Client::builder()
         .timeout(TIMEOUT)
         .cookie_store(true)
+        .redirect(reqwest::redirect::Policy::none())
         .build()
         .map_err(|err| err.to_string())
 }
@@ -280,7 +303,7 @@ fn run_single(action: HttpLabAction) -> Result<HttpExchange, String> {
         HttpLabAction::GetText => execute_get(
             &client,
             "GET text",
-            &format!("{HTTPBIN_BASE}/anything?format=text"),
+            &format!("{HTTPBIN_BASE}/encoding/utf8"),
             HttpBodyKind::Text,
         ),
         HttpLabAction::GetJson => execute_get(
@@ -431,14 +454,29 @@ fn run_cookies() -> Result<HttpExchange, String> {
 
 fn run_cookies_with_client(client: &Client) -> Result<HttpExchange, String> {
     let set_url = format!("{HTTPBIN_BASE}/cookies/set/session/gpui-starter");
-    let _ = client.get(&set_url).send().map_err(|err| err.to_string())?;
+    let set_response = client.get(&set_url).send().map_err(|err| err.to_string())?;
+    let set_cookie_header = set_response
+        .headers()
+        .iter()
+        .find(|(name, _)| name.as_str().eq_ignore_ascii_case("set-cookie"))
+        .map(|(_, value)| value.to_str().unwrap_or("<non-utf8>").to_string());
 
-    execute_get(
+    let mut exchange = execute_get(
         client,
         "Cookies",
         &format!("{HTTPBIN_BASE}/cookies"),
         HttpBodyKind::Json,
-    )
+    )?;
+
+    if let (Some(response), Some(set_cookie_header)) =
+        (exchange.response.as_mut(), set_cookie_header)
+    {
+        response
+            .headers
+            .push(("set-cookie".to_string(), set_cookie_header));
+    }
+
+    Ok(exchange)
 }
 
 fn response_to_exchange(
@@ -495,7 +533,7 @@ fn detect_body_kind(headers: &HeaderMap, expected_kind: HttpBodyKind) -> HttpBod
         .to_ascii_lowercase();
     if content_type.contains("json") {
         HttpBodyKind::Json
-    } else if content_type.contains("xml") || content_type.contains("html") {
+    } else if content_type.contains("xml") {
         HttpBodyKind::Xml
     } else {
         expected_kind
@@ -525,7 +563,13 @@ fn truncate(value: &str, max_len: usize) -> String {
     if value.len() <= max_len {
         value.to_string()
     } else {
-        format!("{}…", &value[..max_len])
+        let end = value
+            .char_indices()
+            .map(|(index, _)| index)
+            .take_while(|index| *index <= max_len)
+            .last()
+            .unwrap_or(0);
+        format!("{}…", &value[..end])
     }
 }
 
@@ -563,4 +607,165 @@ pub fn response_fields(exchange: &HttpExchange) -> BTreeMap<&'static str, String
         fields.insert("error", error.clone());
     }
     fields
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn exchange(label: &str, status: u16, error: Option<&str>) -> HttpExchange {
+        HttpExchange {
+            label: label.to_string(),
+            request: HttpRequestSnapshot {
+                method: "GET".to_string(),
+                url: format!("{HTTPBIN_BASE}/test"),
+                request_body_kind: HttpRequestBodyKind::None,
+                request_body_preview: String::new(),
+            },
+            response: Some(HttpResponseSnapshot {
+                status,
+                status_text: "test".to_string(),
+                final_url: format!("{HTTPBIN_BASE}/test"),
+                elapsed_ms: 1,
+                headers: Vec::new(),
+                body_kind: HttpBodyKind::Text,
+                body_preview: String::new(),
+                parsed_json: None,
+                parsed_xml_preview: None,
+            }),
+            error: error.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn loading_with_state_counts_prior_failure() {
+        let state = HttpLabState {
+            last_error: Some(exchange("Failure", 500, Some("HTTP 500"))),
+            ..HttpLabState::default()
+        };
+        assert_eq!(
+            loading_status_for(HttpLabAction::GetJson, &state),
+            HttpDemoStatus::LoadingWithState
+        );
+    }
+
+    #[test]
+    fn full_flow_starts_from_empty_even_when_cached() {
+        let mut state = HttpLabState {
+            last_success: Some(exchange("Success", 200, None)),
+            last_error: Some(exchange("Failure", 500, Some("HTTP 500"))),
+            ..HttpLabState::default()
+        };
+        let loading_status = loading_status_for(HttpLabAction::FullFlow, &state);
+
+        begin_action(&mut state, HttpLabAction::FullFlow, loading_status);
+
+        assert_eq!(state.status, HttpDemoStatus::LoadingEmpty);
+        assert!(state.last_success.is_none());
+        assert!(state.last_error.is_none());
+        assert_eq!(state.active_label.as_deref(), Some("Run full flow"));
+    }
+
+    #[test]
+    fn successful_exchange_clears_stale_failure() {
+        let mut state = HttpLabState {
+            last_error: Some(exchange("Failure", 500, Some("HTTP 500"))),
+            active_label: Some("GET JSON".to_string()),
+            ..HttpLabState::default()
+        };
+        let success = exchange("Success", 200, None);
+
+        apply_result_to_state(&mut state, HttpLabAction::GetJson, Ok(vec![success]));
+
+        assert_eq!(state.status, HttpDemoStatus::Success);
+        assert!(state.last_success.is_some());
+        assert!(state.last_error.is_none());
+        assert!(state.active_label.is_none());
+        assert_eq!(state.history.len(), 1);
+    }
+
+    #[test]
+    fn failed_exchange_preserves_previous_success_as_cached_state() {
+        let previous_success = exchange("Success", 200, None);
+        let mut state = HttpLabState {
+            last_success: Some(previous_success.clone()),
+            active_label: Some("Failure".to_string()),
+            ..HttpLabState::default()
+        };
+        let failure = exchange("Failure", 500, Some("HTTP 500"));
+
+        apply_result_to_state(&mut state, HttpLabAction::Failure, Ok(vec![failure]));
+
+        assert_eq!(state.status, HttpDemoStatus::Failure);
+        assert_eq!(state.last_success, Some(previous_success));
+        assert!(state.last_error.is_some());
+        assert!(state.active_label.is_none());
+        assert_eq!(state.history.len(), 1);
+    }
+
+    #[test]
+    fn full_flow_records_intermediate_loading_with_state_transitions() {
+        let mut state = HttpLabState::default();
+        let exchanges = vec![
+            exchange("Flow success empty", 200, None),
+            exchange("Flow failure with cached state", 503, Some("HTTP 503")),
+            exchange("POST JSON", 200, None),
+        ];
+
+        apply_result_to_state(&mut state, HttpLabAction::FullFlow, Ok(exchanges));
+
+        assert_eq!(state.status, HttpDemoStatus::Success);
+        assert_eq!(state.history.len(), 3);
+        assert!(
+            state
+                .transition_log
+                .iter()
+                .any(|entry| entry == "Loading with state: Flow failure with cached state")
+        );
+        assert!(
+            state
+                .transition_log
+                .iter()
+                .any(|entry| entry == "Loading with state: POST JSON")
+        );
+    }
+
+    #[test]
+    fn cookies_exchange_updates_cookie_snapshot() {
+        let mut cookies = exchange("Cookies", 200, None);
+        let response = cookies.response.as_mut().expect("response");
+        response
+            .headers
+            .push(("set-cookie".to_string(), "session=gpui-starter".to_string()));
+        response.parsed_json = Some("{\"cookies\":{\"session\":\"gpui-starter\"}}".to_string());
+        let mut state = HttpLabState::default();
+
+        apply_result_to_state(&mut state, HttpLabAction::Cookies, Ok(vec![cookies]));
+
+        let cookies = state.cookies.expect("cookie snapshot");
+        assert_eq!(
+            cookies.set_cookie_header.as_deref(),
+            Some("session=gpui-starter")
+        );
+        assert_eq!(
+            cookies.echoed_cookies_json.as_deref(),
+            Some("{\"cookies\":{\"session\":\"gpui-starter\"}}")
+        );
+    }
+
+    #[test]
+    fn parse_helpers_split_json_xml_and_text() {
+        assert!(parse_json("{\"ok\":true}").is_some());
+        assert!(parse_json("<root />").is_none());
+        assert!(parse_xml_preview("<root />", HttpBodyKind::Xml).is_some());
+        assert!(parse_xml_preview("<html />", HttpBodyKind::Text).is_none());
+    }
+
+    #[test]
+    fn truncate_preserves_utf8_boundaries() {
+        let value = "hello ڄاڻ world";
+        let truncated = truncate(value, 9);
+        assert!(truncated.ends_with('…'));
+        assert!(std::str::from_utf8(truncated.as_bytes()).is_ok());
+    }
 }

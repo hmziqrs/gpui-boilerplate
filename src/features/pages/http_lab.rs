@@ -22,7 +22,7 @@ impl HttpLabPage {
 impl Render for HttpLabPage {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let state = http_lab::snapshot(cx);
-        let current_exchange = state.last_error.as_ref().or(state.last_success.as_ref());
+        let current_exchange = current_exchange(&state);
 
         v_flex()
             .min_h_full()
@@ -50,6 +50,16 @@ impl Render for HttpLabPage {
                 )
             })
             .child(history_panel(&state, cx))
+    }
+}
+
+fn current_exchange(state: &HttpLabState) -> Option<&HttpExchange> {
+    match state.status {
+        http_lab::HttpDemoStatus::Failure | http_lab::HttpDemoStatus::LoadingWithState => {
+            state.last_error.as_ref().or(state.last_success.as_ref())
+        }
+        http_lab::HttpDemoStatus::Success => state.last_success.as_ref(),
+        http_lab::HttpDemoStatus::Idle | http_lab::HttpDemoStatus::LoadingEmpty => None,
     }
 }
 
