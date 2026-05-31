@@ -30,6 +30,7 @@ pub fn validate_deep_link_url(url: &str) -> Result<Url, AppError> {
     let allowed_hosts = [
         "home",
         "form",
+        "http",
         "settings",
         "notifications",
         "diagnostics",
@@ -154,6 +155,7 @@ mod tests {
     fn valid_deep_link_urls() {
         assert!(validate_deep_link_url("gpui-starter://home").is_ok());
         assert!(validate_deep_link_url("gpui-starter://settings").is_ok());
+        assert!(validate_deep_link_url("gpui-starter://http").is_ok());
         assert!(validate_deep_link_url("gpui-starter://settings/notifications").is_ok());
         assert!(validate_deep_link_url("gpui-starter://diagnostics").is_ok());
         assert!(validate_deep_link_url("gpui-starter://notifications").is_ok());

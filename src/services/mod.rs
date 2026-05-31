@@ -4,6 +4,7 @@ pub mod connectivity;
 pub mod desktop_actions;
 pub mod error_surface;
 pub mod first_run;
+pub mod http_lab;
 pub mod i18n;
 pub mod logging;
 pub mod notifications;

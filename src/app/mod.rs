@@ -271,6 +271,7 @@ pub fn init(cx: &mut App) {
     crate::undo_stack::initialize(cx);
     crate::shortcuts::initialize(cx);
     crate::connectivity::initialize(cx);
+    crate::http_lab::initialize(cx);
     crate::desktop_actions::initialize(cx);
     crate::accessibility::initialize(cx);
     crate::secure_storage::initialize(cx);

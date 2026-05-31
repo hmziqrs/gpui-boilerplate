@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 pub enum Page {
     Home,
     Form,
+    HttpLab,
     Settings,
     Notifications,
     Diagnostics,
@@ -16,6 +17,7 @@ impl Page {
         match self {
             Page::Home => "Home",
             Page::Form => "Form",
+            Page::HttpLab => "HTTP Lab",
             Page::Settings => "Settings",
             Page::Notifications => "Notifications",
             Page::Diagnostics => "Diagnostics",
@@ -27,6 +29,7 @@ impl Page {
         match self {
             Page::Home => IconName::Inbox,
             Page::Form => IconName::File,
+            Page::HttpLab => IconName::Globe,
             Page::Settings => IconName::Settings2,
             Page::Notifications => IconName::Bell,
             Page::Diagnostics => IconName::Info,
@@ -38,6 +41,7 @@ impl Page {
         &[
             Page::Home,
             Page::Form,
+            Page::HttpLab,
             Page::Settings,
             Page::Notifications,
             Page::Diagnostics,

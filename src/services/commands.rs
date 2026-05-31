@@ -12,6 +12,7 @@ use crate::{
 pub enum CommandId {
     OpenHome,
     OpenForm,
+    OpenHttpLab,
     OpenSettings,
     OpenNotifications,
     OpenDiagnostics,
@@ -46,6 +47,7 @@ pub fn availability(id: CommandId, cx: &App) -> CommandAvailability {
     match id {
         CommandId::OpenHome
         | CommandId::OpenForm
+        | CommandId::OpenHttpLab
         | CommandId::OpenSettings
         | CommandId::OpenNotifications
         | CommandId::OpenDiagnostics
@@ -98,6 +100,12 @@ pub fn registry() -> Vec<CommandSpec> {
             "Form",
             "Open the Form page",
             IconName::File,
+        ),
+        command(
+            CommandId::OpenHttpLab,
+            "HTTP Lab",
+            "Explore httpbin requests",
+            IconName::Globe,
         ),
         command(
             CommandId::OpenSettings,
@@ -184,6 +192,7 @@ pub fn execute(id: CommandId, cx: &mut App) {
     match id {
         CommandId::OpenHome => navigate(Page::Home, cx),
         CommandId::OpenForm => navigate(Page::Form, cx),
+        CommandId::OpenHttpLab => navigate(Page::HttpLab, cx),
         CommandId::OpenSettings => navigate(Page::Settings, cx),
         CommandId::OpenNotifications => navigate(Page::Notifications, cx),
         CommandId::OpenDiagnostics => navigate(Page::Diagnostics, cx),

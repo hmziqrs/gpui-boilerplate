@@ -9,6 +9,7 @@ pub const APP_URL_SCHEME: &str = "gpui-starter";
 const VALID_HOSTS: &[&str] = &[
     "home",
     "form",
+    "http",
     "settings",
     "notifications",
     "diagnostics",
@@ -83,6 +84,7 @@ impl AppRoute {
         match self {
             Self::Page(Page::Home) => "gpui-starter://home".to_string(),
             Self::Page(Page::Form) => "gpui-starter://form".to_string(),
+            Self::Page(Page::HttpLab) => "gpui-starter://http".to_string(),
             Self::Page(Page::Settings) => "gpui-starter://settings".to_string(),
             Self::Page(Page::Notifications) => "gpui-starter://notifications".to_string(),
             Self::Page(Page::Diagnostics) => "gpui-starter://diagnostics".to_string(),
@@ -142,6 +144,7 @@ impl AppRoute {
         match (host, segments.as_slice()) {
             ("home", []) => Ok(Self::Page(Page::Home)),
             ("form", []) => Ok(Self::Page(Page::Form)),
+            ("http", []) => Ok(Self::Page(Page::HttpLab)),
             ("settings", []) => Ok(Self::Page(Page::Settings)),
             ("settings", ["notifications"]) => Ok(Self::SettingsNotifications),
             ("notifications", []) => Ok(Self::Page(Page::Notifications)),
@@ -181,6 +184,10 @@ mod tests {
         assert_eq!(
             AppRoute::parse_deep_link("gpui-starter://notifications").unwrap(),
             AppRoute::Page(Page::Notifications)
+        );
+        assert_eq!(
+            AppRoute::parse_deep_link("gpui-starter://http").unwrap(),
+            AppRoute::Page(Page::HttpLab)
         );
     }
 

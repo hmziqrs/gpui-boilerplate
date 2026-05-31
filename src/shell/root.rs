@@ -9,7 +9,7 @@ use gpui_component::{
 use crate::sidebar::Page;
 use crate::title_bar::AppTitleBar;
 use crate::views::{
-    AboutPage, DiagnosticsPage, FormPage, HomePage, NotificationsPage, SettingsPage,
+    AboutPage, DiagnosticsPage, FormPage, HomePage, HttpLabPage, NotificationsPage, SettingsPage,
 };
 use crate::{
     app::ToggleSearch,
@@ -53,6 +53,7 @@ pub struct AppRoot {
     collapsed: bool,
     home_page: Entity<HomePage>,
     form_page: Entity<FormPage>,
+    http_lab_page: Entity<HttpLabPage>,
     settings_page: Entity<SettingsPage>,
     notifications_page: Entity<NotificationsPage>,
     diagnostics_page: Entity<DiagnosticsPage>,
@@ -68,6 +69,7 @@ impl AppRoot {
         let title_bar = cx.new(|cx| AppTitleBar::new(title, window, cx));
         let home_page = cx.new(|_| HomePage::new());
         let form_page = cx.new(|cx| FormPage::new(window, cx));
+        let http_lab_page = cx.new(|cx| HttpLabPage::new(window, cx));
         let settings_page = cx.new(|cx| SettingsPage::new(window, cx));
         let notifications_page = cx.new(|cx| NotificationsPage::new(window, cx));
         let diagnostics_page = cx.new(|cx| DiagnosticsPage::new(window, cx));
@@ -161,6 +163,7 @@ impl AppRoot {
             collapsed: config.sidebar_collapsed,
             home_page,
             form_page,
+            http_lab_page,
             settings_page,
             notifications_page,
             diagnostics_page,
@@ -172,6 +175,7 @@ impl AppRoot {
         match self.active_route.page_for_render() {
             Page::Home => self.home_page.clone().into(),
             Page::Form => self.form_page.clone().into(),
+            Page::HttpLab => self.http_lab_page.clone().into(),
             Page::Settings => self.settings_page.clone().into(),
             Page::Notifications => self.notifications_page.clone().into(),
             Page::Diagnostics => self.diagnostics_page.clone().into(),
