@@ -317,6 +317,14 @@ impl Focusable for LauncherRoot {
 
 impl LauncherRoot {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        // Install Liquid Glass — creates NSGlassEffectView directly in the
+        // native view hierarchy, no GPUI source patches needed.
+        #[cfg(target_os = "macos")]
+        crate::platform::liquid_glass::LiquidGlass::install(
+            window,
+            &Default::default(),
+        );
+
         let launcher = cx.new(|cx| Launcher::new(window, cx));
 
         // Focus the search input after the first layout pass
