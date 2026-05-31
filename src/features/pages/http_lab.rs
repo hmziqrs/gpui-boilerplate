@@ -61,7 +61,7 @@ fn hero(state: &HttpLabState, cx: &App) -> Div {
                         .max_w(px(760.))
                         .text_sm()
                         .text_color(cx.theme().muted_foreground)
-                        .child("A small React Query-style GPUI store: every request type has its own resource state, request policy, cache policy, active task id, cancellation guard, and response cache."),
+                        .child("A small React Query-style GPUI store: every request type has its own resource state, request policy, cache policy, request id, cancellation guard, and response cache."),
                 )
                 .child(
                     div()
@@ -69,7 +69,7 @@ fn hero(state: &HttpLabState, cx: &App) -> Div {
                         .flex_wrap()
                         .gap_2()
                         .child(chip(
-                            &format!("Active tasks: {}", state.active_count()),
+                            &format!("Active requests: {}", state.active_count()),
                             cx.theme().background,
                             cx,
                         ))
@@ -79,7 +79,7 @@ fn hero(state: &HttpLabState, cx: &App) -> Div {
                             cx,
                         ))
                         .child(chip(
-                            "Cancellation is logical: blocking reqwest may finish, but stale task results are ignored.",
+                            "Cancellation is logical: blocking reqwest may finish, but stale request results are ignored.",
                             cx.theme().background,
                             cx,
                         )),
@@ -172,9 +172,9 @@ fn resource_panel(state: &HttpLabState, resource: &ApiResource, cx: &App) -> Div
                     cx.theme().background,
                     cx,
                 ))
-                .when_some(resource.active_task, |this, task_id| {
+                .when_some(resource.active_request_id, |this, request_id| {
                     this.child(chip(
-                        &format!("Task #{}", task_id.value()),
+                        &format!("request #{}", request_id.value()),
                         cx.theme().background,
                         cx,
                     ))

@@ -11,10 +11,10 @@ const TIMEOUT: Duration = Duration::from_secs(15);
 const GET_CACHE_TTL_MS: u64 = 60_000;
 const REVALIDATE_TTL_MS: u64 = 30_000;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-pub struct ApiTaskId(u64);
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RequestId(u64);
 
-impl ApiTaskId {
+impl RequestId {
     pub fn value(self) -> u64 {
         self.0
     }
@@ -169,7 +169,7 @@ pub struct ApiResource {
     pub status: ApiStatus,
     pub data: Option<HttpExchange>,
     pub error: Option<String>,
-    pub active_task: Option<ApiTaskId>,
+    pub active_request_id: Option<RequestId>,
     pub cache_policy: CachePolicy,
     pub request_policy: RequestPolicy,
     pub started_at_ms: Option<u128>,
@@ -186,7 +186,7 @@ impl ApiResource {
             status: ApiStatus::Idle,
             data: None,
             error: None,
-            active_task: None,
+            active_request_id: None,
             cache_policy: action.cache_policy(),
             request_policy: action.request_policy(),
             started_at_ms: None,
@@ -222,63 +222,10 @@ impl ApiResource {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TaskPool {
-    next_task_id: u64,
-    active: BTreeMap<ApiTaskId, HttpLabAction>,
-    pub cancelled_count: u64,
-    pub ignored_results: u64,
-}
-
-impl Default for TaskPool {
-    fn default() -> Self {
-        Self {
-            next_task_id: 1,
-            active: BTreeMap::new(),
-            cancelled_count: 0,
-            ignored_results: 0,
-        }
-    }
-}
-
-impl TaskPool {
-    fn start(&mut self, action: HttpLabAction) -> ApiTaskId {
-        let task_id = ApiTaskId(self.next_task_id);
-        self.next_task_id += 1;
-        self.active.insert(task_id, action);
-        task_id
-    }
-
-    fn cancel(&mut self, task_id: ApiTaskId) -> bool {
-        let removed = self.active.remove(&task_id).is_some();
-        if removed {
-            self.cancelled_count += 1;
-        }
-        removed
-    }
-
-    fn finish(&mut self, task_id: ApiTaskId, action: HttpLabAction) -> bool {
-        match self.active.get(&task_id).copied() {
-            Some(active_action) if active_action == action => {
-                self.active.remove(&task_id);
-                true
-            }
-            _ => {
-                self.ignored_results += 1;
-                false
-            }
-        }
-    }
-
-    pub fn active_count(&self) -> usize {
-        self.active.len()
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HttpLabState {
     pub selected_action: HttpLabAction,
     pub resources: BTreeMap<HttpLabAction, ApiResource>,
-    pub task_pool: TaskPool,
+    next_request_id: u64,
     pub history: Vec<HttpExchange>,
     pub transition_log: Vec<String>,
     pub cookies: Option<HttpCookieSnapshot>,
@@ -294,7 +241,7 @@ impl Default for HttpLabState {
         Self {
             selected_action: HttpLabAction::GetJson,
             resources,
-            task_pool: TaskPool::default(),
+            next_request_id: 1,
             history: Vec::new(),
             transition_log: vec!["Idle".to_string()],
             cookies: None,
@@ -314,7 +261,10 @@ impl HttpLabState {
     }
 
     pub fn active_count(&self) -> usize {
-        self.task_pool.active_count()
+        self.resources
+            .values()
+            .filter(|resource| resource.active_request_id.is_some())
+            .count()
     }
 }
 
@@ -436,10 +386,10 @@ pub fn select_action(action: HttpLabAction, cx: &mut App) {
 
 pub fn run_action(action: HttpLabAction, cx: &mut App) {
     let now_ms = now_ms();
-    let task_id =
+    let request_id =
         cx.update_global::<HttpLabState, _>(|state, _cx| begin_action(state, action, now_ms));
 
-    let Some(task_id) = task_id else {
+    let Some(request_id) = request_id else {
         return;
     };
 
@@ -450,7 +400,7 @@ pub fn run_action(action: HttpLabAction, cx: &mut App) {
             .await;
 
         cx.update(move |cx| {
-            apply_result(action, task_id, result, cx);
+            apply_result(action, request_id, result, cx);
         });
     })
     .detach();
@@ -472,7 +422,7 @@ fn begin_action(
     state: &mut HttpLabState,
     action: HttpLabAction,
     now_ms: u128,
-) -> Option<ApiTaskId> {
+) -> Option<RequestId> {
     state.selected_action = action;
 
     let resource = state.resource(action);
@@ -502,7 +452,7 @@ fn begin_action(
     }
 
     let has_data = state.resource(action).has_data();
-    let task_id = state.task_pool.start(action);
+    let request_id = next_request_id(state);
     let status = if has_data {
         ApiStatus::LoadingWithData
     } else {
@@ -511,7 +461,7 @@ fn begin_action(
     let cache_policy = state.resource(action).cache_policy;
     if let Some(resource) = state.resources.get_mut(&action) {
         resource.status = status;
-        resource.active_task = Some(task_id);
+        resource.active_request_id = Some(request_id);
         resource.started_at_ms = Some(now_ms);
         resource.error = None;
     }
@@ -521,30 +471,30 @@ fn begin_action(
         _ => "request started",
     };
     record_transition(state, status, action.label(), note);
-    Some(task_id)
+    Some(request_id)
 }
 
 fn apply_result(
     action: HttpLabAction,
-    task_id: ApiTaskId,
+    request_id: RequestId,
     result: Result<Vec<ActionExchange>, String>,
     cx: &mut App,
 ) {
     let now_ms = now_ms();
     cx.update_global::<HttpLabState, _>(|state, _cx| {
-        apply_result_to_state(state, action, task_id, result, now_ms);
+        apply_result_to_state(state, action, request_id, result, now_ms);
     });
 }
 
 fn apply_result_to_state(
     state: &mut HttpLabState,
     action: HttpLabAction,
-    task_id: ApiTaskId,
+    request_id: RequestId,
     result: Result<Vec<ActionExchange>, String>,
     now_ms: u128,
 ) {
-    if !state.task_pool.finish(task_id, action) {
-        mark_ignored_result(state, action, task_id);
+    if !request_is_current(state, action, request_id) {
+        mark_ignored_result(state, action, request_id);
         return;
     }
 
@@ -590,7 +540,7 @@ fn finish_exchange(
         resource.status = status;
         resource.data = Some(exchange.clone());
         resource.error = error;
-        resource.active_task = None;
+        resource.active_request_id = None;
         resource.last_updated_at_ms = Some(now_ms);
     }
 
@@ -611,7 +561,7 @@ fn finish_flow_resource(
         resource.status = ApiStatus::Success;
         resource.data = last_exchange;
         resource.error = None;
-        resource.active_task = None;
+        resource.active_request_id = None;
         resource.last_updated_at_ms = Some(now_ms);
     }
     record_transition(
@@ -638,7 +588,7 @@ fn fail_resource(state: &mut HttpLabState, action: HttpLabAction, error: String,
     if let Some(resource) = state.resources.get_mut(&action) {
         resource.status = ApiStatus::Failure;
         resource.error = Some(error);
-        resource.active_task = None;
+        resource.active_request_id = None;
         resource.last_updated_at_ms = Some(now_ms);
     }
 
@@ -647,11 +597,9 @@ fn fail_resource(state: &mut HttpLabState, action: HttpLabAction, error: String,
 }
 
 fn cancel_action_in_state(state: &mut HttpLabState, action: HttpLabAction, reason: &str) {
-    let task_id = state.resource(action).active_task;
-    if let Some(task_id) = task_id {
-        state.task_pool.cancel(task_id);
+    if state.resource(action).active_request_id.is_some() {
         if let Some(resource) = state.resources.get_mut(&action) {
-            resource.active_task = None;
+            resource.active_request_id = None;
             resource.status = ApiStatus::Cancelled;
             resource.error = Some(reason.to_string());
             resource.cancelled_count += 1;
@@ -660,18 +608,36 @@ fn cancel_action_in_state(state: &mut HttpLabState, action: HttpLabAction, reaso
     }
 }
 
+fn next_request_id(state: &mut HttpLabState) -> RequestId {
+    let request_id = RequestId(state.next_request_id);
+    state.next_request_id += 1;
+    request_id
+}
+
+fn request_is_current(
+    state: &mut HttpLabState,
+    action: HttpLabAction,
+    request_id: RequestId,
+) -> bool {
+    let is_current = state.resource(action).active_request_id == Some(request_id);
+    if is_current && let Some(resource) = state.resources.get_mut(&action) {
+        resource.active_request_id = None;
+    }
+    is_current
+}
+
 fn cancel_all_in_state(state: &mut HttpLabState, reason: &str) {
     let actions = HttpLabAction::all()
         .iter()
         .copied()
-        .filter(|action| state.resource(*action).active_task.is_some())
+        .filter(|action| state.resource(*action).active_request_id.is_some())
         .collect::<Vec<_>>();
     for action in actions {
         cancel_action_in_state(state, action, reason);
     }
 }
 
-fn mark_ignored_result(state: &mut HttpLabState, action: HttpLabAction, task_id: ApiTaskId) {
+fn mark_ignored_result(state: &mut HttpLabState, action: HttpLabAction, request_id: RequestId) {
     if let Some(resource) = state.resources.get_mut(&action) {
         resource.ignored_results += 1;
     }
@@ -679,7 +645,7 @@ fn mark_ignored_result(state: &mut HttpLabState, action: HttpLabAction, task_id:
         state,
         ApiStatus::Cancelled,
         action.label(),
-        &format!("ignored stale task #{}", task_id.value()),
+        &format!("ignored stale request #{}", request_id.value()),
     );
 }
 

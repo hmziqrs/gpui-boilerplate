@@ -43,69 +43,71 @@ fn ttl_cache_can_short_circuit_request() {
     resource.data = Some(exchange("GET text", 200, None));
     resource.last_updated_at_ms = Some(now_ms - 100);
 
-    let task = begin_action(&mut state, HttpLabAction::GetText, now_ms);
+    let request = begin_action(&mut state, HttpLabAction::GetText, now_ms);
 
-    assert!(task.is_none());
+    assert!(request.is_none());
     let resource = state.resource(HttpLabAction::GetText);
     assert_eq!(resource.status, ApiStatus::Success);
     assert_eq!(resource.cache_hits, 1);
 }
 
 #[test]
-fn stale_while_revalidate_keeps_data_and_starts_task() {
+fn stale_while_revalidate_keeps_data_and_starts_request() {
     let mut state = HttpLabState::default();
     let now_ms = 100_000;
     let resource = state.resources.get_mut(&HttpLabAction::GetJson).unwrap();
     resource.data = Some(exchange("GET JSON", 200, None));
     resource.last_updated_at_ms = Some(now_ms - 1);
 
-    let task = begin_action(&mut state, HttpLabAction::GetJson, now_ms);
+    let request = begin_action(&mut state, HttpLabAction::GetJson, now_ms);
 
-    assert!(task.is_some());
+    assert!(request.is_some());
     let resource = state.resource(HttpLabAction::GetJson);
     assert_eq!(resource.status, ApiStatus::LoadingWithData);
     assert!(resource.data.is_some());
 }
 
 #[test]
-fn latest_wins_cancels_previous_task_for_same_action() {
+fn latest_wins_cancels_previous_request_for_same_action() {
     let mut state = HttpLabState::default();
-    let first = begin_action(&mut state, HttpLabAction::GetXml, 1).expect("first task");
-    let second = begin_action(&mut state, HttpLabAction::GetXml, 2).expect("second task");
+    let first = begin_action(&mut state, HttpLabAction::GetXml, 1).expect("first request");
+    let second = begin_action(&mut state, HttpLabAction::GetXml, 2).expect("second request");
 
     assert_ne!(first, second);
-    assert_eq!(state.task_pool.active_count(), 1);
+    assert_eq!(state.active_count(), 1);
     assert_eq!(
-        state.resource(HttpLabAction::GetXml).active_task,
+        state.resource(HttpLabAction::GetXml).active_request_id,
         Some(second)
     );
     assert_eq!(state.resource(HttpLabAction::GetXml).cancelled_count, 1);
 }
 
 #[test]
-fn ignore_while_loading_policy_does_not_start_duplicate_task() {
+fn ignore_while_loading_policy_does_not_start_duplicate_request() {
     let mut state = HttpLabState::default();
-    let first = begin_action(&mut state, HttpLabAction::PostMultipart, 1).expect("first task");
+    let first = begin_action(&mut state, HttpLabAction::PostMultipart, 1).expect("first request");
     let duplicate = begin_action(&mut state, HttpLabAction::PostMultipart, 2);
 
     assert!(duplicate.is_none());
     assert_eq!(
-        state.resource(HttpLabAction::PostMultipart).active_task,
+        state
+            .resource(HttpLabAction::PostMultipart)
+            .active_request_id,
         Some(first)
     );
-    assert_eq!(state.task_pool.active_count(), 1);
+    assert_eq!(state.active_count(), 1);
 }
 
 #[test]
 fn stale_result_is_ignored_after_cancellation() {
     let mut state = HttpLabState::default();
-    let task = begin_action(&mut state, HttpLabAction::GetJson, 1).expect("task");
+    let request = begin_action(&mut state, HttpLabAction::GetJson, 1).expect("request");
 
     cancel_action_in_state(&mut state, HttpLabAction::GetJson, "test cancel");
     apply_result_to_state(
         &mut state,
         HttpLabAction::GetJson,
-        task,
+        request,
         Ok(vec![(
             HttpLabAction::GetJson,
             exchange("GET JSON", 200, None),
@@ -122,12 +124,12 @@ fn stale_result_is_ignored_after_cancellation() {
 #[test]
 fn successful_exchange_updates_only_target_resource() {
     let mut state = HttpLabState::default();
-    let task = begin_action(&mut state, HttpLabAction::GetJson, 1).expect("task");
+    let request = begin_action(&mut state, HttpLabAction::GetJson, 1).expect("request");
 
     apply_result_to_state(
         &mut state,
         HttpLabAction::GetJson,
-        task,
+        request,
         Ok(vec![(
             HttpLabAction::GetJson,
             exchange("GET JSON", 200, None),
@@ -154,11 +156,11 @@ fn failed_exchange_preserves_previous_data() {
     let resource = state.resources.get_mut(&HttpLabAction::Failure).unwrap();
     resource.data = Some(previous);
 
-    let task = begin_action(&mut state, HttpLabAction::Failure, 1).expect("task");
+    let request = begin_action(&mut state, HttpLabAction::Failure, 1).expect("request");
     apply_result_to_state(
         &mut state,
         HttpLabAction::Failure,
-        task,
+        request,
         Ok(vec![(
             HttpLabAction::Failure,
             exchange("Failure", 503, Some("HTTP 503")),
@@ -175,7 +177,7 @@ fn failed_exchange_preserves_previous_data() {
 #[test]
 fn full_flow_populates_individual_resources_and_flow_resource() {
     let mut state = HttpLabState::default();
-    let task = begin_action(&mut state, HttpLabAction::FullFlow, 1).expect("flow task");
+    let request = begin_action(&mut state, HttpLabAction::FullFlow, 1).expect("flow request");
     let exchanges = vec![
         (HttpLabAction::GetJson, exchange("GET JSON", 200, None)),
         (
@@ -185,7 +187,13 @@ fn full_flow_populates_individual_resources_and_flow_resource() {
         (HttpLabAction::PostJson, exchange("POST JSON", 200, None)),
     ];
 
-    apply_result_to_state(&mut state, HttpLabAction::FullFlow, task, Ok(exchanges), 2);
+    apply_result_to_state(
+        &mut state,
+        HttpLabAction::FullFlow,
+        request,
+        Ok(exchanges),
+        2,
+    );
 
     assert_eq!(
         state.resource(HttpLabAction::FullFlow).status,
@@ -215,12 +223,12 @@ fn cookies_exchange_updates_cookie_snapshot() {
         .push(("set-cookie".to_string(), "session=gpui-starter".to_string()));
     response.parsed_json = Some("{\"cookies\":{\"session\":\"gpui-starter\"}}".to_string());
     let mut state = HttpLabState::default();
-    let task = begin_action(&mut state, HttpLabAction::Cookies, 1).expect("task");
+    let request = begin_action(&mut state, HttpLabAction::Cookies, 1).expect("request");
 
     apply_result_to_state(
         &mut state,
         HttpLabAction::Cookies,
-        task,
+        request,
         Ok(vec![(HttpLabAction::Cookies, cookies)]),
         2,
     );
