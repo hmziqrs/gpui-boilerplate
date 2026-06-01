@@ -68,6 +68,20 @@ pub struct HttpLabTestingPage {
     local_lab_selected: HttpLabAction,
     local_lab_history: Vec<(HttpLabAction, RawResponse)>,
     local_lab_message: String,
+    // Signal exercise
+    query_signal_resource: QueryResource<RawResponse>,
+    query_signal_sequencer: RequestSequencer,
+    query_signal_message: String,
+    // Placeholder / previous data exercise
+    query_placeholder_resource: QueryResource<RawResponse>,
+    query_placeholder_sequencer: RequestSequencer,
+    query_placeholder_message: String,
+    // Optimistic update exercise
+    query_optimistic_resource: QueryResource<RawResponse>,
+    query_optimistic_sequencer: RequestSequencer,
+    query_optimistic_message: String,
+    // Client fetch exercise
+    client_query_message: String,
 }
 
 impl HttpLabTestingPage {
@@ -106,6 +120,28 @@ impl HttpLabTestingPage {
             local_lab_selected: HttpLabAction::GetJson,
             local_lab_history: Vec::new(),
             local_lab_message: "No local full-query lab request sent yet.".to_string(),
+            query_signal_resource: QueryResource::new(
+                "http_lab_testing/signal_query",
+                CachePolicy::NoCache,
+                RequestPolicy::LatestWins,
+            ),
+            query_signal_sequencer: RequestSequencer::new(),
+            query_signal_message: "No signal exercise run yet.".to_string(),
+            query_placeholder_resource: QueryResource::new(
+                "http_lab_testing/placeholder_query",
+                CachePolicy::NoCache,
+                RequestPolicy::LatestWins,
+            ),
+            query_placeholder_sequencer: RequestSequencer::new(),
+            query_placeholder_message: "No placeholder exercise run yet.".to_string(),
+            query_optimistic_resource: QueryResource::new(
+                "http_lab_testing/optimistic_query",
+                CachePolicy::NoCache,
+                RequestPolicy::LatestWins,
+            ),
+            query_optimistic_sequencer: RequestSequencer::new(),
+            query_optimistic_message: "No optimistic exercise run yet.".to_string(),
+            client_query_message: "No client fetch exercise run yet.".to_string(),
         }
     }
 
@@ -911,6 +947,322 @@ impl HttpLabTestingPage {
         self.local_lab_history.insert(0, (action, response));
         self.local_lab_history.truncate(16);
     }
+
+    // -- Feature 1: Cancel Signal --
+
+    fn exercise_query_signal(&mut self, cx: &mut Context<Self>) {
+        let now_ms = query_now_ms();
+        // Reset to clear any previous state.
+        self.query_signal_resource.reset();
+        let result = self.query_signal_resource.begin_request(
+            &mut self.query_signal_sequencer,
+            now_ms,
+            QueryFetchMode::Normal,
+        );
+
+        let QueryBeginResult::Started { request_id, .. } = result else {
+            self.query_signal_message = format!("Signal setup did not start: {result:?}");
+            cx.notify();
+            return;
+        };
+
+        // Clone the signal before cancelling.
+        let signal = self.query_signal_resource.signal().cloned();
+        let signal_present = signal.is_some();
+        let before_cancel = signal.as_ref().map(|s| s.is_cancelled());
+
+        // Cancel the resource — this should propagate to the signal.
+        self.query_signal_resource.cancel(QueryError::cancelled("signal test"));
+        let after_cancel = signal.as_ref().map(|s| s.is_cancelled());
+
+        self.query_signal_message = format!(
+            "Signal probe: request={} signal_present={signal_present} before_cancel={:?} after_cancel={:?}",
+            request_id.label(),
+            before_cancel,
+            after_cancel,
+        );
+        cx.notify();
+    }
+
+    // -- Feature 3: Placeholder / Previous Data --
+
+    fn exercise_query_placeholder_data(&mut self, cx: &mut Context<Self>) {
+        let now_ms = query_now_ms();
+
+        // Step 1: Seed the resource with real data.
+        self.query_placeholder_resource.reset();
+        let first = self.query_placeholder_resource.begin_request(
+            &mut self.query_placeholder_sequencer,
+            now_ms,
+            QueryFetchMode::Normal,
+        );
+        let QueryBeginResult::Started { request_id: first_id, .. } = first else {
+            self.query_placeholder_message = format!("Placeholder setup did not start: {first:?}");
+            cx.notify();
+            return;
+        };
+        self.query_placeholder_resource.complete_current_success(
+            first_id,
+            fake_response("original"),
+            now_ms + 1,
+        );
+
+        // Step 2: Set placeholder data, then reset (clears data).
+        self.query_placeholder_resource.set_placeholder_data(Some(fake_response("placeholder")));
+
+        // Step 3: Reset clears data but NOT placeholder (actually reset DOES clear placeholder).
+        // So set placeholder AFTER reset.
+        self.query_placeholder_resource.reset();
+        self.query_placeholder_resource.set_placeholder_data(Some(fake_response("placeholder")));
+
+        // Step 4: Begin new request — during loading, display_data returns placeholder.
+        let second = self.query_placeholder_resource.begin_request(
+            &mut self.query_placeholder_sequencer,
+            now_ms + 10,
+            QueryFetchMode::Normal,
+        );
+        let loading_display = self.query_placeholder_resource.display_data().map(|r| r.preview.clone());
+
+        // Step 5: Complete with real data.
+        if let QueryBeginResult::Started { request_id: second_id, .. } = second {
+            self.query_placeholder_resource.complete_current_success(
+                second_id,
+                fake_response("real"),
+                now_ms + 11,
+            );
+        }
+
+        let final_data = self.query_placeholder_resource.data().map(|r| r.preview.clone());
+        let final_display = self.query_placeholder_resource.display_data().map(|r| r.preview.clone());
+        let previous = self.query_placeholder_resource.previous_data().map(|r| r.preview.clone());
+
+        self.query_placeholder_message = format!(
+            "Placeholder probe: loading_display={loading_display:?} final_data={final_data:?} final_display={final_display:?} previous={previous:?}"
+        );
+        cx.notify();
+    }
+
+    fn exercise_query_previous_data(&mut self, cx: &mut Context<Self>) {
+        let now_ms = query_now_ms();
+
+        // Seed "first" then "second".
+        self.query_placeholder_resource.reset();
+        let first = self.query_placeholder_resource.begin_request(
+            &mut self.query_placeholder_sequencer,
+            now_ms,
+            QueryFetchMode::Normal,
+        );
+        if let QueryBeginResult::Started { request_id, .. } = first {
+            self.query_placeholder_resource.complete_current_success(
+                request_id,
+                fake_response("first"),
+                now_ms + 1,
+            );
+        }
+
+        let second = self.query_placeholder_resource.begin_request(
+            &mut self.query_placeholder_sequencer,
+            now_ms + 10,
+            QueryFetchMode::Normal,
+        );
+        if let QueryBeginResult::Started { request_id, .. } = second {
+            self.query_placeholder_resource.complete_current_success(
+                request_id,
+                fake_response("second"),
+                now_ms + 11,
+            );
+        }
+
+        let data = self.query_placeholder_resource.data().map(|r| r.preview.clone());
+        let previous = self.query_placeholder_resource.previous_data().map(|r| r.preview.clone());
+
+        self.query_placeholder_message = format!(
+            "Previous data probe: data={data:?} previous={previous:?}"
+        );
+        cx.notify();
+    }
+
+    // -- Feature 4: Optimistic Updates --
+
+    fn exercise_query_optimistic_set(&mut self, cx: &mut Context<Self>) {
+        let now_ms = query_now_ms();
+
+        // Seed original data.
+        self.query_optimistic_resource.reset();
+        let first = self.query_optimistic_resource.begin_request(
+            &mut self.query_optimistic_sequencer,
+            now_ms,
+            QueryFetchMode::Normal,
+        );
+        if let QueryBeginResult::Started { request_id, .. } = first {
+            self.query_optimistic_resource.complete_current_success(
+                request_id,
+                fake_response("original"),
+                now_ms + 1,
+            );
+        }
+
+        // Optimistic update.
+        self.query_optimistic_resource.set_data(fake_response("optimistic"));
+
+        let data = self.query_optimistic_resource.data().map(|r| r.preview.clone());
+        let previous = self.query_optimistic_resource.previous_data().map(|r| r.preview.clone());
+        let status = self.query_optimistic_resource.status().label().to_string();
+
+        self.query_optimistic_message = format!(
+            "Optimistic set: data={data:?} previous={previous:?} status={status}"
+        );
+        cx.notify();
+    }
+
+    fn exercise_query_optimistic_rollback(&mut self, cx: &mut Context<Self>) {
+        let now_ms = query_now_ms();
+
+        // Seed original data.
+        self.query_optimistic_resource.reset();
+        let first = self.query_optimistic_resource.begin_request(
+            &mut self.query_optimistic_sequencer,
+            now_ms,
+            QueryFetchMode::Normal,
+        );
+        if let QueryBeginResult::Started { request_id, .. } = first {
+            self.query_optimistic_resource.complete_current_success(
+                request_id,
+                fake_response("original"),
+                now_ms + 1,
+            );
+        }
+
+        // Optimistic update then rollback.
+        self.query_optimistic_resource.set_data(fake_response("optimistic"));
+        let rolled_back = self.query_optimistic_resource.rollback_to_previous();
+
+        let data = self.query_optimistic_resource.data().map(|r| r.preview.clone());
+        let previous = self.query_optimistic_resource.previous_data().map(|r| r.preview.clone());
+        let status = self.query_optimistic_resource.status().label().to_string();
+
+        self.query_optimistic_message = format!(
+            "Optimistic rollback: rolled_back={rolled_back} data={data:?} previous={previous:?} status={status}"
+        );
+        cx.notify();
+    }
+
+    fn exercise_query_optimistic_flow(&mut self, cx: &mut Context<Self>) {
+        let now_ms = query_now_ms();
+
+        // Seed original.
+        self.query_optimistic_resource.reset();
+        let first = self.query_optimistic_resource.begin_request(
+            &mut self.query_optimistic_sequencer,
+            now_ms,
+            QueryFetchMode::Normal,
+        );
+        if let QueryBeginResult::Started { request_id, .. } = first {
+            self.query_optimistic_resource.complete_current_success(
+                request_id,
+                fake_response("original"),
+                now_ms + 1,
+            );
+        }
+
+        // Optimistic update.
+        self.query_optimistic_resource.set_data(fake_response("optimistic"));
+
+        // Simulate mutation success — begin request and complete with server data.
+        let mutation = self.query_optimistic_resource.begin_request(
+            &mut self.query_optimistic_sequencer,
+            now_ms + 10,
+            QueryFetchMode::Normal,
+        );
+        if let QueryBeginResult::Started { request_id, .. } = mutation {
+            self.query_optimistic_resource.complete_current_success(
+                request_id,
+                fake_response("server confirmed"),
+                now_ms + 11,
+            );
+        }
+
+        let data = self.query_optimistic_resource.data().map(|r| r.preview.clone());
+        let previous = self.query_optimistic_resource.previous_data().map(|r| r.preview.clone());
+        let status = self.query_optimistic_resource.status().label().to_string();
+
+        self.query_optimistic_message = format!(
+            "Optimistic flow: data={data:?} previous={previous:?} status={status}"
+        );
+        cx.notify();
+    }
+
+    // -- Feature 2: Client fetchQuery --
+
+    fn exercise_client_fetch_query(&mut self, cx: &mut Context<Self>) {
+        let key = gpui_query::QueryKey::from_single("http_lab_testing/client_fetch");
+        let now_ms = query_now_ms();
+
+        if !cx.has_global::<gpui_query::client::QueryClient>() {
+            cx.set_global(gpui_query::client::QueryClient::new(
+                gpui_query::CachePolicy::default(),
+                gpui_query::RequestPolicy::default(),
+            ));
+        }
+
+        let result = cx.update_global::<gpui_query::client::QueryClient, _>(|client, cx| {
+            client.fetch_query::<RawResponse, QueryError>(
+                key,
+                CachePolicy::NoCache,
+                RequestPolicy::LatestWins,
+                now_ms,
+                cx,
+            )
+        });
+
+        match result {
+            Some((_entity, request_id)) => {
+                self.client_query_message = format!(
+                    "Client fetch: started request {} (entity created via QueryClient)",
+                    request_id.label()
+                );
+            }
+            None => {
+                self.client_query_message = "Client fetch: cache hit or ignored (None returned)".to_string();
+            }
+        }
+        cx.notify();
+    }
+
+    fn exercise_client_force_fetch_query(&mut self, cx: &mut Context<Self>) {
+        let key = gpui_query::QueryKey::from_single("http_lab_testing/client_force_fetch");
+        let now_ms = query_now_ms();
+
+        if !cx.has_global::<gpui_query::client::QueryClient>() {
+            cx.set_global(gpui_query::client::QueryClient::new(
+                gpui_query::CachePolicy::default(),
+                gpui_query::RequestPolicy::default(),
+            ));
+        }
+
+        let result = cx.update_global::<gpui_query::client::QueryClient, _>(|client, cx| {
+            client.force_fetch_query::<RawResponse, QueryError>(
+                key,
+                CachePolicy::NoCache,
+                RequestPolicy::LatestWins,
+                now_ms,
+                cx,
+            )
+        });
+
+        match result {
+            Some((_entity, request_id)) => {
+                self.client_query_message = format!(
+                    "Client force fetch: started request {} (forced, bypasses cache)",
+                    request_id.label()
+                );
+            }
+            None => {
+                self.client_query_message = "Client force fetch: ignored (None returned)".to_string();
+            }
+        }
+        cx.notify();
+    }
 }
 
 impl Render for HttpLabTestingPage {
@@ -1005,6 +1357,79 @@ impl Render for HttpLabTestingPage {
                                 this.exercise_query_latest_wins(cx);
                             })),
                     )
+                    // --- New feature buttons ---
+                    .child(
+                        Button::new("http-lab-testing-query-signal")
+                            .outline()
+                            .label("Query signal")
+                            .disabled(is_sending)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.exercise_query_signal(cx);
+                            })),
+                    )
+                    .child(
+                        Button::new("http-lab-testing-placeholder")
+                            .outline()
+                            .label("Placeholder data")
+                            .disabled(is_sending)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.exercise_query_placeholder_data(cx);
+                            })),
+                    )
+                    .child(
+                        Button::new("http-lab-testing-previous-data")
+                            .outline()
+                            .label("Previous data")
+                            .disabled(is_sending)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.exercise_query_previous_data(cx);
+                            })),
+                    )
+                    .child(
+                        Button::new("http-lab-testing-optimistic-set")
+                            .outline()
+                            .label("Optimistic set")
+                            .disabled(is_sending)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.exercise_query_optimistic_set(cx);
+                            })),
+                    )
+                    .child(
+                        Button::new("http-lab-testing-optimistic-rollback")
+                            .outline()
+                            .label("Optimistic rollback")
+                            .disabled(is_sending)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.exercise_query_optimistic_rollback(cx);
+                            })),
+                    )
+                    .child(
+                        Button::new("http-lab-testing-optimistic-flow")
+                            .outline()
+                            .label("Optimistic flow")
+                            .disabled(is_sending)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.exercise_query_optimistic_flow(cx);
+                            })),
+                    )
+                    .child(
+                        Button::new("http-lab-testing-client-fetch")
+                            .outline()
+                            .label("Client fetch")
+                            .disabled(is_sending)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.exercise_client_fetch_query(cx);
+                            })),
+                    )
+                    .child(
+                        Button::new("http-lab-testing-client-force")
+                            .outline()
+                            .label("Client force")
+                            .disabled(is_sending)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.exercise_client_force_fetch_query(cx);
+                            })),
+                    )
                     .children(HttpLabAction::all().iter().copied().map(|action| {
                         Button::new(format!("http-lab-testing-local-{}", action.id()))
                             .outline()
@@ -1036,6 +1461,10 @@ impl Render for HttpLabTestingPage {
             )
             .child(status_panel(self, cx))
             .child(query_panel(self, cx))
+            .child(signal_panel(self, cx))
+            .child(data_retention_panel(self, cx))
+            .child(optimistic_panel(self, cx))
+            .child(client_query_panel(self, cx))
             .child(local_lab_panel(self, cx))
             .child(response_panel(self, cx));
 
@@ -1480,6 +1909,109 @@ fn query_resource_row(label: &str, resource: &QueryResource<RawResponse>, cx: &A
         &format!("{} active={} {}", resource.status().label(), active, data),
         cx,
     )
+}
+
+fn signal_panel(page: &HttpLabTestingPage, cx: &App) -> Div {
+    let resource = &page.query_signal_resource;
+    let signal_status = match resource.signal() {
+        Some(signal) => if signal.is_cancelled() { "cancelled" } else { "active" },
+        None => "none",
+    };
+    div()
+        .p_4()
+        .rounded(cx.theme().radius_lg)
+        .border_1()
+        .border_color(cx.theme().border)
+        .child(
+            v_flex()
+                .gap_2()
+                .child(
+                    div()
+                        .text_lg()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .child("Cancel signal state"),
+                )
+                .child(query_resource_row("Signal resource", resource, cx))
+                .child(row("Signal", signal_status, cx))
+                .child(row("Signal message", &page.query_signal_message, cx)),
+        )
+}
+
+fn data_retention_panel(page: &HttpLabTestingPage, cx: &App) -> Div {
+    let resource = &page.query_placeholder_resource;
+    let data_label = resource.data().map(|r| r.preview.clone()).unwrap_or_else(|| "none".to_string());
+    let placeholder_label = resource.placeholder_data().map(|r| r.preview.clone()).unwrap_or_else(|| "none".to_string());
+    let display_label = resource.display_data().map(|r| r.preview.clone()).unwrap_or_else(|| "none".to_string());
+    let previous_label = resource.previous_data().map(|r| r.preview.clone()).unwrap_or_else(|| "none".to_string());
+
+    div()
+        .p_4()
+        .rounded(cx.theme().radius_lg)
+        .border_1()
+        .border_color(cx.theme().border)
+        .child(
+            v_flex()
+                .gap_2()
+                .child(
+                    div()
+                        .text_lg()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .child("Data retention state"),
+                )
+                .child(query_resource_row("Placeholder resource", resource, cx))
+                .child(row("Data", &data_label, cx))
+                .child(row("Placeholder", &placeholder_label, cx))
+                .child(row("Display data", &display_label, cx))
+                .child(row("Previous data", &previous_label, cx))
+                .child(row("Placeholder message", &page.query_placeholder_message, cx)),
+        )
+}
+
+fn optimistic_panel(page: &HttpLabTestingPage, cx: &App) -> Div {
+    let resource = &page.query_optimistic_resource;
+    let data_label = resource.data().map(|r| r.preview.clone()).unwrap_or_else(|| "none".to_string());
+    let previous_label = resource.previous_data().map(|r| r.preview.clone()).unwrap_or_else(|| "none".to_string());
+    let display_label = resource.display_data().map(|r| r.preview.clone()).unwrap_or_else(|| "none".to_string());
+
+    div()
+        .p_4()
+        .rounded(cx.theme().radius_lg)
+        .border_1()
+        .border_color(cx.theme().border)
+        .child(
+            v_flex()
+                .gap_2()
+                .child(
+                    div()
+                        .text_lg()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .child("Optimistic update state"),
+                )
+                .child(query_resource_row("Optimistic resource", resource, cx))
+                .child(row("Data", &data_label, cx))
+                .child(row("Previous data", &previous_label, cx))
+                .child(row("Display data", &display_label, cx))
+                .child(row("Optimistic message", &page.query_optimistic_message, cx)),
+        )
+}
+
+fn client_query_panel(page: &HttpLabTestingPage, cx: &App) -> Div {
+    div()
+        .p_4()
+        .rounded(cx.theme().radius_lg)
+        .border_1()
+        .border_color(cx.theme().border)
+        .child(
+            v_flex()
+                .gap_2()
+                .child(
+                    div()
+                        .text_lg()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .child("Client fetch state"),
+                )
+                .child(row("Client message", &page.client_query_message, cx)),
+        )
 }
 
 fn row(label: &str, value: &str, cx: &App) -> Div {

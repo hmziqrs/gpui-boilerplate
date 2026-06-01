@@ -35,3 +35,15 @@ mod http_lab_response_test;
 #[cfg(test)]
 #[path = "http_lab/tasks.test.rs"]
 mod http_lab_tasks_test;
+
+#[cfg(test)]
+#[path = "http_lab/data_retention.test.rs"]
+mod http_lab_data_retention_test;
+
+#[cfg(test)]
+#[path = "http_lab/optimistic.test.rs"]
+mod http_lab_optimistic_test;
+
+#[cfg(test)]
+#[path = "http_lab/signal.test.rs"]
+mod http_lab_signal_test;
