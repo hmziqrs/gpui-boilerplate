@@ -1,7 +1,8 @@
 [workspace]
-members = ["."]
+members = [".", "crates/gpui-query"]
 
 [workspace.dependencies]
+gpui-query = { path = "crates/gpui-query" }
 gpui = { git = "https://github.com/zed-industries/zed" }
 gpui_platform = { git = "https://github.com/zed-industries/zed", features = [
     "font-kit",

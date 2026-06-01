@@ -3100,6 +3100,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "gpui-query"
+version = "0.1.0"
+dependencies = [
+ "gpui",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "gpui-starter"
 version = "0.2.0"
 dependencies = [
