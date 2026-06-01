@@ -34,13 +34,15 @@ pub struct LiquidGlassConfig {
     pub disable_shadow: bool,
 }
 
-/// Predefined tint values for `NSGlassEffectView`.
+/// Tint values for `NSGlassEffectView`.
 #[derive(Debug, Clone, Copy)]
 pub enum LiquidGlassTint {
     /// Neutral grey tint.
     Grey,
     /// System blue tint.
     Blue,
+    /// Custom RGBA color (each component 0.0–1.0).
+    Custom { r: f64, g: f64, b: f64, a: f64 },
 }
 
 impl Default for LiquidGlassConfig {
@@ -49,7 +51,12 @@ impl Default for LiquidGlassConfig {
             corner_radius: 16.0,
             style: 1,   // Default Liquid Glass (heavier)
             variant: 3, // Default variant
-            tint: None, // No tint — pure glass
+            tint: Some(LiquidGlassTint::Custom {
+                r: 0.0,
+                g: 0.0,
+                b: 0.0,
+                a: 0.98,
+            }),
             disable_shadow: true,
         }
     }
@@ -94,16 +101,7 @@ impl LiquidGlassView {
     pub fn set_tint(&self, tint: LiquidGlassTint) {
         // SAFETY: setTintColor: accepts an NSColor or nil.
         unsafe {
-            let color: *mut objc2::runtime::AnyObject = match tint {
-                LiquidGlassTint::Grey => {
-                    let cls = AnyClass::get(c"NSColor").expect("NSColor class should exist");
-                    objc2::msg_send![cls, systemGrayColor]
-                }
-                LiquidGlassTint::Blue => {
-                    let cls = AnyClass::get(c"NSColor").expect("NSColor class should exist");
-                    objc2::msg_send![cls, systemBlueColor]
-                }
-            };
+            let color: *mut objc2::runtime::AnyObject = make_nscolor(tint);
             let _: () = objc2::msg_send![self.view, setTintColor: color];
         }
     }
@@ -117,6 +115,20 @@ impl LiquidGlassView {
                 self.view,
                 setTintColor: std::ptr::null_mut::<objc2::runtime::AnyObject>()
             ];
+        }
+    }
+}
+
+/// Create an NSColor from a `LiquidGlassTint`.
+fn make_nscolor(tint: LiquidGlassTint) -> *mut objc2::runtime::AnyObject {
+    unsafe {
+        let cls = AnyClass::get(c"NSColor").expect("NSColor class should exist");
+        match tint {
+            LiquidGlassTint::Grey => objc2::msg_send![cls, systemGrayColor],
+            LiquidGlassTint::Blue => objc2::msg_send![cls, systemBlueColor],
+            LiquidGlassTint::Custom { r, g, b, a } => {
+                objc2::msg_send![cls, colorWithRed: r, green: g, blue: b, alpha: a]
+            }
         }
     }
 }
@@ -160,18 +172,7 @@ impl LiquidGlass {
 
             match &config.tint {
                 Some(tint) => {
-                    let color: *mut objc2::runtime::AnyObject = match tint {
-                        LiquidGlassTint::Grey => {
-                            let cls =
-                                AnyClass::get(c"NSColor").expect("NSColor class should exist");
-                            objc2::msg_send![cls, systemGrayColor]
-                        }
-                        LiquidGlassTint::Blue => {
-                            let cls =
-                                AnyClass::get(c"NSColor").expect("NSColor class should exist");
-                            objc2::msg_send![cls, systemBlueColor]
-                        }
-                    };
+                    let color = make_nscolor(*tint);
                     let _: () = objc2::msg_send![glass, setTintColor: color];
                 }
                 None => {
