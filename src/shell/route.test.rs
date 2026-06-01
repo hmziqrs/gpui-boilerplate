@@ -21,6 +21,10 @@ fn parses_supported_deep_links() {
         AppRoute::parse_deep_link("gpui-starter://http").unwrap(),
         AppRoute::Page(Page::HttpLab)
     );
+    assert_eq!(
+        AppRoute::parse_deep_link("gpui-starter://httplab-testing").unwrap(),
+        AppRoute::Page(Page::HttpLabTesting)
+    );
 }
 
 #[test]

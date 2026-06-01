@@ -44,20 +44,31 @@ pub fn snapshot(cx: &App) -> ConnectivitySnapshot {
 pub fn check_now(cx: &mut App) {
     let probe_url = snapshot(cx).probe_url;
     let interfaces = read_interfaces();
+    let rt = cx
+        .global::<crate::services::tokio_runtime::TokioRuntimeGlobal>()
+        .0
+        .runtime
+        .clone();
+    let client = cx
+        .global::<crate::services::tokio_runtime::TokioRuntimeGlobal>()
+        .0
+        .http_client
+        .clone();
+
     cx.spawn(async move |cx| {
-        let url = probe_url.clone();
-        let result = cx
-            .background_executor()
-            .spawn(async move {
-                // NOTE: Uses `reqwest::blocking` intentionally. The HTTP probe runs inside
-                // a background Tokio task (via `cx.spawn`), so blocking the task thread is
-                // acceptable and avoids the complexity of async HTTP in a non-async GPUI context.
-                reqwest::blocking::Client::new()
-                    .get(&url)
-                    .timeout(std::time::Duration::from_secs(10))
-                    .send()
-            })
-            .await;
+        let handle = rt.spawn(async move {
+            client
+                .get(&probe_url)
+                .timeout(std::time::Duration::from_secs(10))
+                .send()
+                .await
+        });
+
+        let result = match handle.await {
+            Ok(r) => r.map_err(|e| e.to_string()),
+            Err(e) => Err(format!("connectivity probe panicked: {e}")),
+        };
+
         cx.update(move |cx| {
             cx.update_global::<ConnectivitySnapshot, _>(|next, _cx| {
                 next.interfaces = interfaces;

@@ -1,6 +1,6 @@
 use crate::services::{
     http_lab::{
-        client::HTTPBIN_BASE,
+        client::HTTP_LAB_BASE,
         response::cookie_snapshot_from_exchange,
         state::HttpLabState,
         task_tracking::{HttpTaskUpdate, cancel_request_flag, remove_request_flag},
@@ -14,11 +14,19 @@ use crate::services::{
     },
 };
 
+const LOG: &str = "gpui_starter::http_lab::state";
+
 pub(super) fn begin_action(
     state: &mut HttpLabState,
     action: HttpLabAction,
     now_ms: u128,
 ) -> Option<RequestId> {
+    tracing::debug!(
+        target: LOG,
+        action = action.id(),
+        now_ms,
+        "HTTP Lab begin_action entered"
+    );
     state.selected_action = action;
 
     if action == HttpLabAction::FullFlow {
@@ -62,10 +70,23 @@ pub(super) fn begin_action(
                 _ => "request started",
             };
             record_transition(state, status, action.label(), note);
+            tracing::info!(
+                target: LOG,
+                action = action.id(),
+                request_id = %request_id.label(),
+                status = status.label(),
+                note,
+                "HTTP Lab request state started"
+            );
             Some(request_id)
         }
         QueryBeginResult::CacheHit => {
             record_transition(state, QueryStatus::Success, action.label(), "cache hit");
+            tracing::info!(
+                target: LOG,
+                action = action.id(),
+                "HTTP Lab request short-circuited by cache"
+            );
             None
         }
         QueryBeginResult::IgnoredWhileLoading { .. } => {
@@ -74,6 +95,11 @@ pub(super) fn begin_action(
                 state.resource(action).status(),
                 action.label(),
                 "ignored duplicate while loading",
+            );
+            tracing::info!(
+                target: LOG,
+                action = action.id(),
+                "HTTP Lab request ignored while loading"
             );
             None
         }
@@ -87,9 +113,22 @@ pub(super) fn apply_result_to_state(
     result: Result<Vec<ActionExchange>, String>,
     now_ms: u128,
 ) -> Option<HttpTaskUpdate> {
+    tracing::debug!(
+        target: LOG,
+        action = action.id(),
+        request_id = %request_id.label(),
+        ok = result.is_ok(),
+        "HTTP Lab apply_result_to_state entered"
+    );
     let task_id = state.inflight_tasks.remove(&request_id);
     remove_request_flag(request_id);
     if !state.request_sequencer.is_current_scope(request_id) {
+        tracing::warn!(
+            target: LOG,
+            action = action.id(),
+            request_id = %request_id.label(),
+            "HTTP Lab result ignored because request scope is stale"
+        );
         return Some(HttpTaskUpdate::cancelled(
             task_id,
             "ignored stale request scope".to_string(),
@@ -102,6 +141,12 @@ pub(super) fn apply_result_to_state(
         .and_then(|resource| resource.accept_current_request(request_id))
     else {
         record_ignored_result(state, action, request_id);
+        tracing::warn!(
+            target: LOG,
+            action = action.id(),
+            request_id = %request_id.label(),
+            "HTTP Lab result ignored because request is no longer current"
+        );
         return Some(HttpTaskUpdate::cancelled(
             task_id,
             format!("ignored stale request {}", request_id.label()),
@@ -110,6 +155,13 @@ pub(super) fn apply_result_to_state(
 
     match result {
         Ok(exchanges) => {
+            tracing::info!(
+                target: LOG,
+                action = action.id(),
+                request_id = %request_id.label(),
+                exchange_count = exchanges.len(),
+                "HTTP Lab applying successful exchanges"
+            );
             let last_exchange = exchanges.last().map(|(_, exchange)| exchange.clone());
             for (index, (target_action, exchange)) in exchanges.into_iter().enumerate() {
                 if action == HttpLabAction::FullFlow && index > 0 {
@@ -129,6 +181,13 @@ pub(super) fn apply_result_to_state(
             Some(HttpTaskUpdate::succeeded(task_id))
         }
         Err(error) => {
+            tracing::warn!(
+                target: LOG,
+                action = action.id(),
+                request_id = %request_id.label(),
+                error = %error,
+                "HTTP Lab applying failed exchange"
+            );
             fail_resource(state, action, &request_guard, error.clone());
             Some(HttpTaskUpdate::failed(task_id, error))
         }
@@ -142,6 +201,12 @@ fn finish_exchange(
     request_guard: &RequestGuard,
     now_ms: u128,
 ) {
+    tracing::info!(
+        target: LOG,
+        action = action.id(),
+        status = if exchange.error.is_none() { "success" } else { "failure" },
+        "HTTP Lab finish_exchange"
+    );
     let status = if exchange.error.is_none() {
         QueryStatus::Success
     } else {
@@ -197,7 +262,7 @@ fn fail_resource(
         label: action.label().to_string(),
         request: HttpRequestSnapshot {
             method: "-".to_string(),
-            url: HTTPBIN_BASE.to_string(),
+            url: HTTP_LAB_BASE.to_string(),
             request_body_kind: HttpRequestBodyKind::None,
             request_body_preview: String::new(),
         },
@@ -224,6 +289,13 @@ pub(super) fn cancel_action_in_state(
     reason: &str,
 ) {
     if let Some(request_id) = state.resource(action).active_request_id() {
+        tracing::info!(
+            target: LOG,
+            action = action.id(),
+            request_id = %request_id.label(),
+            reason,
+            "HTTP Lab cancelling action in state"
+        );
         cancel_request_flag(request_id);
         if let Some(resource) = state.resources.get_mut(&action) {
             resource.cancel(QueryError::cancelled(reason));

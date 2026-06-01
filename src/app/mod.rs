@@ -270,6 +270,9 @@ pub fn init(cx: &mut App) {
     crate::error_surface::initialize(cx);
     crate::undo_stack::initialize(cx);
     crate::shortcuts::initialize(cx);
+    cx.set_global(crate::services::tokio_runtime::TokioRuntimeGlobal(
+        crate::services::tokio_runtime::TokioRuntime::new(),
+    ));
     crate::connectivity::initialize(cx);
     crate::http_lab::initialize(cx);
     crate::desktop_actions::initialize(cx);

@@ -14,4 +14,5 @@ pub mod session;
 pub mod storage;
 pub mod tasks;
 pub mod telemetry;
+pub mod tokio_runtime;
 pub mod undo_stack;

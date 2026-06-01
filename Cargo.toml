@@ -21,6 +21,7 @@ tracing-subscriber = { version = "0.3", features = [
     "registry",
 ], default-features = false }
 tokio = { version = "1", features = ["rt", "sync", "time", "io-util", "net"] }
+tokio-util = { version = "0.7", features = ["rt"] }
 async-trait = "0.1"
 rust-i18n = "3"
 regex = "1"
@@ -57,6 +58,7 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 tracing-appender = "0.2"
 tokio.workspace = true
+tokio-util.workspace = true
 async-trait.workspace = true
 rust-i18n.workspace = true
 regex.workspace = true
@@ -80,11 +82,11 @@ tempfile = "3.27.0"
 single-instance = "0.3.3"
 interprocess = { version = "2.4.2", features = ["tokio"] }
 reqwest = { version = "0.12.24", default-features = false, features = [
-    "blocking",
     "cookies",
     "json",
     "multipart",
     "rustls-tls",
+    "stream",
 ] }
 network-interface = "2.0.3"
 keyring = { version = "3.6.3", features = ["apple-native"] }

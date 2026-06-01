@@ -1,5 +1,5 @@
 use super::{
-    client::HTTPBIN_BASE,
+    client::HTTP_LAB_BASE,
     transitions::{apply_result_to_state, begin_action},
     *,
 };
@@ -10,14 +10,14 @@ pub(super) fn exchange(label: &str, status: u16, error: Option<&str>) -> HttpExc
         label: label.to_string(),
         request: HttpRequestSnapshot {
             method: "GET".to_string(),
-            url: format!("{HTTPBIN_BASE}/test"),
+            url: format!("{HTTP_LAB_BASE}/test"),
             request_body_kind: HttpRequestBodyKind::None,
             request_body_preview: String::new(),
         },
         response: Some(HttpResponseSnapshot {
             status,
             status_text: "test".to_string(),
-            final_url: format!("{HTTPBIN_BASE}/test"),
+            final_url: format!("{HTTP_LAB_BASE}/test"),
             elapsed_ms: 1,
             headers: Vec::new(),
             body_kind: HttpBodyKind::Text,

@@ -47,7 +47,7 @@ fn cancelled_request_keeps_task_tracking_until_result_arrives() {
 
     cancel_action_in_state(&mut state, HttpLabAction::GetJson, "test cancel");
     assert_eq!(state.inflight_tasks.get(&request), Some(&task_id));
-    assert!(cancellation.load(std::sync::atomic::Ordering::SeqCst));
+    assert!(cancellation.is_cancelled());
 
     let update = apply_result_to_state(
         &mut state,

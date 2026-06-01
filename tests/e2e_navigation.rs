@@ -11,8 +11,8 @@ use gpui_starter::sidebar::Page;
 #[test]
 fn test_sidebar_pages_exist() {
     let all = Page::all();
-    // The app must expose exactly seven pages.
-    assert_eq!(all.len(), 7, "expected 7 sidebar pages, got {}", all.len());
+    // The app must expose exactly eight pages.
+    assert_eq!(all.len(), 8, "expected 8 sidebar pages, got {}", all.len());
 
     // Every page variant that AppRoot::active_page_view matches on must be
     // present in the canonical list.
@@ -20,6 +20,7 @@ fn test_sidebar_pages_exist() {
         Page::Home,
         Page::Form,
         Page::HttpLab,
+        Page::HttpLabTesting,
         Page::Settings,
         Page::Notifications,
         Page::Diagnostics,
@@ -53,6 +54,10 @@ fn test_route_parsing() {
         ("gpui-starter://home", AppRoute::Page(Page::Home)),
         ("gpui-starter://form", AppRoute::Page(Page::Form)),
         ("gpui-starter://http", AppRoute::Page(Page::HttpLab)),
+        (
+            "gpui-starter://httplab-testing",
+            AppRoute::Page(Page::HttpLabTesting),
+        ),
         ("gpui-starter://settings", AppRoute::Page(Page::Settings)),
         (
             "gpui-starter://notifications",

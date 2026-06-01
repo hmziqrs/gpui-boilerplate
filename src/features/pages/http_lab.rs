@@ -22,28 +22,77 @@ impl HttpLabPage {
             _subscriptions: subscriptions,
         }
     }
+
+    fn run_action(&mut self, action: HttpLabAction, cx: &mut Context<Self>) {
+        tracing::info!(
+            target: "gpui_starter::http_lab::ui",
+            action = action.id(),
+            "HTTP Lab action clicked"
+        );
+        tracing::info!(
+            target: "gpui_starter::http_lab::ui",
+            action = action.id(),
+            "HTTP Lab scheduling GPUI entity task"
+        );
+        cx.spawn(async move |_this, cx| {
+            tracing::info!(
+                target: "gpui_starter::http_lab::ui",
+                action = action.id(),
+                "HTTP Lab GPUI entity task started"
+            );
+
+            let handle = match cx.update(|cx| http_lab::prepare_action(action, cx)) {
+                Some(handle) => handle,
+                None => {
+                    tracing::info!(
+                        target: "gpui_starter::http_lab::ui",
+                        action = action.id(),
+                        "HTTP Lab action deduplicated inside entity task"
+                    );
+                    return;
+                }
+            };
+
+            tracing::info!(
+                target: "gpui_starter::http_lab::ui",
+                action = action.id(),
+                "HTTP Lab action prepared inside entity task"
+            );
+            http_lab::execute_action(handle, cx).await;
+            tracing::info!(
+                target: "gpui_starter::http_lab::ui",
+                action = action.id(),
+                "HTTP Lab GPUI entity task finished"
+            );
+        })
+        .detach();
+        tracing::info!(
+            target: "gpui_starter::http_lab::ui",
+            action = action.id(),
+            "HTTP Lab GPUI entity task scheduled"
+        );
+    }
 }
 
 impl Render for HttpLabPage {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        http_lab::read_state(cx, |state| {
-            let selected_resource = state.selected_resource();
+        let state = http_lab::snapshot(cx);
+        let selected_resource = state.selected_resource();
 
-            v_flex()
-                .min_h_full()
-                .p_6()
-                .gap_5()
-                .child(hero(state, cx))
-                .child(action_bar(state))
-                .child(tab_bar(state))
-                .child(resource_panel(
-                    state,
-                    state.selected_action,
-                    selected_resource,
-                    cx,
-                ))
-                .child(activity_panel(state, cx))
-        })
+        v_flex()
+            .min_h_full()
+            .p_6()
+            .gap_5()
+            .child(hero(&state, cx))
+            .child(action_bar(&state, cx))
+            .child(tab_bar(&state))
+            .child(resource_panel(
+                &state,
+                state.selected_action,
+                selected_resource,
+                cx,
+            ))
+            .child(activity_panel(&state, cx))
     }
 }
 
@@ -94,14 +143,14 @@ fn hero(state: &HttpLabState, cx: &App) -> Div {
         )
 }
 
-fn action_bar(state: &HttpLabState) -> Div {
+fn action_bar(state: &HttpLabState, cx: &mut Context<HttpLabPage>) -> Div {
     div()
         .flex()
         .flex_wrap()
         .gap_2()
         .children(HttpLabAction::all().iter().copied().map(|action| {
             let resource = state.resource(action);
-            action_button(action, resource)
+            action_button(action, resource, cx)
         }))
         .child(
             Button::new("http-lab-cancel-all")
@@ -122,7 +171,11 @@ fn action_bar(state: &HttpLabState) -> Div {
         )
 }
 
-fn action_button(action: HttpLabAction, resource: &QueryResource<HttpExchange>) -> Button {
+fn action_button(
+    action: HttpLabAction,
+    resource: &QueryResource<HttpExchange>,
+    cx: &mut Context<HttpLabPage>,
+) -> Button {
     let is_loading = resource.is_loading();
     let blocks_duplicate =
         is_loading && resource.request_policy() == RequestPolicy::IgnoreWhileLoading;
@@ -133,11 +186,10 @@ fn action_button(action: HttpLabAction, resource: &QueryResource<HttpExchange>) 
         } else {
             action.label().to_string()
         })
-        .loading(is_loading)
         .disabled(blocks_duplicate)
-        .on_click(move |_, _, cx| {
-            http_lab::run_action(action, cx);
-        })
+        .on_click(cx.listener(move |this, _, _, cx| {
+            this.run_action(action, cx);
+        }))
 }
 
 fn tab_bar(state: &HttpLabState) -> Div {
