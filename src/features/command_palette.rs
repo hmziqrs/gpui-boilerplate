@@ -154,7 +154,7 @@ impl Render for Launcher {
 
         v_flex()
             .size_full()
-            .bg(gpui::transparent_black())
+            .bg(theme.background.opacity(0.0))
             .border_1()
             .border_color(theme.border.opacity(0.5))
             .rounded(theme.radius_lg)
@@ -320,10 +320,7 @@ impl LauncherRoot {
         // Install Liquid Glass — creates NSGlassEffectView directly in the
         // native view hierarchy, no GPUI source patches needed.
         #[cfg(target_os = "macos")]
-        crate::platform::liquid_glass::LiquidGlass::install(
-            window,
-            &Default::default(),
-        );
+        crate::platform::liquid_glass::LiquidGlass::install(window, &Default::default());
 
         let launcher = cx.new(|cx| Launcher::new(window, cx));
 

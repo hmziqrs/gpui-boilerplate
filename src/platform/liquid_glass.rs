@@ -6,8 +6,8 @@
 //! - **Configure**: adjusts corner radius, style, and tint after creation
 
 use gpui::Window;
-use objc2::runtime::{AnyClass, NSObjectProtocol};
 use objc2::rc::Retained;
+use objc2::runtime::{AnyClass, NSObjectProtocol};
 use objc2_app_kit::NSView;
 use objc2_foundation::NSArray;
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
@@ -23,8 +23,11 @@ const NS_VIEW_HEIGHT_SIZABLE: u64 = 1 << 4;
 pub struct LiquidGlassConfig {
     /// Corner radius in points.
     pub corner_radius: f64,
-    /// Glass style: `0` = default, `1` = clear/thin.
+    /// Glass style: `0` = default (heavier), `1` = clear/thin.
     pub style: i64,
+    /// Glass variant: controls the glass intensity/pattern.
+    /// `0` = default, higher values change the glass appearance.
+    pub variant: i64,
     /// Optional tint color.
     pub tint: Option<LiquidGlassTint>,
     /// Whether to disable the window shadow (recommended for glass windows).
@@ -44,8 +47,9 @@ impl Default for LiquidGlassConfig {
     fn default() -> Self {
         Self {
             corner_radius: 16.0,
-            style: 1, // Clear
-            tint: None,
+            style: 1,   // Default Liquid Glass (heavier)
+            variant: 3, // Default variant
+            tint: None, // No tint — pure glass
             disable_shadow: true,
         }
     }
@@ -78,19 +82,25 @@ impl LiquidGlassView {
         }
     }
 
+    /// Set the glass variant (controls intensity/pattern).
+    pub fn set_variant(&self, variant: i64) {
+        // SAFETY: set_variant: is a private NSGlassEffectView setter.
+        unsafe {
+            let _: () = objc2::msg_send![self.view, set_variant: variant];
+        }
+    }
+
     /// Set the tint color to a predefined tint.
     pub fn set_tint(&self, tint: LiquidGlassTint) {
         // SAFETY: setTintColor: accepts an NSColor or nil.
         unsafe {
             let color: *mut objc2::runtime::AnyObject = match tint {
                 LiquidGlassTint::Grey => {
-                    let cls =
-                        AnyClass::get(c"NSColor").expect("NSColor class should exist");
+                    let cls = AnyClass::get(c"NSColor").expect("NSColor class should exist");
                     objc2::msg_send![cls, systemGrayColor]
                 }
                 LiquidGlassTint::Blue => {
-                    let cls =
-                        AnyClass::get(c"NSColor").expect("NSColor class should exist");
+                    let cls = AnyClass::get(c"NSColor").expect("NSColor class should exist");
                     objc2::msg_send![cls, systemBlueColor]
                 }
             };
@@ -138,8 +148,7 @@ impl LiquidGlass {
             }
 
             let content_view = ns_window.contentView()?;
-            let frame: objc2_foundation::NSRect =
-                objc2::msg_send![&*content_view, bounds];
+            let frame: objc2_foundation::NSRect = objc2::msg_send![&*content_view, bounds];
 
             // Create the glass view.
             let glass: *mut objc2::runtime::AnyObject = objc2::msg_send![glass_cls, alloc];
@@ -147,18 +156,19 @@ impl LiquidGlass {
                 objc2::msg_send![glass, initWithFrame: frame];
             let _: () = objc2::msg_send![glass, setCornerRadius: config.corner_radius];
             let _: () = objc2::msg_send![glass, setStyle: config.style];
+            let _: () = objc2::msg_send![glass, set_variant: config.variant];
 
             match &config.tint {
                 Some(tint) => {
                     let color: *mut objc2::runtime::AnyObject = match tint {
                         LiquidGlassTint::Grey => {
-                            let cls = AnyClass::get(c"NSColor")
-                                .expect("NSColor class should exist");
+                            let cls =
+                                AnyClass::get(c"NSColor").expect("NSColor class should exist");
                             objc2::msg_send![cls, systemGrayColor]
                         }
                         LiquidGlassTint::Blue => {
-                            let cls = AnyClass::get(c"NSColor")
-                                .expect("NSColor class should exist");
+                            let cls =
+                                AnyClass::get(c"NSColor").expect("NSColor class should exist");
                             objc2::msg_send![cls, systemBlueColor]
                         }
                     };
@@ -190,16 +200,14 @@ impl LiquidGlass {
             ];
 
             // Remove any existing NSVisualEffectView that GPUI created for the
-            // Blurred background — it would sit on top and hide the glass.
+            // Blurred background — it clashes with the glass effect.
             if let Some(blur_cls) = AnyClass::get(c"NSVisualEffectView") {
                 let subviews: Retained<NSArray<NSView>> =
                     objc2::msg_send![&*content_view, subviews];
                 let count = subviews.count();
-                // Iterate in reverse so removal doesn't shift indices.
                 for i in (0..count).rev() {
                     let sub = subviews.objectAtIndex(i);
                     if sub.isKindOfClass(blur_cls) {
-                        tracing::debug!(target: LOG, "Removing NSVisualEffectView to make room for glass");
                         let _: () = objc2::msg_send![&*sub, removeFromSuperview];
                     }
                 }
@@ -240,6 +248,7 @@ impl LiquidGlass {
         };
         glass.set_corner_radius(config.corner_radius);
         glass.set_style(config.style);
+        glass.set_variant(config.variant);
         match &config.tint {
             Some(tint) => glass.set_tint(*tint),
             None => glass.clear_tint(),
