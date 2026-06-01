@@ -3,7 +3,7 @@ use crate::services::{
         client::HTTP_LAB_BASE,
         response::cookie_snapshot_from_exchange,
         state::HttpLabState,
-        task_tracking::{HttpTaskUpdate, cancel_request_flag, remove_request_flag},
+        task_tracking::{cancel_request_flag, remove_request_flag},
         types::{
             ActionExchange, HttpExchange, HttpLabAction, HttpRequestBodyKind, HttpRequestSnapshot,
         },
@@ -112,7 +112,7 @@ pub(super) fn apply_result_to_state(
     request_id: RequestId,
     result: Result<Vec<ActionExchange>, String>,
     now_ms: u128,
-) -> Option<HttpTaskUpdate> {
+) {
     tracing::debug!(
         target: LOG,
         action = action.id(),
@@ -120,7 +120,6 @@ pub(super) fn apply_result_to_state(
         ok = result.is_ok(),
         "HTTP Lab apply_result_to_state entered"
     );
-    let task_id = state.inflight_tasks.remove(&request_id);
     remove_request_flag(request_id);
     if !state.request_sequencer.is_current_scope(request_id) {
         tracing::warn!(
@@ -129,10 +128,7 @@ pub(super) fn apply_result_to_state(
             request_id = %request_id.label(),
             "HTTP Lab result ignored because request scope is stale"
         );
-        return Some(HttpTaskUpdate::cancelled(
-            task_id,
-            "ignored stale request scope".to_string(),
-        ));
+        return;
     }
 
     let Some(request_guard) = state
@@ -147,10 +143,7 @@ pub(super) fn apply_result_to_state(
             request_id = %request_id.label(),
             "HTTP Lab result ignored because request is no longer current"
         );
-        return Some(HttpTaskUpdate::cancelled(
-            task_id,
-            format!("ignored stale request {}", request_id.label()),
-        ));
+        return;
     };
 
     match result {
@@ -178,7 +171,6 @@ pub(super) fn apply_result_to_state(
             if action == HttpLabAction::FullFlow {
                 finish_flow_resource(state, last_exchange, &request_guard, now_ms);
             }
-            Some(HttpTaskUpdate::succeeded(task_id))
         }
         Err(error) => {
             tracing::warn!(
@@ -189,7 +181,6 @@ pub(super) fn apply_result_to_state(
                 "HTTP Lab applying failed exchange"
             );
             fail_resource(state, action, &request_guard, error.clone());
-            Some(HttpTaskUpdate::failed(task_id, error))
         }
     }
 }

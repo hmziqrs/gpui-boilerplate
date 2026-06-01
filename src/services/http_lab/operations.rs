@@ -2,22 +2,18 @@ use std::{sync::OnceLock, time::Instant};
 
 use gpui::{App, BorrowAppContext as _};
 
-use crate::{
-    ids::TaskId,
-    services::{
-        http_lab::{
-            client::run_http_action,
-            state::{HttpLabState, ResetRequests},
-            task_tracking::{apply_task_update, cancel_request_flag, register_request_flag},
-            transitions::{
-                apply_result_to_state, begin_action, cancel_action_in_state, cancel_all_in_state,
-            },
-            types::{ActionExchange, HttpLabAction},
+use crate::services::{
+    http_lab::{
+        client::run_http_action,
+        state::{HttpLabState, ResetRequests},
+        task_tracking::{cancel_request_flag, register_request_flag},
+        transitions::{
+            apply_result_to_state, begin_action, cancel_action_in_state, cancel_all_in_state,
         },
-        query::RequestId,
-        tokio_runtime::TokioRuntimeGlobal,
+        types::{ActionExchange, HttpLabAction},
     },
-    tasks::TaskProgress,
+    query::RequestId,
+    tokio_runtime::TokioRuntimeGlobal,
 };
 
 const LOG: &str = "gpui_starter::http_lab";
@@ -61,9 +57,6 @@ pub fn reset(cx: &mut App) {
         );
         cancel_request_flag(request_id);
     }
-    for task_id in reset_requests.task_ids {
-        crate::tasks::cancel(task_id, "HTTP Lab reset".to_string(), cx);
-    }
 }
 
 pub fn select_action(action: HttpLabAction, cx: &mut App) {
@@ -75,60 +68,22 @@ pub fn select_action(action: HttpLabAction, cx: &mut App) {
 /// Prepare an HTTP action: update state, register task, return handles for spawning.
 /// Returns `None` if the action was deduplicated (cache hit or already loading).
 pub fn prepare_action(action: HttpLabAction, cx: &mut App) -> Option<ActionHandle> {
-    prepare_action_impl(action, cx, true)
-}
-
-/// Prepare an HTTP action without registering a global background task.
-///
-/// The interactive HTTP Lab page uses this path while we isolate GPUI hangs:
-/// it keeps the query resource lifecycle intact but avoids TaskRegistry and
-/// AppEventQueue notifications during request startup.
-pub fn prepare_action_untracked(action: HttpLabAction, cx: &mut App) -> Option<ActionHandle> {
-    prepare_action_impl(action, cx, false)
-}
-
-fn prepare_action_impl(
-    action: HttpLabAction,
-    cx: &mut App,
-    track_background_task: bool,
-) -> Option<ActionHandle> {
     let now_ms = now_ms();
     tracing::info!(
         target: LOG,
         action = action.id(),
         now_ms,
-        track_background_task,
         "HTTP Lab preparing action"
     );
     let request_id =
         cx.update_global::<HttpLabState, _>(|state, _cx| begin_action(state, action, now_ms))?;
 
-    if track_background_task {
-        let task_id = TaskId::new();
-        tracing::info!(
-            target: LOG,
-            action = action.id(),
-            request_id = %request_id.label(),
-            task_id = ?task_id,
-            "HTTP Lab action accepted with background task"
-        );
-        crate::tasks::start(
-            task_id,
-            format!("HTTP Lab {}", action.label()),
-            TaskProgress::Indeterminate,
-            cx,
-        );
-        cx.update_global::<HttpLabState, _>(|state, _cx| {
-            state.inflight_tasks.insert(request_id, task_id);
-        });
-    } else {
-        tracing::info!(
-            target: LOG,
-            action = action.id(),
-            request_id = %request_id.label(),
-            "HTTP Lab action accepted without background task"
-        );
-    }
+    tracing::info!(
+        target: LOG,
+        action = action.id(),
+        request_id = %request_id.label(),
+        "HTTP Lab action accepted"
+    );
     let cancellation = register_request_flag(request_id);
     tracing::debug!(
         target: LOG,
@@ -273,10 +228,9 @@ fn apply_result(
         request_id = %request_id.label(),
         "HTTP Lab reducing result into state"
     );
-    let task_update = cx.update_global::<HttpLabState, _>(|state, _cx| {
+    cx.update_global::<HttpLabState, _>(|state, _cx| {
         apply_result_to_state(state, action, request_id, result, now_ms)
     });
-    apply_task_update(task_update, cx);
 }
 
 fn now_ms() -> u128 {

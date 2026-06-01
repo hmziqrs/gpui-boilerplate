@@ -4,7 +4,7 @@ use super::{
     transitions::{apply_result_to_state, begin_action},
     *,
 };
-use crate::{ids::TaskId, services::query::QueryStatus};
+use crate::services::query::QueryStatus;
 
 #[test]
 fn full_flow_populates_individual_resources_and_flow_resource() {
@@ -80,8 +80,6 @@ fn individual_request_cancels_pending_full_flow_before_it_can_apply_results() {
 fn reset_makes_in_flight_request_results_silent_stale_results() {
     let mut state = HttpLabState::default();
     let request = begin_action(&mut state, HttpLabAction::GetJson, 1).expect("request");
-    let task_id = TaskId::new();
-    state.inflight_tasks.insert(request, task_id);
 
     let reset_requests = state.reset_for_user();
     let transition_log = state.transition_log.clone();
@@ -104,7 +102,6 @@ fn reset_makes_in_flight_request_results_silent_stale_results() {
         reset_requests,
         ResetRequests {
             request_ids: vec![request],
-            task_ids: vec![task_id],
         }
     );
 }

@@ -1,10 +1,10 @@
 use super::{
-    task_tracking::{HttpTaskUpdate, cancellation_flags, register_request_flag},
+    task_tracking::{cancellation_flags, register_request_flag},
     test_support::{error_message, exchange, seed_response},
     transitions::{apply_result_to_state, begin_action, cancel_action_in_state},
     *,
 };
-use crate::{ids::TaskId, services::query::QueryStatus};
+use crate::services::query::QueryStatus;
 
 fn state_after_scope_advances(count: usize) -> HttpLabState {
     let mut state = HttpLabState::default();
@@ -41,15 +41,12 @@ fn stale_result_is_ignored_after_cancellation() {
 fn cancelled_request_keeps_task_tracking_until_result_arrives() {
     let mut state = state_after_scope_advances(10);
     let request = begin_action(&mut state, HttpLabAction::GetJson, 1).expect("request");
-    let task_id = TaskId::new();
-    state.inflight_tasks.insert(request, task_id);
     let cancellation = register_request_flag(request);
 
     cancel_action_in_state(&mut state, HttpLabAction::GetJson, "test cancel");
-    assert_eq!(state.inflight_tasks.get(&request), Some(&task_id));
     assert!(cancellation.is_cancelled());
 
-    let update = apply_result_to_state(
+    apply_result_to_state(
         &mut state,
         HttpLabAction::GetJson,
         request,
@@ -60,14 +57,6 @@ fn cancelled_request_keeps_task_tracking_until_result_arrives() {
         2,
     );
 
-    assert_eq!(
-        update,
-        Some(HttpTaskUpdate::cancelled(
-            Some(task_id),
-            format!("ignored stale request {}", request.label()),
-        ))
-    );
-    assert!(!state.inflight_tasks.contains_key(&request));
     assert!(cancellation_flags().lock().unwrap().get(&request).is_none());
 }
 
@@ -75,11 +64,9 @@ fn cancelled_request_keeps_task_tracking_until_result_arrives() {
 fn successful_result_completes_tracked_task() {
     let mut state = state_after_scope_advances(11);
     let request = begin_action(&mut state, HttpLabAction::GetJson, 1).expect("request");
-    let task_id = TaskId::new();
-    state.inflight_tasks.insert(request, task_id);
     register_request_flag(request);
 
-    let update = apply_result_to_state(
+    apply_result_to_state(
         &mut state,
         HttpLabAction::GetJson,
         request,
@@ -90,8 +77,6 @@ fn successful_result_completes_tracked_task() {
         2,
     );
 
-    assert_eq!(update, Some(HttpTaskUpdate::succeeded(Some(task_id))));
-    assert!(!state.inflight_tasks.contains_key(&request));
     assert!(cancellation_flags().lock().unwrap().get(&request).is_none());
 }
 

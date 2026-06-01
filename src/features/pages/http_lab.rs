@@ -45,7 +45,7 @@ impl HttpLabPage {
                 "HTTP Lab GPUI entity task started"
             );
 
-            let handle = match cx.update(|cx| http_lab::prepare_action_untracked(action, cx)) {
+            let handle = match cx.update(|cx| http_lab::prepare_action(action, cx)) {
                 Some(handle) => handle,
                 None => {
                     tracing::info!(
