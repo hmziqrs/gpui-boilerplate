@@ -1,9 +1,10 @@
 use gpui::{prelude::*, *};
 use gpui_component::{
+    ActiveTheme as _, Selectable as _,
     button::{Button, ButtonVariants as _},
     label::Label,
     switch::Switch,
-    v_flex, ActiveTheme as _, Selectable as _,
+    v_flex,
 };
 
 pub struct HomePage;
@@ -66,14 +67,14 @@ impl Render for HomePage {
                 Button::new("start-demo-task")
                     .outline()
                     .label("Start Demo Task")
-                    .on_click(|_, _, cx| {
+                    .on_click(cx.listener(|_, _, window, cx| {
                         tracing::info!(
                             target: "gpui_starter::features::pages::home",
                             active_tasks_before = crate::tasks::active_count(cx),
                             "Start Demo Task clicked"
                         );
-                        crate::tasks::start_demo_task(cx);
-                    }),
+                        crate::tasks::start_demo_task_in_window(window, cx);
+                    })),
             )
             .when(first_run_pending, |this| {
                 this.child(

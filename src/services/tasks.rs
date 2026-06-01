@@ -1,4 +1,5 @@
-use gpui::{App, Global, Task};
+use gpui::{AnyWindowHandle, App, AppContext as _, Global, Task, Window};
+use gpui_component::{WindowExt as _, notification::Notification};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
@@ -37,6 +38,8 @@ pub struct TaskRegistry {
 }
 
 impl Global for TaskRegistry {}
+
+struct DemoTaskToast;
 
 static SHUTDOWN_REQUESTED: AtomicBool = AtomicBool::new(false);
 
@@ -83,37 +86,24 @@ pub fn start_demo_task(cx: &mut App) {
         TaskProgress::Percent(0),
         cx,
     );
+    spawn_demo_task(id, cx);
+}
 
-    cx.spawn(async move |cx| {
-        let background = cx.background_executor();
-        for step in [20_u8, 40, 60, 80, 100] {
-            if is_shutdown_requested() {
-                cx.update(|cx| {
-                    fail(id, "cancelled during shutdown".to_string(), cx);
-                });
-                return;
-            }
-            background.timer(Duration::from_millis(350)).await;
-            cx.update(move |cx| {
-                tracing::debug!(
-                    target: "gpui_starter::tasks",
-                    task_id = %id,
-                    progress = step,
-                    "updating demo task progress"
-                );
-                update_progress(id, TaskProgress::Percent(step), cx);
-            });
-        }
-        cx.update(move |cx| {
-            tracing::info!(
-                target: "gpui_starter::tasks",
-                task_id = %id,
-                "demo task succeeded"
-            );
-            succeed(id, cx);
-        });
-    })
-    .detach();
+pub fn start_demo_task_in_window(window: &mut Window, cx: &mut App) {
+    let id = TaskId::new();
+    tracing::info!(
+        target: "gpui_starter::tasks",
+        task_id = %id,
+        "starting demo task in window"
+    );
+    start(
+        id,
+        "Demo background task".to_string(),
+        TaskProgress::Percent(0),
+        cx,
+    );
+    push_demo_task_notification_now(window, id, DemoTaskNotificationKind::Loading, cx);
+    spawn_demo_task_in_window(id, window, cx);
 }
 
 pub fn start(id: TaskId, label: String, progress: TaskProgress, cx: &mut App) {
@@ -246,4 +236,143 @@ fn mutate_task(id: TaskId, cx: &mut App, mutate: impl FnOnce(&mut BackgroundTask
             "background task mutated"
         );
     }
+}
+
+fn spawn_demo_task(id: TaskId, cx: &mut App) {
+    cx.spawn(async move |cx| {
+        let background = cx.background_executor();
+        for step in [20_u8, 40, 60, 80, 100] {
+            if is_shutdown_requested() {
+                cx.update(|cx| {
+                    fail(id, "cancelled during shutdown".to_string(), cx);
+                });
+                return;
+            }
+            background.timer(Duration::from_millis(350)).await;
+            cx.update(move |cx| {
+                tracing::debug!(
+                    target: "gpui_starter::tasks",
+                    task_id = %id,
+                    progress = step,
+                    "updating demo task progress"
+                );
+                update_progress(id, TaskProgress::Percent(step), cx);
+            });
+        }
+        cx.update(move |cx| {
+            tracing::info!(
+                target: "gpui_starter::tasks",
+                task_id = %id,
+                "demo task succeeded"
+            );
+            succeed(id, cx);
+        });
+    })
+    .detach();
+}
+
+fn spawn_demo_task_in_window(id: TaskId, window: &mut Window, cx: &mut App) {
+    let window_handle = window.window_handle();
+    cx.spawn(async move |cx| {
+        let background = cx.background_executor();
+        for step in [20_u8, 40, 60, 80, 100] {
+            if is_shutdown_requested() {
+                cx.update(|cx| {
+                    fail(id, "cancelled during shutdown".to_string(), cx);
+                    push_demo_task_notification(
+                        window_handle,
+                        id,
+                        DemoTaskNotificationKind::Cancelled,
+                        cx,
+                    );
+                });
+                return;
+            }
+            background.timer(Duration::from_millis(350)).await;
+            cx.update(move |cx| {
+                tracing::debug!(
+                    target: "gpui_starter::tasks",
+                    task_id = %id,
+                    progress = step,
+                    "updating demo task progress"
+                );
+                update_progress(id, TaskProgress::Percent(step), cx);
+            });
+        }
+
+        cx.update(move |cx| {
+            tracing::info!(
+                target: "gpui_starter::tasks",
+                task_id = %id,
+                "demo task succeeded"
+            );
+            succeed(id, cx);
+            push_demo_task_notification(window_handle, id, DemoTaskNotificationKind::Success, cx);
+        });
+    })
+    .detach();
+}
+
+#[derive(Clone, Copy)]
+enum DemoTaskNotificationKind {
+    Loading,
+    Success,
+    Cancelled,
+}
+
+fn push_demo_task_notification(
+    window_handle: AnyWindowHandle,
+    id: TaskId,
+    kind: DemoTaskNotificationKind,
+    cx: &mut App,
+) {
+    let note = match kind {
+        DemoTaskNotificationKind::Loading => Notification::info("Running demo task...")
+            .title("Demo task started")
+            .autohide(false),
+        DemoTaskNotificationKind::Success => {
+            Notification::success("Demo task finished successfully.").title("Demo task completed")
+        }
+        DemoTaskNotificationKind::Cancelled => {
+            Notification::warning("Demo task was cancelled during shutdown.")
+                .title("Demo task cancelled")
+                .autohide(false)
+        }
+    }
+    .id1::<DemoTaskToast>(id.to_string());
+
+    if let Err(err) = cx.update_window(window_handle, |_, window, cx| {
+        window.push_notification(note, cx);
+    }) {
+        tracing::warn!(
+            target: "gpui_starter::tasks",
+            task_id = %id,
+            ?err,
+            "failed to show demo task notification"
+        );
+    }
+}
+
+fn push_demo_task_notification_now(
+    window: &mut Window,
+    id: TaskId,
+    kind: DemoTaskNotificationKind,
+    cx: &mut App,
+) {
+    let note = match kind {
+        DemoTaskNotificationKind::Loading => Notification::info("Running demo task...")
+            .title("Demo task started")
+            .autohide(false),
+        DemoTaskNotificationKind::Success => {
+            Notification::success("Demo task finished successfully.").title("Demo task completed")
+        }
+        DemoTaskNotificationKind::Cancelled => {
+            Notification::warning("Demo task was cancelled during shutdown.")
+                .title("Demo task cancelled")
+                .autohide(false)
+        }
+    }
+    .id1::<DemoTaskToast>(id.to_string());
+
+    window.push_notification(note, cx);
 }
