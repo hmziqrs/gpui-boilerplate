@@ -1110,6 +1110,46 @@ impl HttpLabTestingPage {
         cx.notify();
     }
 
+    fn exercise_query_rollback(&mut self, cx: &mut Context<Self>) {
+        let now_ms = query_now_ms();
+
+        // Seed data, overwrite, then rollback.
+        self.query_placeholder_resource.reset();
+        let first = self.query_placeholder_resource.begin_request(
+            &mut self.query_placeholder_sequencer,
+            now_ms,
+            QueryFetchMode::Normal,
+        );
+        if let QueryBeginResult::Started { request_id, .. } = first {
+            self.query_placeholder_resource.complete_current_success(
+                request_id,
+                fake_response("original"),
+                now_ms + 1,
+            );
+        }
+
+        // Overwrite with new data.
+        self.query_placeholder_resource
+            .set_data(fake_response("overwritten"));
+
+        // Rollback to previous.
+        let rolled_back = self.query_placeholder_resource.rollback_to_previous();
+
+        let data = self
+            .query_placeholder_resource
+            .data()
+            .map(|r| r.preview.clone());
+        let previous = self
+            .query_placeholder_resource
+            .previous_data()
+            .map(|r| r.preview.clone());
+
+        self.query_placeholder_message = format!(
+            "Rollback probe: rolled_back={rolled_back} data={data:?} previous={previous:?}"
+        );
+        cx.notify();
+    }
+
     // -- Feature 4: Optimistic Updates --
 
     fn exercise_query_optimistic_set(&mut self, cx: &mut Context<Self>) {
@@ -1323,6 +1363,428 @@ impl Render for HttpLabTestingPage {
         let local_selected = self.local_lab_selected;
         let local_history_len = self.local_lab_history.len();
 
+        // -- Section 1: Query Lifecycle --
+        let query_lifecycle_section = section_card(
+            "Query Lifecycle",
+            "Test request policies (LatestWins, IgnoreWhileLoading) and cache TTL behavior",
+            cx,
+        )
+        .child(
+            div().flex().flex_wrap().gap_2().px_4().py_3()
+            .child(
+                Button::new("http-lab-testing-query-send")
+                    .outline()
+                    .label(if is_sending {
+                        "Sending query GET"
+                    } else {
+                        "Send query GET"
+                    })
+                    .disabled(is_sending)
+                    .tooltip("Real HTTP GET through QueryResource (NoCache, LatestWins). Result appears in the resource state below.")
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.send_query_get(cx);
+                    })),
+            )
+            .child(
+                Button::new("http-lab-testing-query-ttl")
+                    .outline()
+                    .label("Query TTL")
+                    .disabled(is_sending)
+                    .tooltip("Sync probe: start\u{2192}complete\u{2192}start again. Second should hit cache. Look for cache_hit=true below.")
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.exercise_query_ttl_cache(cx);
+                    })),
+            )
+            .child(
+                Button::new("http-lab-testing-query-ignore")
+                    .outline()
+                    .label("Query ignore")
+                    .disabled(is_sending)
+                    .tooltip("Sync probe: start request, try duplicate. Duplicate ignored. Look for duplicate_ignored=true below.")
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.exercise_query_ignore_while_loading(cx);
+                    })),
+            )
+            .child(
+                Button::new("http-lab-testing-query-latest")
+                    .outline()
+                    .label("Query latest")
+                    .disabled(is_sending)
+                    .tooltip("Sync probe: two requests, second replaces first. Stale completion rejected. Look for stale_accepted=false below.")
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.exercise_query_latest_wins(cx);
+                    })),
+            ),
+        )
+        .child(
+            div().px_4().py_3().child(
+                v_flex().gap_2()
+                    .child(query_resource_row("Main", &self.query_resource, cx))
+                    .child(query_resource_row("TTL", &self.query_ttl_resource, cx))
+                    .child(query_resource_row("Ignore", &self.query_ignore_resource, cx))
+                    .child(query_resource_row("Latest", &self.query_latest_resource, cx))
+                    .child(row("Query message", &self.query_message, cx)),
+            ),
+        );
+
+        // -- Section 2: Cancel Signal --
+        let signal_resource = &self.query_signal_resource;
+        let signal_status = match signal_resource.signal() {
+            Some(signal) => {
+                if signal.is_cancelled() {
+                    "cancelled"
+                } else {
+                    "active"
+                }
+            }
+            None => "none",
+        };
+        let cancel_signal_section = section_card(
+            "Cancel Signal",
+            "Test cooperative cancellation signal that propagates to cloned signal references",
+            cx,
+        )
+        .child(
+            div().flex().flex_wrap().gap_2().px_4().py_3()
+            .child(
+                Button::new("http-lab-testing-query-signal")
+                    .outline()
+                    .label("Query signal")
+                    .disabled(is_sending)
+                    .tooltip("Sync probe: begin request, clone signal, cancel resource. Cloned signal should read is_cancelled=true. Look for before=false after=true below.")
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.exercise_query_signal(cx);
+                    })),
+            )
+            .child(
+                Button::new("http-lab-testing-signal-cancel")
+                    .danger()
+                    .outline()
+                    .label("Cancel active")
+                    .disabled(!is_sending)
+                    .tooltip("Cancels any in-flight request via CancellationToken.")
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.cancel(cx);
+                    })),
+            ),
+        )
+        .child(
+            div().px_4().py_3().child(
+                v_flex().gap_2()
+                    .child(query_resource_row("Signal resource", signal_resource, cx))
+                    .child(row("Signal", signal_status, cx))
+                    .child(row("Signal message", &self.query_signal_message, cx)),
+            ),
+        );
+
+        // -- Section 3: Cache & Data Retention --
+        let placeholder_resource = &self.query_placeholder_resource;
+        let ph_data = placeholder_resource
+            .data()
+            .map(|r| r.preview.clone())
+            .unwrap_or_else(|| "none".to_string());
+        let ph_placeholder = placeholder_resource
+            .placeholder_data()
+            .map(|r| r.preview.clone())
+            .unwrap_or_else(|| "none".to_string());
+        let ph_display = placeholder_resource
+            .display_data()
+            .map(|r| r.preview.clone())
+            .unwrap_or_else(|| "none".to_string());
+        let ph_previous = placeholder_resource
+            .previous_data()
+            .map(|r| r.preview.clone())
+            .unwrap_or_else(|| "none".to_string());
+
+        let data_retention_section = section_card(
+            "Cache & Data Retention",
+            "Test placeholder data fallback, automatic previous_data tracking on success, and rollback",
+            cx,
+        )
+        .child(
+            div().flex().flex_wrap().gap_2().px_4().py_3()
+            .child(
+                Button::new("http-lab-testing-placeholder")
+                    .outline()
+                    .label("Placeholder data")
+                    .disabled(is_sending)
+                    .tooltip("Sync probe: seed data, set placeholder, reset, begin loading. display_data returns placeholder during loading, real data after completion. Check results below.")
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.exercise_query_placeholder_data(cx);
+                    })),
+            )
+            .child(
+                Button::new("http-lab-testing-previous-data")
+                    .outline()
+                    .label("Previous data")
+                    .disabled(is_sending)
+                    .tooltip("Sync probe: seed 'first', then 'second'. previous_data holds 'first'. Check results below.")
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.exercise_query_previous_data(cx);
+                    })),
+            )
+            .child(
+                Button::new("http-lab-testing-rollback")
+                    .outline()
+                    .label("Rollback")
+                    .disabled(is_sending)
+                    .tooltip("Sync probe: seed data, overwrite, rollback_to_previous. Data restored. Check results below.")
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.exercise_query_rollback(cx);
+                    })),
+            ),
+        )
+        .child(
+            div().px_4().py_3().child(
+                v_flex().gap_2()
+                    .child(query_resource_row("Placeholder resource", placeholder_resource, cx))
+                    .child(row("Data", &ph_data, cx))
+                    .child(row("Placeholder", &ph_placeholder, cx))
+                    .child(row("Display data", &ph_display, cx))
+                    .child(row("Previous data", &ph_previous, cx))
+                    .child(row("Placeholder message", &self.query_placeholder_message, cx)),
+            ),
+        );
+
+        // -- Section 4: Optimistic Updates --
+        let optimistic_resource = &self.query_optimistic_resource;
+        let opt_data = optimistic_resource
+            .data()
+            .map(|r| r.preview.clone())
+            .unwrap_or_else(|| "none".to_string());
+        let opt_previous = optimistic_resource
+            .previous_data()
+            .map(|r| r.preview.clone())
+            .unwrap_or_else(|| "none".to_string());
+        let opt_display = optimistic_resource
+            .display_data()
+            .map(|r| r.preview.clone())
+            .unwrap_or_else(|| "none".to_string());
+        let opt_status = optimistic_resource.status().label().to_string();
+
+        let optimistic_section = section_card(
+            "Optimistic Updates",
+            "Test optimistic writes that store previous data for rollback on mutation failure",
+            cx,
+        )
+        .child(
+            div().flex().flex_wrap().gap_2().px_4().py_3()
+            .child(
+                Button::new("http-lab-testing-optimistic-set")
+                    .outline()
+                    .label("Optimistic set")
+                    .disabled(is_sending)
+                    .tooltip("Sync probe: seed 'original', set_data('optimistic'). data='optimistic' previous='original'. Status unchanged.")
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.exercise_query_optimistic_set(cx);
+                    })),
+            )
+            .child(
+                Button::new("http-lab-testing-optimistic-rollback")
+                    .outline()
+                    .label("Optimistic rollback")
+                    .disabled(is_sending)
+                    .tooltip("Sync probe: seed, set_data, rollback. Data restored to original.")
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.exercise_query_optimistic_rollback(cx);
+                    })),
+            )
+            .child(
+                Button::new("http-lab-testing-optimistic-flow")
+                    .outline()
+                    .label("Full mutation")
+                    .disabled(is_sending)
+                    .tooltip("Sync probe: seed 'original' \u{2192} set_data('optimistic') \u{2192} complete('server confirmed'). data='server confirmed' previous='optimistic'.")
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.exercise_query_optimistic_flow(cx);
+                    })),
+            ),
+        )
+        .child(
+            div().px_4().py_3().child(
+                v_flex().gap_2()
+                    .child(query_resource_row("Optimistic resource", optimistic_resource, cx))
+                    .child(row("Data", &opt_data, cx))
+                    .child(row("Previous data", &opt_previous, cx))
+                    .child(row("Display data", &opt_display, cx))
+                    .child(row("Status", &opt_status, cx))
+                    .child(row("Optimistic message", &self.query_optimistic_message, cx)),
+            ),
+        );
+
+        // -- Section 5: Standalone Client Fetch --
+        let client_fetch_section = section_card(
+            "Standalone Client Fetch",
+            "Test QueryClient.fetch_query() and force_fetch_query() \u{2014} no component subscription needed",
+            cx,
+        )
+        .child(
+            div().flex().flex_wrap().gap_2().px_4().py_3()
+            .child(
+                Button::new("http-lab-testing-client-fetch")
+                    .outline()
+                    .label("Client fetch")
+                    .disabled(is_sending)
+                    .tooltip("Imperative fetch via QueryClient. Creates resource and starts request without a component. Check message below.")
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.exercise_client_fetch_query(cx);
+                    })),
+            )
+            .child(
+                Button::new("http-lab-testing-client-force")
+                    .outline()
+                    .label("Client force fetch")
+                    .disabled(is_sending)
+                    .tooltip("Same but bypasses cache freshness checks. Check message below.")
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.exercise_client_force_fetch_query(cx);
+                    })),
+            ),
+        )
+        .child(
+            div().px_4().py_3().child(
+                v_flex()
+                    .gap_2()
+                    .child(row("Client message", &self.client_query_message, cx)),
+            ),
+        );
+
+        // -- Section 6: Local Full Lab --
+        let local_lab_section = section_card(
+            "Local Full Lab",
+            "Full integration: each action uses its own QueryResource with real cache/request policies, real HTTP calls",
+            cx,
+        )
+        .child(
+            div().flex().flex_wrap().gap_2().px_4().py_3()
+            .children(HttpLabAction::all().iter().copied().map(|action| {
+                let tip = match action {
+                    HttpLabAction::GetText => "Sends GET to httpbingo.org/encoding/utf8 (TTL 60s, LatestWins). Populates the local lab resource panel.",
+                    HttpLabAction::GetXml => "Sends GET to httpbingo.org/xml (TTL 60s, LatestWins). Populates the local lab resource panel.",
+                    HttpLabAction::GetJson => "Sends GET to httpbingo.org/json (StaleWhileRevalidate 30s, LatestWins). Populates the local lab resource panel.",
+                    HttpLabAction::PostJson => "Sends POST to httpbingo.org/post (NoCache, LatestWins). Populates the local lab resource panel.",
+                    HttpLabAction::PostForm => "Sends POST to httpbingo.org/post (NoCache, LatestWins). Populates the local lab resource panel.",
+                    HttpLabAction::PostMultipart => "Sends POST to httpbingo.org/post (NoCache, IgnoreWhileLoading). Duplicates are ignored while loading.",
+                    HttpLabAction::Cookies => "Sends GET to httpbingo.org/cookies (NoCache, LatestWins). Populates the local lab resource panel.",
+                    HttpLabAction::Failure => "Sends GET to httpbingo.org/status/418 (NoCache, LatestWins). Expect a 418 error response.",
+                    HttpLabAction::FullFlow => "Runs 4 sequential requests (GetJson, PostJson, Cookies, Failure) and populates all individual resources plus the FullFlow resource.",
+                };
+                Button::new(format!("http-lab-testing-local-{}", action.id()))
+                    .outline()
+                    .label(format!("Local {}", action.label()))
+                    .disabled(is_sending)
+                    .tooltip(tip)
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.send_local_lab_action(action, cx);
+                    }))
+            }))
+            .child(
+                Button::new("http-lab-testing-local-reset")
+                    .outline()
+                    .label("Local reset")
+                    .disabled(is_sending)
+                    .tooltip("Resets all local lab resources to Idle, advances the request sequencer scope, and clears history.")
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.reset_local_lab(cx);
+                    })),
+            )
+            .child(
+                Button::new("http-lab-testing-local-cancel")
+                    .danger()
+                    .outline()
+                    .label("Cancel active")
+                    .disabled(!is_sending)
+                    .tooltip("Cancels any in-flight request via CancellationToken.")
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.cancel(cx);
+                    })),
+            ),
+        )
+        .child(
+            div().px_4().py_3().child(
+                v_flex()
+                    .gap_2()
+                    .child(row("Selected", self.local_lab_selected.label(), cx))
+                    .child(row("Message", &self.local_lab_message, cx))
+                    .child(row(
+                        "History",
+                        &self.local_lab_history.len().to_string(),
+                        cx,
+                    ))
+                    .children(HttpLabAction::all().iter().copied().map(|action| {
+                        let resource = self
+                            .local_lab_resources
+                            .get(&action)
+                            .expect("local lab resource must exist");
+                        query_resource_row(action.label(), resource, cx)
+                    }))
+                    .child(local_lab_history_panel(self, cx)),
+            ),
+        );
+
+        // -- Section 7: Raw Baseline --
+        let raw_baseline_section = section_card(
+            "Raw Baseline",
+            "Plain reqwest GET with manual operation tracking \u{2014} no gpui-query involved",
+            cx,
+        )
+        .child(
+            div().flex().flex_wrap().gap_2().px_4().py_3()
+            .child(
+                Button::new("http-lab-testing-send")
+                    .outline()
+                    .label(if is_sending {
+                        "Sending raw GET"
+                    } else {
+                        "Send raw GET"
+                    })
+                    .disabled(is_sending)
+                    .tooltip("Plain reqwest GET to httpbingo.org. No QueryResource. Baseline for comparison.")
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.send_raw_get(cx);
+                    })),
+            ),
+        )
+        .child(
+            div().px_4().py_3().child(
+                v_flex()
+                    .gap_2()
+                    .child(row("Status", self.status.label(), cx))
+                    .child(row(
+                        "Active operation",
+                        &self
+                            .active_operation_id
+                            .map(|id| id.to_string())
+                            .unwrap_or_else(|| "none".to_string()),
+                        cx,
+                    ))
+                    .child(row("Message", &self.last_message, cx))
+                    .when_some(self.last_response.as_ref(), |this, response| {
+                        this.child(row("Response status", &response.status.to_string(), cx))
+                            .child(row("Response URL", &response.final_url, cx))
+                            .child(row("Response headers", &response.header_count.to_string(), cx))
+                            .child(row("Preview bytes", &response.bytes.to_string(), cx))
+                            .child(
+                                div()
+                                    .p_3()
+                                    .rounded(cx.theme().radius)
+                                    .bg(cx.theme().muted)
+                                    .text_xs()
+                                    .font_family("monospace")
+                                    .child(response.preview.clone()),
+                            )
+                    })
+                    .when(self.last_response.is_none(), |this| {
+                        this.child(
+                            div()
+                                .text_sm()
+                                .text_color(cx.theme().muted_foreground)
+                                .child("No response captured."),
+                        )
+                    }),
+            ),
+        );
+
         let view = v_flex()
             .min_h_full()
             .p_6()
@@ -1352,170 +1814,13 @@ impl Render for HttpLabTestingPage {
                             ),
                     ),
             )
-            .child(
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .gap_2()
-                    .child(
-                        Button::new("http-lab-testing-send")
-                            .outline()
-                            .label(if is_sending { "Sending raw GET" } else { "Send raw GET" })
-                            .disabled(is_sending)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.send_raw_get(cx);
-                            })),
-                    )
-                    .child(
-                        Button::new("http-lab-testing-query-send")
-                            .outline()
-                            .label(if is_sending {
-                                "Sending query GET"
-                            } else {
-                                "Send query GET"
-                            })
-                            .disabled(is_sending)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.send_query_get(cx);
-                            })),
-                    )
-                    .child(
-                        Button::new("http-lab-testing-query-ttl")
-                            .outline()
-                            .label("Query TTL")
-                            .disabled(is_sending)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.exercise_query_ttl_cache(cx);
-                            })),
-                    )
-                    .child(
-                        Button::new("http-lab-testing-query-ignore")
-                            .outline()
-                            .label("Query ignore")
-                            .disabled(is_sending)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.exercise_query_ignore_while_loading(cx);
-                            })),
-                    )
-                    .child(
-                        Button::new("http-lab-testing-query-latest")
-                            .outline()
-                            .label("Query latest")
-                            .disabled(is_sending)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.exercise_query_latest_wins(cx);
-                            })),
-                    )
-                    // --- New feature buttons ---
-                    .child(
-                        Button::new("http-lab-testing-query-signal")
-                            .outline()
-                            .label("Query signal")
-                            .disabled(is_sending)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.exercise_query_signal(cx);
-                            })),
-                    )
-                    .child(
-                        Button::new("http-lab-testing-placeholder")
-                            .outline()
-                            .label("Placeholder data")
-                            .disabled(is_sending)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.exercise_query_placeholder_data(cx);
-                            })),
-                    )
-                    .child(
-                        Button::new("http-lab-testing-previous-data")
-                            .outline()
-                            .label("Previous data")
-                            .disabled(is_sending)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.exercise_query_previous_data(cx);
-                            })),
-                    )
-                    .child(
-                        Button::new("http-lab-testing-optimistic-set")
-                            .outline()
-                            .label("Optimistic set")
-                            .disabled(is_sending)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.exercise_query_optimistic_set(cx);
-                            })),
-                    )
-                    .child(
-                        Button::new("http-lab-testing-optimistic-rollback")
-                            .outline()
-                            .label("Optimistic rollback")
-                            .disabled(is_sending)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.exercise_query_optimistic_rollback(cx);
-                            })),
-                    )
-                    .child(
-                        Button::new("http-lab-testing-optimistic-flow")
-                            .outline()
-                            .label("Optimistic flow")
-                            .disabled(is_sending)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.exercise_query_optimistic_flow(cx);
-                            })),
-                    )
-                    .child(
-                        Button::new("http-lab-testing-client-fetch")
-                            .outline()
-                            .label("Client fetch")
-                            .disabled(is_sending)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.exercise_client_fetch_query(cx);
-                            })),
-                    )
-                    .child(
-                        Button::new("http-lab-testing-client-force")
-                            .outline()
-                            .label("Client force")
-                            .disabled(is_sending)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.exercise_client_force_fetch_query(cx);
-                            })),
-                    )
-                    .children(HttpLabAction::all().iter().copied().map(|action| {
-                        Button::new(format!("http-lab-testing-local-{}", action.id()))
-                            .outline()
-                            .label(format!("Local {}", action.label()))
-                            .disabled(is_sending)
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.send_local_lab_action(action, cx);
-                            }))
-                    }))
-                    .child(
-                        Button::new("http-lab-testing-local-reset")
-                            .outline()
-                            .label("Local reset")
-                            .disabled(is_sending)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.reset_local_lab(cx);
-                            })),
-                    )
-                    .child(
-                        Button::new("http-lab-testing-cancel")
-                            .danger()
-                            .outline()
-                            .label("Cancel")
-                            .disabled(!is_sending)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.cancel(cx);
-                            })),
-                    ),
-            )
-            .child(status_panel(self, cx))
-            .child(query_panel(self, cx))
-            .child(signal_panel(self, cx))
-            .child(data_retention_panel(self, cx))
-            .child(optimistic_panel(self, cx))
-            .child(client_query_panel(self, cx))
-            .child(local_lab_panel(self, cx))
-            .child(response_panel(self, cx));
+            .child(query_lifecycle_section)
+            .child(cancel_signal_section)
+            .child(data_retention_section)
+            .child(optimistic_section)
+            .child(client_fetch_section)
+            .child(local_lab_section)
+            .child(raw_baseline_section);
 
         tracing::info!(
             target: RENDER_LOG,
@@ -1685,223 +1990,36 @@ fn local_lab_url(action: HttpLabAction) -> String {
     }
 }
 
-fn status_panel(page: &HttpLabTestingPage, cx: &App) -> Div {
-    let render_started = Instant::now();
-    let view = div()
-        .p_4()
+fn section_card(title: &str, description: &str, cx: &App) -> Div {
+    div()
         .rounded(cx.theme().radius_lg)
         .border_1()
         .border_color(cx.theme().border)
+        .overflow_hidden()
         .child(
-            v_flex()
-                .gap_2()
+            div()
+                .px_4()
+                .py_3()
+                .bg(cx.theme().muted)
+                .border_b_1()
+                .border_color(cx.theme().border)
                 .child(
-                    div()
-                        .text_lg()
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .child("Raw request state"),
-                )
-                .child(row("Status", page.status.label(), cx))
-                .child(row(
-                    "Active operation",
-                    &page
-                        .active_operation_id
-                        .map(|id| id.to_string())
-                        .unwrap_or_else(|| "none".to_string()),
-                    cx,
-                ))
-                .child(row("Message", &page.last_message, cx)),
-        );
-
-    tracing::debug!(
-        target: RENDER_LOG,
-        elapsed_us = render_started.elapsed().as_micros() as u64,
-        status = page.status.label(),
-        active_operation_id = page.active_operation_id,
-        "HTTP Lab Testing status panel rendered"
-    );
-
-    view
-}
-
-fn response_panel(page: &HttpLabTestingPage, cx: &App) -> Div {
-    let render_started = Instant::now();
-    let has_response = page.last_response.is_some();
-    let panel = div()
-        .p_4()
-        .rounded(cx.theme().radius_lg)
-        .border_1()
-        .border_color(cx.theme().border)
-        .child(
-            v_flex()
-                .gap_3()
-                .child(
-                    div()
-                        .text_lg()
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .child("Response"),
-                )
-                .when_some(page.last_response.as_ref(), |this, response| {
-                    this.child(row("Status", &response.status.to_string(), cx))
-                        .child(row("Final URL", &response.final_url, cx))
-                        .child(row("Headers", &response.header_count.to_string(), cx))
-                        .child(row("Preview bytes", &response.bytes.to_string(), cx))
+                    v_flex()
+                        .gap_1()
                         .child(
                             div()
-                                .p_3()
-                                .rounded(cx.theme().radius)
-                                .bg(cx.theme().muted)
-                                .text_xs()
-                                .font_family("monospace")
-                                .child(response.preview.clone()),
+                                .text_base()
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .child(title.to_string()),
                         )
-                }),
-        );
-
-    let view = if page.last_response.is_some() {
-        panel
-    } else {
-        panel.child(
-            div()
-                .text_sm()
-                .text_color(cx.theme().muted_foreground)
-                .child("No response captured."),
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground)
+                                .child(description.to_string()),
+                        ),
+                ),
         )
-    };
-
-    tracing::debug!(
-        target: RENDER_LOG,
-        elapsed_us = render_started.elapsed().as_micros() as u64,
-        has_response,
-        "HTTP Lab Testing response panel rendered"
-    );
-
-    view
-}
-
-fn query_panel(page: &HttpLabTestingPage, cx: &App) -> Div {
-    let render_started = Instant::now();
-    let view = div()
-        .p_4()
-        .rounded(cx.theme().radius_lg)
-        .border_1()
-        .border_color(cx.theme().border)
-        .child(
-            v_flex()
-                .gap_2()
-                .child(
-                    div()
-                        .text_lg()
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .child("Minimal query state"),
-                )
-                .child(row(
-                    "Query status",
-                    page.query_resource.status().label(),
-                    cx,
-                ))
-                .child(row(
-                    "Query active",
-                    &page
-                        .query_resource
-                        .active_request_id()
-                        .map(|id| id.label())
-                        .unwrap_or_else(|| "none".to_string()),
-                    cx,
-                ))
-                .child(row(
-                    "Query data",
-                    if page.query_resource.data().is_some() {
-                        "present"
-                    } else {
-                        "none"
-                    },
-                    cx,
-                ))
-                .child(row(
-                    "Query error",
-                    page.query_resource
-                        .error()
-                        .map(QueryError::message)
-                        .unwrap_or("none"),
-                    cx,
-                ))
-                .child(query_resource_row("TTL", &page.query_ttl_resource, cx))
-                .child(query_resource_row(
-                    "Ignore",
-                    &page.query_ignore_resource,
-                    cx,
-                ))
-                .child(query_resource_row(
-                    "Latest",
-                    &page.query_latest_resource,
-                    cx,
-                ))
-                .child(row("Query message", &page.query_message, cx)),
-        );
-
-    tracing::debug!(
-        target: RENDER_LOG,
-        elapsed_us = render_started.elapsed().as_micros() as u64,
-        query_status = page.query_resource.status().label(),
-        ttl_status = page.query_ttl_resource.status().label(),
-        ignore_status = page.query_ignore_resource.status().label(),
-        latest_status = page.query_latest_resource.status().label(),
-        "HTTP Lab Testing query panel rendered"
-    );
-
-    view
-}
-
-fn local_lab_panel(page: &HttpLabTestingPage, cx: &App) -> Div {
-    let render_started = Instant::now();
-    let active_count = page
-        .local_lab_resources
-        .values()
-        .filter(|resource| resource.active_request_id().is_some())
-        .count();
-    let view = div()
-        .p_4()
-        .rounded(cx.theme().radius_lg)
-        .border_1()
-        .border_color(cx.theme().border)
-        .child(
-            v_flex()
-                .gap_3()
-                .child(
-                    div()
-                        .text_lg()
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .child("Local full-query lab"),
-                )
-                .child(row("Selected", page.local_lab_selected.label(), cx))
-                .child(row("Message", &page.local_lab_message, cx))
-                .child(row(
-                    "History",
-                    &page.local_lab_history.len().to_string(),
-                    cx,
-                ))
-                .children(HttpLabAction::all().iter().copied().map(|action| {
-                    let resource = page
-                        .local_lab_resources
-                        .get(&action)
-                        .expect("local lab resource must exist");
-                    query_resource_row(action.label(), resource, cx)
-                }))
-                .child(local_lab_history_panel(page, cx)),
-        );
-
-    tracing::debug!(
-        target: RENDER_LOG,
-        elapsed_us = render_started.elapsed().as_micros() as u64,
-        selected = page.local_lab_selected.id(),
-        resource_count = page.local_lab_resources.len(),
-        active_count,
-        history_len = page.local_lab_history.len(),
-        "HTTP Lab Testing local lab panel rendered"
-    );
-
-    view
 }
 
 fn local_lab_history_panel(page: &HttpLabTestingPage, cx: &App) -> Div {
@@ -1958,144 +2076,6 @@ fn query_resource_row(label: &str, resource: &QueryResource<RawResponse>, cx: &A
         &format!("{} active={} {}", resource.status().label(), active, data),
         cx,
     )
-}
-
-fn signal_panel(page: &HttpLabTestingPage, cx: &App) -> Div {
-    let resource = &page.query_signal_resource;
-    let signal_status = match resource.signal() {
-        Some(signal) => {
-            if signal.is_cancelled() {
-                "cancelled"
-            } else {
-                "active"
-            }
-        }
-        None => "none",
-    };
-    div()
-        .p_4()
-        .rounded(cx.theme().radius_lg)
-        .border_1()
-        .border_color(cx.theme().border)
-        .child(
-            v_flex()
-                .gap_2()
-                .child(
-                    div()
-                        .text_lg()
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .child("Cancel signal state"),
-                )
-                .child(query_resource_row("Signal resource", resource, cx))
-                .child(row("Signal", signal_status, cx))
-                .child(row("Signal message", &page.query_signal_message, cx)),
-        )
-}
-
-fn data_retention_panel(page: &HttpLabTestingPage, cx: &App) -> Div {
-    let resource = &page.query_placeholder_resource;
-    let data_label = resource
-        .data()
-        .map(|r| r.preview.clone())
-        .unwrap_or_else(|| "none".to_string());
-    let placeholder_label = resource
-        .placeholder_data()
-        .map(|r| r.preview.clone())
-        .unwrap_or_else(|| "none".to_string());
-    let display_label = resource
-        .display_data()
-        .map(|r| r.preview.clone())
-        .unwrap_or_else(|| "none".to_string());
-    let previous_label = resource
-        .previous_data()
-        .map(|r| r.preview.clone())
-        .unwrap_or_else(|| "none".to_string());
-
-    div()
-        .p_4()
-        .rounded(cx.theme().radius_lg)
-        .border_1()
-        .border_color(cx.theme().border)
-        .child(
-            v_flex()
-                .gap_2()
-                .child(
-                    div()
-                        .text_lg()
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .child("Data retention state"),
-                )
-                .child(query_resource_row("Placeholder resource", resource, cx))
-                .child(row("Data", &data_label, cx))
-                .child(row("Placeholder", &placeholder_label, cx))
-                .child(row("Display data", &display_label, cx))
-                .child(row("Previous data", &previous_label, cx))
-                .child(row(
-                    "Placeholder message",
-                    &page.query_placeholder_message,
-                    cx,
-                )),
-        )
-}
-
-fn optimistic_panel(page: &HttpLabTestingPage, cx: &App) -> Div {
-    let resource = &page.query_optimistic_resource;
-    let data_label = resource
-        .data()
-        .map(|r| r.preview.clone())
-        .unwrap_or_else(|| "none".to_string());
-    let previous_label = resource
-        .previous_data()
-        .map(|r| r.preview.clone())
-        .unwrap_or_else(|| "none".to_string());
-    let display_label = resource
-        .display_data()
-        .map(|r| r.preview.clone())
-        .unwrap_or_else(|| "none".to_string());
-
-    div()
-        .p_4()
-        .rounded(cx.theme().radius_lg)
-        .border_1()
-        .border_color(cx.theme().border)
-        .child(
-            v_flex()
-                .gap_2()
-                .child(
-                    div()
-                        .text_lg()
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .child("Optimistic update state"),
-                )
-                .child(query_resource_row("Optimistic resource", resource, cx))
-                .child(row("Data", &data_label, cx))
-                .child(row("Previous data", &previous_label, cx))
-                .child(row("Display data", &display_label, cx))
-                .child(row(
-                    "Optimistic message",
-                    &page.query_optimistic_message,
-                    cx,
-                )),
-        )
-}
-
-fn client_query_panel(page: &HttpLabTestingPage, cx: &App) -> Div {
-    div()
-        .p_4()
-        .rounded(cx.theme().radius_lg)
-        .border_1()
-        .border_color(cx.theme().border)
-        .child(
-            v_flex()
-                .gap_2()
-                .child(
-                    div()
-                        .text_lg()
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .child("Client fetch state"),
-                )
-                .child(row("Client message", &page.client_query_message, cx)),
-        )
 }
 
 fn row(label: &str, value: &str, cx: &App) -> Div {
