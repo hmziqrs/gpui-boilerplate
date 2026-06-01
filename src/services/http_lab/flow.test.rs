@@ -107,6 +107,20 @@ fn reset_makes_in_flight_request_results_silent_stale_results() {
 }
 
 #[test]
+fn reset_for_user_returns_only_request_ids() {
+    let mut state = HttpLabState::default();
+    let request = begin_action(&mut state, HttpLabAction::GetJson, 1).expect("request");
+
+    let reset_requests = state.reset_for_user();
+
+    assert_eq!(reset_requests.request_ids, vec![request]);
+    assert_eq!(
+        state.resource(HttpLabAction::GetJson).status(),
+        QueryStatus::Idle
+    );
+}
+
+#[test]
 fn reset_prevents_old_request_id_from_colliding_with_new_request() {
     let mut state = HttpLabState::default();
     let old_request = begin_action(&mut state, HttpLabAction::GetJson, 1).expect("old request");
