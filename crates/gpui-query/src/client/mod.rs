@@ -36,7 +36,10 @@ use std::collections::HashMap;
 
 use gpui::{App, Entity, Global};
 
-use crate::core::{CachePolicy, QueryKey, QueryKeyFilter, QueryResource, RequestPolicy};
+use crate::core::{
+    CachePolicy, QueryFetchMode, QueryKey, QueryKeyFilter, QueryResource, QuerySignal, RequestId,
+    RequestPolicy,
+};
 
 pub use bucket::{BucketDefaults, QueryBucket, QueryBucketTrait};
 
@@ -115,6 +118,51 @@ impl QueryClient {
             .resource_with_policies(key, cache_policy, request_policy, cx)
     }
 
+    /// Imperatively fetch a query without a component subscription.
+    ///
+    /// Creates the resource if it doesn't exist, begins a request, and returns
+    /// the [`Entity`] and [`RequestId`]. The caller is responsible for completing
+    /// the request by calling complete methods on the resource entity via
+    /// `cx.update()`.
+    ///
+    /// Returns `None` (short-circuits) when:
+    /// - The cache is fresh (`CacheHit`)
+    /// - A request is already loading and `IgnoreWhileLoading` is set
+    pub fn fetch_query<T, E>(
+        &mut self,
+        key: QueryKey,
+        cache_policy: CachePolicy,
+        request_policy: RequestPolicy,
+        now_ms: u128,
+        cx: &mut App,
+    ) -> Option<(Entity<QueryResource<T, E>>, RequestId)>
+    where
+        T: Clone + Send + Sync + 'static,
+        E: Clone + Send + Sync + 'static,
+    {
+        self.fetch_query_inner(key, cache_policy, request_policy, now_ms, QueryFetchMode::Normal, cx)
+    }
+
+    /// Force-fetch a query, bypassing cache freshness checks.
+    ///
+    /// Behaves like [`fetch_query`](Self::fetch_query) but always starts a new
+    /// request even when the cache is fresh. Still respects `IgnoreWhileLoading`
+    /// if a request is already in flight.
+    pub fn force_fetch_query<T, E>(
+        &mut self,
+        key: QueryKey,
+        cache_policy: CachePolicy,
+        request_policy: RequestPolicy,
+        now_ms: u128,
+        cx: &mut App,
+    ) -> Option<(Entity<QueryResource<T, E>>, RequestId)>
+    where
+        T: Clone + Send + Sync + 'static,
+        E: Clone + Send + Sync + 'static,
+    {
+        self.fetch_query_inner(key, cache_policy, request_policy, now_ms, QueryFetchMode::Force, cx)
+    }
+
     /// Check if a resource exists for the given key and type.
     pub fn contains<T: Clone + Send + Sync + 'static, E: Clone + Send + Sync + 'static>(
         &self,
@@ -126,6 +174,77 @@ impl QueryClient {
             .and_then(|b| b.downcast_ref::<T, E>())
             .map(|b| b.resources.contains_key(key))
             .unwrap_or(false)
+    }
+
+    /// Cancel the active request for a resource, also cancelling its signal.
+    ///
+    /// Returns `true` if there was an active request to cancel, `false` if the
+    /// resource was idle or didn't exist.
+    pub fn cancel_query<T: Clone + Send + Sync + 'static, E: Clone + Send + Sync + 'static>(
+        &mut self,
+        key: &QueryKey,
+        error: E,
+        cx: &mut App,
+    ) -> bool {
+        let type_id = TypeId::of::<(T, E)>();
+        let Some(erased) = self.buckets.get_mut(&type_id) else {
+            return false;
+        };
+        let bucket = erased.downcast_mut::<T, E>().unwrap();
+        let Some(entity) = bucket.resources.get(key).cloned() else {
+            return false;
+        };
+        entity.update(cx, |resource, _| resource.cancel(error))
+    }
+
+    /// Returns a clone of the cancellation signal for the resource at `key`,
+    /// if the resource exists and has an active signal.
+    pub fn signal_for<T: Clone + Send + Sync + 'static, E: Clone + Send + Sync + 'static>(
+        &self,
+        key: &QueryKey,
+        cx: &App,
+    ) -> Option<QuerySignal> {
+        let type_id = TypeId::of::<(T, E)>();
+        self.buckets
+            .get(&type_id)
+            .and_then(|b| b.downcast_ref::<T, E>())
+            .and_then(|bucket| bucket.signal_for(key, cx))
+    }
+
+    /// Optimistically set data on a resource without completing a request.
+    ///
+    /// The current data is stored in `previous_data` for potential rollback
+    /// via [`rollback_query_data`](Self::rollback_query_data).
+    /// Returns `true` if the resource was found and updated, `false` otherwise.
+    pub fn set_query_data<T: Clone + Send + Sync + 'static, E: Clone + Send + Sync + 'static>(
+        &mut self,
+        key: &QueryKey,
+        data: T,
+        cx: &mut App,
+    ) -> bool {
+        let type_id = TypeId::of::<(T, E)>();
+        let Some(erased) = self.buckets.get_mut(&type_id) else {
+            return false;
+        };
+        let bucket = erased.downcast_mut::<T, E>().unwrap();
+        bucket.set_data_for(key, data, cx)
+    }
+
+    /// Roll back optimistically set data on a resource.
+    ///
+    /// Returns `true` if the resource was found and had previous data to restore.
+    /// Returns `false` if the resource wasn't found or had no previous data.
+    pub fn rollback_query_data<T: Clone + Send + Sync + 'static, E: Clone + Send + Sync + 'static>(
+        &mut self,
+        key: &QueryKey,
+        cx: &mut App,
+    ) -> bool {
+        let type_id = TypeId::of::<(T, E)>();
+        let Some(erased) = self.buckets.get_mut(&type_id) else {
+            return false;
+        };
+        let bucket = erased.downcast_mut::<T, E>().unwrap();
+        bucket.rollback_data_for(key, cx)
     }
 
     // ── Bulk operations (type-erased) ──────────────────────────────────
@@ -166,6 +285,29 @@ impl QueryClient {
     }
 
     // ── Private helpers ────────────────────────────────────────────────
+
+    fn fetch_query_inner<T, E>(
+        &mut self,
+        key: QueryKey,
+        cache_policy: CachePolicy,
+        request_policy: RequestPolicy,
+        now_ms: u128,
+        fetch_mode: QueryFetchMode,
+        cx: &mut App,
+    ) -> Option<(Entity<QueryResource<T, E>>, RequestId)>
+    where
+        T: Clone + Send + Sync + 'static,
+        E: Clone + Send + Sync + 'static,
+    {
+        let type_id = TypeId::of::<(T, E)>();
+        self.ensure_bucket::<T, E>(type_id);
+        self.buckets
+            .get_mut(&type_id)
+            .unwrap()
+            .downcast_mut::<T, E>()
+            .unwrap()
+            .fetch(&key, cache_policy, request_policy, now_ms, fetch_mode, cx)
+    }
 
     fn ensure_bucket<
         T: Clone + Send + Sync + 'static,

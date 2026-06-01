@@ -5,7 +5,7 @@ use gpui::{App, AppContext, Entity};
 
 use crate::core::{
     CachePolicy, QueryBeginResult, QueryFetchMode, QueryKey, QueryKeyFilter, QueryResource,
-    RequestPolicy, RequestSequencer,
+    QuerySignal, RequestId, RequestPolicy, RequestSequencer,
 };
 
 /// Type-erased trait for bulk operations that don't need to know `T` or `E`.
@@ -95,6 +95,70 @@ impl<T: 'static, E: 'static> QueryBucket<T, E> {
         let entity = self.resources.get(key).cloned()?;
         let sequencer = self.sequencers.entry(key.clone()).or_default();
         Some(entity.update(cx, |resource, _| resource.begin_request(sequencer, now_ms, fetch_mode)))
+    }
+
+    /// Fetch (begin request) for a key, creating the resource if needed.
+    ///
+    /// This is a combined create-and-begin operation. If the key doesn't exist
+    /// yet, it creates the resource with the given policies, then begins a request.
+    /// Returns `Some((entity, request_id))` when a new request is started,
+    /// or `None` if the request was short-circuited (CacheHit) or ignored
+    /// (IgnoredWhileLoading).
+    pub fn fetch(
+        &mut self,
+        key: &QueryKey,
+        cache_policy: CachePolicy,
+        request_policy: RequestPolicy,
+        now_ms: u128,
+        fetch_mode: QueryFetchMode,
+        cx: &mut App,
+    ) -> Option<(Entity<QueryResource<T, E>>, RequestId)> {
+        let entity = self.resource_with_policies(key.clone(), cache_policy, request_policy, cx);
+        let sequencer = self.sequencers.entry(key.clone()).or_default();
+        let result = entity.update(cx, |resource, _| {
+            resource.begin_request(sequencer, now_ms, fetch_mode)
+        });
+        match result {
+            QueryBeginResult::Started { request_id, .. } => Some((entity, request_id)),
+            QueryBeginResult::CacheHit => None,
+            QueryBeginResult::IgnoredWhileLoading { .. } => None,
+        }
+    }
+
+    /// Returns a clone of the cancellation signal for the resource at `key`,
+    /// if the resource exists and has an active signal.
+    ///
+    /// This is useful for passing to an async fetcher so it can observe
+    /// cooperative cancellation.
+    pub fn signal_for(&self, key: &QueryKey, cx: &App) -> Option<QuerySignal> {
+        let entity = self.resources.get(key)?;
+        entity.read(cx).signal().cloned()
+    }
+
+    /// Optimistically set data on the resource at `key` without completing a request.
+    ///
+    /// The current data is stored in `previous_data` for potential rollback.
+    /// Returns `true` if the resource was found and updated, `false` otherwise.
+    pub fn set_data_for(&mut self, key: &QueryKey, data: T, cx: &mut App) -> bool {
+        let Some(entity) = self.resources.get(key).cloned() else {
+            return false;
+        };
+        entity.update(cx, |resource, _| {
+            resource.set_data(data);
+        });
+        true
+    }
+
+    /// Roll back optimistically set data on the resource at `key`.
+    ///
+    /// Returns `true` if the resource was found and rollback succeeded
+    /// (i.e., there was previous data to restore). Returns `false` if
+    /// the resource wasn't found or had no previous data.
+    pub fn rollback_data_for(&mut self, key: &QueryKey, cx: &mut App) -> bool {
+        let Some(entity) = self.resources.get(key).cloned() else {
+            return false;
+        };
+        entity.update(cx, |resource, _| resource.rollback_to_previous())
     }
 }
 

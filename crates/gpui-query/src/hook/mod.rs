@@ -36,7 +36,7 @@ pub use options::QueryOptions;
 use gpui::{AppContext, BorrowAppContext, Context, Entity, Subscription};
 
 use crate::client::QueryClient;
-use crate::core::{QueryKey, QueryResource, QueryStatus};
+use crate::core::{QueryKey, QueryResource, QuerySignal, QueryStatus};
 
 /// Subscribe to a query resource and automatically re-render when it changes.
 ///
@@ -73,6 +73,67 @@ where
         let weak = entity.downgrade();
         cx.spawn(async move |_this, cx| {
             let result = fetcher().await;
+            let now_ms = current_time_ms();
+            let entity = match weak.upgrade() {
+                Some(e) => e,
+                None => return Ok::<_, ()>(()),
+            };
+            entity.update(cx, |resource, cx| {
+                if let Some(guard) = resource.accept_current_request(
+                    resource
+                        .active_request_id()
+                        .unwrap_or(crate::core::RequestId::scoped(0, 0)),
+                ) {
+                    match result {
+                        Ok(data) => {
+                            resource.complete_success(&guard, data, now_ms);
+                        }
+                        Err(error) => {
+                            resource.complete_failure(&guard, error);
+                        }
+                    }
+                }
+                cx.notify();
+            });
+            Ok::<_, ()>(())
+        })
+        .detach();
+    }
+
+    (entity, subscription)
+}
+
+/// Like [`use_query`], but the fetcher receives a [`QuerySignal`] that it can
+/// check periodically for cooperative cancellation.
+///
+/// The fetcher signature is `FnOnce(QuerySignal) -> Fut` instead of `FnOnce() -> Fut`.
+pub fn use_query_with_signal<T, E, C, F, Fut>(
+    key: QueryKey,
+    cache_policy: crate::core::CachePolicy,
+    request_policy: crate::core::RequestPolicy,
+    fetcher: F,
+    cx: &mut Context<C>,
+) -> (Entity<QueryResource<T, E>>, Subscription)
+where
+    T: Clone + Send + Sync + 'static,
+    E: Clone + Send + Sync + 'static,
+    C: 'static,
+    F: FnOnce(QuerySignal) -> Fut + Send + 'static,
+    Fut: std::future::Future<Output = Result<T, E>> + Send + 'static,
+{
+    let (entity, subscription) = use_query_manual(key, cache_policy, request_policy, cx);
+
+    // Start fetch if resource is idle
+    let should_fetch = entity.read(cx).status() == QueryStatus::Idle;
+    if should_fetch {
+        let signal = entity
+            .read(cx)
+            .signal()
+            .cloned()
+            .unwrap_or_else(QuerySignal::new);
+        let weak = entity.downgrade();
+        cx.spawn(async move |_this, cx| {
+            let result = fetcher(signal).await;
             let now_ms = current_time_ms();
             let entity = match weak.upgrade() {
                 Some(e) => e,
@@ -149,6 +210,56 @@ pub fn fetch_query<T, E, C, F, Fut>(
     let weak = entity.downgrade();
     cx.spawn(async move |_this, cx| {
         let result = fetcher().await;
+        let now_ms = current_time_ms();
+        let entity = match weak.upgrade() {
+            Some(e) => e,
+            None => return Ok::<_, ()>(()),
+        };
+        entity.update(cx, |resource, cx| {
+            if let Some(guard) = resource.accept_current_request(
+                resource
+                    .active_request_id()
+                    .unwrap_or(crate::core::RequestId::scoped(0, 0)),
+            ) {
+                match result {
+                    Ok(data) => {
+                        resource.complete_success(&guard, data, now_ms);
+                    }
+                    Err(error) => {
+                        resource.complete_failure(&guard, error);
+                    }
+                }
+            }
+            cx.notify();
+        });
+        Ok::<_, ()>(())
+    })
+    .detach();
+}
+
+/// Like [`fetch_query`], but the fetcher receives a [`QuerySignal`] that it can
+/// check periodically for cooperative cancellation.
+///
+/// The fetcher signature is `FnOnce(QuerySignal) -> Fut` instead of `FnOnce() -> Fut`.
+pub fn fetch_query_with_signal<T, E, C, F, Fut>(
+    entity: &Entity<QueryResource<T, E>>,
+    fetcher: F,
+    cx: &mut Context<C>,
+) where
+    T: Clone + Send + Sync + 'static,
+    E: Clone + Send + Sync + 'static,
+    C: 'static,
+    F: FnOnce(QuerySignal) -> Fut + Send + 'static,
+    Fut: std::future::Future<Output = Result<T, E>> + Send + 'static,
+{
+    let signal = entity
+        .read(cx)
+        .signal()
+        .cloned()
+        .unwrap_or_else(QuerySignal::new);
+    let weak = entity.downgrade();
+    cx.spawn(async move |_this, cx| {
+        let result = fetcher(signal).await;
         let now_ms = current_time_ms();
         let entity = match weak.upgrade() {
             Some(e) => e,

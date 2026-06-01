@@ -187,3 +187,103 @@ fn reset_keeps_key_and_policies_but_clears_runtime_state() {
     assert_eq!(resource.cancelled_count(), 0);
     assert_eq!(resource.ignored_results(), 0);
 }
+
+// ── QuerySignal integration tests ──────────────────────────────────────
+
+#[test]
+fn begin_request_creates_fresh_signal() {
+    let mut resource = resource();
+    let mut sequencer = RequestSequencer::new();
+
+    assert!(resource.signal().is_none(), "no signal before first request");
+
+    let _ = resource.begin_request(&mut sequencer, 100, QueryFetchMode::Normal);
+
+    let signal = resource
+        .signal()
+        .expect("signal should exist after begin_request");
+    assert!(
+        !signal.is_cancelled(),
+        "fresh signal should not be cancelled"
+    );
+}
+
+#[test]
+fn cancel_propagates_to_signal() {
+    let mut resource = resource();
+    let mut sequencer = RequestSequencer::new();
+    let _ = resource.begin_request(&mut sequencer, 100, QueryFetchMode::Normal);
+
+    // Grab a clone before cancelling
+    let signal_clone = resource.signal().unwrap().clone();
+
+    assert!(resource.cancel(QueryError::cancelled("aborted")));
+
+    assert!(
+        signal_clone.is_cancelled(),
+        "signal clone should see cancellation"
+    );
+    assert!(
+        resource.signal().unwrap().is_cancelled(),
+        "resource signal should be cancelled"
+    );
+}
+
+#[test]
+fn signal_is_fresh_on_new_request() {
+    let mut resource = resource();
+    let mut sequencer = RequestSequencer::new();
+
+    // First request, then cancel
+    let _ = resource.begin_request(&mut sequencer, 100, QueryFetchMode::Normal);
+    resource.cancel(QueryError::cancelled("old"));
+
+    // Second request should get a fresh signal
+    let _ = resource.begin_request(&mut sequencer, 200, QueryFetchMode::Normal);
+
+    let signal = resource.signal().expect("signal should exist after new begin_request");
+    assert!(
+        !signal.is_cancelled(),
+        "new request should have a fresh (non-cancelled) signal"
+    );
+}
+
+#[test]
+fn completion_does_not_cancel_signal() {
+    let mut resource = resource();
+    let mut sequencer = RequestSequencer::new();
+
+    let result = resource.begin_request(&mut sequencer, 100, QueryFetchMode::Normal);
+    let request_id = match result {
+        QueryBeginResult::Started { request_id, .. } => request_id,
+        _ => panic!("expected Started"),
+    };
+
+    // Complete with success
+    assert!(resource.complete_current_success(request_id, "data", 200));
+
+    // Signal still exists and is NOT cancelled
+    let signal = resource
+        .signal()
+        .expect("signal should still exist after completion");
+    assert!(
+        !signal.is_cancelled(),
+        "successful completion should not cancel the signal"
+    );
+}
+
+#[test]
+fn reset_clears_signal() {
+    let mut resource = resource();
+    let mut sequencer = RequestSequencer::new();
+
+    let _ = resource.begin_request(&mut sequencer, 100, QueryFetchMode::Normal);
+    assert!(resource.signal().is_some());
+
+    resource.reset();
+
+    assert!(
+        resource.signal().is_none(),
+        "reset should clear the signal"
+    );
+}

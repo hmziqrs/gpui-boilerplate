@@ -13,6 +13,7 @@ pub mod key_filter;
 mod policy;
 mod request;
 mod resource;
+mod signal;
 mod status;
 
 pub use error::{QueryError, QueryErrorKind};
@@ -21,4 +22,5 @@ pub use key_filter::QueryKeyFilter;
 pub use policy::{CachePolicy, QueryBeginResult, QueryFetchMode, RequestPolicy};
 pub use request::{QueryTimestamp, RequestGuard, RequestId, RequestSequencer};
 pub use resource::QueryResource;
+pub use signal::QuerySignal;
 pub use status::QueryStatus;

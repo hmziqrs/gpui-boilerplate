@@ -1,5 +1,5 @@
 use crate::core::{
-    CachePolicy, QueryKey, QueryStatus, QueryTimestamp, RequestId, RequestPolicy,
+    CachePolicy, QueryKey, QuerySignal, QueryStatus, QueryTimestamp, RequestId, RequestPolicy,
 };
 
 use super::QueryResource;
@@ -59,5 +59,43 @@ impl<T, E> QueryResource<T, E> {
 
     pub fn has_data(&self) -> bool {
         self.data.is_some()
+    }
+
+    /// Returns a reference to the cancellation signal for the current request,
+    /// if one exists. The signal is created when a request begins and cleared on reset.
+    pub fn signal(&self) -> Option<&QuerySignal> {
+        self.signal.as_ref()
+    }
+
+    /// Returns a mutable reference to the cancellation signal for the current request,
+    /// if one exists.
+    pub fn signal_mut(&mut self) -> Option<&mut QuerySignal> {
+        self.signal.as_mut()
+    }
+
+    /// Returns the placeholder data, if set.
+    ///
+    /// Placeholder data is shown while loading before the first fetch completes,
+    /// similar to TanStack Query's `placeholderData`.
+    pub fn placeholder_data(&self) -> Option<&T> {
+        self.placeholder_data.as_ref()
+    }
+
+    /// Returns the previous data, if set.
+    ///
+    /// Previous data is stored automatically when `apply_success` or
+    /// `apply_success_optional` overwrites existing data. It can be
+    /// restored via [`rollback_to_previous`](super::QueryResource::rollback_to_previous).
+    pub fn previous_data(&self) -> Option<&T> {
+        self.previous_data.as_ref()
+    }
+
+    /// Returns the data for display, falling back to placeholder data.
+    ///
+    /// If actual data is present, it is returned. Otherwise, placeholder
+    /// data is returned (if set). This is the recommended accessor for
+    /// UI rendering.
+    pub fn display_data(&self) -> Option<&T> {
+        self.data.as_ref().or(self.placeholder_data.as_ref())
     }
 }

@@ -40,6 +40,10 @@ mod core_lifecycle;
 #[path = "tests/core_request.rs"]
 mod core_request;
 
+#[cfg(test)]
+#[path = "tests/core_data_retention.rs"]
+mod core_data_retention;
+
 // Integration tests (require GPUI test-support, available via dev-dep)
 #[cfg(test)]
 #[path = "tests/integration_client.rs"]

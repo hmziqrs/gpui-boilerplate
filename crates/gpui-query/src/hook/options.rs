@@ -16,6 +16,9 @@ pub struct QueryOptions<T, E = crate::core::QueryError> {
     pub gc_time_ms: u64,
     /// Whether to bypass cache on the next fetch.
     pub force_fetch: bool,
+    /// When `true`, the previous resource's data is used as placeholder data
+    /// when the query key changes, similar to TanStack Query's `keepPreviousData`.
+    pub keep_previous_data: bool,
     _marker: std::marker::PhantomData<(T, E)>,
 }
 
@@ -28,6 +31,7 @@ impl<T, E> QueryOptions<T, E> {
             request_policy: RequestPolicy::default(),
             gc_time_ms: 5 * 60 * 1_000,
             force_fetch: false,
+            keep_previous_data: false,
             _marker: std::marker::PhantomData,
         }
     }
@@ -53,6 +57,16 @@ impl<T, E> QueryOptions<T, E> {
     /// Force a fresh fetch, bypassing any cache.
     pub fn force(mut self) -> Self {
         self.force_fetch = true;
+        self
+    }
+
+    /// Enable keep-previous-data behavior.
+    ///
+    /// When the query key changes, the previous resource's data is used
+    /// as placeholder data for the new resource, so the UI never shows
+    /// an empty state during the transition.
+    pub fn keep_previous_data(mut self, value: bool) -> Self {
+        self.keep_previous_data = value;
         self
     }
 }

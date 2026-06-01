@@ -1,6 +1,6 @@
 use crate::core::{
-    QueryBeginResult, QueryFetchMode, QueryStatus, QueryTimestamp, RequestGuard, RequestId,
-    RequestPolicy, RequestSequencer,
+    QueryBeginResult, QueryFetchMode, QuerySignal, QueryStatus, QueryTimestamp, RequestGuard,
+    RequestId, RequestPolicy, RequestSequencer,
 };
 
 use super::QueryResource;
@@ -51,6 +51,7 @@ impl<T, E> QueryResource<T, E> {
         self.active_request_id = Some(request_id);
         self.started_at = Some(QueryTimestamp::from(now_ms));
         self.error = None;
+        self.signal = Some(QuerySignal::new());
         status
     }
 
@@ -71,6 +72,7 @@ impl<T, E> QueryResource<T, E> {
     /// Cancel the active request. Returns `false` if there is no active request.
     ///
     /// The `error` is stored and can be retrieved via [`error()`](super::QueryResource::error).
+    /// If a signal exists, it is also cancelled so the in-flight fetcher can observe it.
     pub fn cancel(&mut self, error: E) -> bool {
         if self.active_request_id.is_none() {
             return false;
@@ -80,6 +82,11 @@ impl<T, E> QueryResource<T, E> {
         self.status = QueryStatus::Cancelled;
         self.error = Some(error);
         self.cancelled_count += 1;
+
+        if let Some(signal) = self.signal.as_ref() {
+            signal.cancel();
+        }
+
         true
     }
 
@@ -97,5 +104,60 @@ impl<T, E> QueryResource<T, E> {
         self.cache_hits = 0;
         self.cancelled_count = 0;
         self.ignored_results = 0;
+        self.placeholder_data = None;
+        self.previous_data = None;
+        self.signal = None;
+    }
+
+    /// Set (or clear) placeholder data for this resource.
+    ///
+    /// Placeholder data is returned by [`display_data`](super::QueryResource::display_data)
+    /// when no actual data is available yet. This is useful for showing a
+    /// previously-known value while a new key is loading, similar to
+    /// TanStack Query's `placeholderData`.
+    pub fn set_placeholder_data(&mut self, data: Option<T>) {
+        self.placeholder_data = data;
+    }
+
+    /// Roll back to the previous data, if available.
+    ///
+    /// On success, the resource transitions to `Success` status with the
+    /// previous data restored. Returns `true` if rollback succeeded.
+    /// Returns `false` if there is no previous data to restore.
+    ///
+    /// This is the core mechanism for optimistic update rollback.
+    pub fn rollback_to_previous(&mut self) -> bool {
+        if let Some(prev) = self.previous_data.take() {
+            self.data = Some(prev);
+            self.status = QueryStatus::Success;
+            return true;
+        }
+        false
+    }
+
+    /// Apply an optimistic update to the resource's data.
+    ///
+    /// Stores the current data in [`previous_data`](super::QueryResource::previous_data)
+    /// for rollback via [`rollback_to_previous`](super::QueryResource::rollback_to_previous),
+    /// then sets the new data. Does **not** change the request status or active request.
+    ///
+    /// Typical usage:
+    /// 1. Call `set_data(optimistic_value)` before starting a mutation.
+    /// 2. If the mutation succeeds, complete the request normally — the real
+    ///    data overwrites the optimistic value.
+    /// 3. If the mutation fails, call `rollback_to_previous()` to restore the
+    ///    original data.
+    pub fn set_data(&mut self, data: T) {
+        self.previous_data = self.data.take();
+        self.data = Some(data);
+    }
+
+    /// Clear the resource's data optimistically.
+    ///
+    /// Stores the current data in [`previous_data`](super::QueryResource::previous_data)
+    /// for rollback via [`rollback_to_previous`](super::QueryResource::rollback_to_previous),
+    /// then sets data to `None`. Does **not** change the request status or active request.
+    pub fn clear_data(&mut self) {
+        self.previous_data = self.data.take();
     }
 }

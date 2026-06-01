@@ -77,6 +77,7 @@ impl<T, E> QueryResource<T, E> {
     }
 
     pub(crate) fn apply_success(&mut self, data: T, now_ms: u128) {
+        self.previous_data = self.data.take();
         self.status = QueryStatus::Success;
         self.data = Some(data);
         self.error = None;
@@ -91,6 +92,7 @@ impl<T, E> QueryResource<T, E> {
     }
 
     pub(crate) fn apply_success_optional(&mut self, data: Option<T>, now_ms: u128) {
+        self.previous_data = self.data.take();
         self.status = QueryStatus::Success;
         self.data = data;
         self.error = None;

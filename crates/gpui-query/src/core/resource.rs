@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
 
 use super::{
-    CachePolicy, QueryError, QueryKey, QueryStatus, QueryTimestamp, RequestId, RequestPolicy,
+    CachePolicy, QueryError, QueryKey, QuerySignal, QueryStatus, QueryTimestamp, RequestId,
+    RequestPolicy,
 };
 
 mod accessors;
@@ -23,6 +24,10 @@ pub struct QueryResource<T, E = QueryError> {
     cache_hits: u64,
     cancelled_count: u64,
     ignored_results: u64,
+    placeholder_data: Option<T>,
+    previous_data: Option<T>,
+    #[serde(skip)]
+    signal: Option<QuerySignal>,
 }
 
 impl<T, E> QueryResource<T, E> {
@@ -44,6 +49,9 @@ impl<T, E> QueryResource<T, E> {
             cache_hits: 0,
             cancelled_count: 0,
             ignored_results: 0,
+            placeholder_data: None,
+            previous_data: None,
+            signal: None,
         }
     }
 }
