@@ -55,7 +55,7 @@ impl Default for LiquidGlassConfig {
                 r: 0.0,
                 g: 0.0,
                 b: 0.0,
-                a: 0.98,
+                a: 0.06,
             }),
             disable_shadow: true,
         }
