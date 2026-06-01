@@ -1,16 +1,15 @@
-use crate::services::{
-    http_lab::{
-        client::HTTP_LAB_BASE,
-        response::cookie_snapshot_from_exchange,
-        state::HttpLabState,
-        task_tracking::{cancel_request_flag, remove_request_flag},
-        types::{
-            ActionExchange, HttpExchange, HttpLabAction, HttpRequestBodyKind, HttpRequestSnapshot,
-        },
-    },
-    query::{
-        CachePolicy, QueryBeginResult, QueryError, QueryFetchMode, QueryStatus, RequestGuard,
-        RequestId,
+use gpui_query::{
+    CachePolicy, QueryBeginResult, QueryError, QueryFetchMode, QueryStatus, RequestGuard,
+    RequestId,
+};
+
+use crate::services::http_lab::{
+    client::HTTP_LAB_BASE,
+    response::cookie_snapshot_from_exchange,
+    state::HttpLabState,
+    task_tracking::{cancel_request_flag, remove_request_flag},
+    types::{
+        ActionExchange, HttpExchange, HttpLabAction, HttpRequestBodyKind, HttpRequestSnapshot,
     },
 };
 

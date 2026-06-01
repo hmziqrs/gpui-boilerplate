@@ -8,7 +8,7 @@ use gpui_component::{
 };
 
 use crate::http_lab::{self, HttpExchange, HttpLabAction, HttpLabState};
-use crate::services::query::{QueryResource, QueryStatus, RequestPolicy};
+use gpui_query::{QueryResource, QueryStatus, RequestPolicy};
 
 const RENDER_LOG: &str = "gpui_starter::http_lab::render";
 

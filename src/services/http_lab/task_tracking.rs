@@ -5,7 +5,7 @@ use std::{
 
 use tokio_util::sync::CancellationToken;
 
-use crate::services::query::RequestId;
+use gpui_query::RequestId;
 
 const LOG: &str = "gpui_starter::http_lab::tasks";
 

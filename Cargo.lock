@@ -3155,6 +3155,7 @@ dependencies = [
  "gpui-component",
  "gpui-component-assets",
  "gpui-form",
+ "gpui-query",
  "gpui_platform",
  "insta",
  "interprocess",

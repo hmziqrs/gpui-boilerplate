@@ -8,14 +8,12 @@ use gpui_component::{
 };
 use tokio_util::sync::CancellationToken;
 
-use crate::services::{
-    http_lab::HttpLabAction,
-    query::{
-        CachePolicy, QueryBeginResult, QueryError, QueryFetchMode, QueryResource, RequestPolicy,
-        RequestSequencer,
-    },
-    tokio_runtime::TokioRuntimeGlobal,
+use gpui_query::{
+    CachePolicy, QueryBeginResult, QueryError, QueryFetchMode, QueryResource, RequestPolicy,
+    RequestSequencer,
 };
+
+use crate::services::{http_lab::HttpLabAction, tokio_runtime::TokioRuntimeGlobal};
 
 const LOG: &str = "gpui_starter::http_lab_testing";
 const RENDER_LOG: &str = "gpui_starter::http_lab_testing::render";

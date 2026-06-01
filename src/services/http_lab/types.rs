@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::services::query::{CachePolicy, QueryKey, RequestPolicy};
+use gpui_query::{CachePolicy, QueryKey, RequestPolicy};
 
 const GET_CACHE_TTL_MS: u64 = 60_000;
 const REVALIDATE_TTL_MS: u64 = 30_000;
@@ -141,7 +141,7 @@ impl HttpLabAction {
     }
 
     pub fn query_key(self) -> QueryKey {
-        QueryKey::new(format!("http_lab/{}", self.id()))
+        QueryKey::from(["http_lab", self.id()])
     }
 
     pub(super) fn cache_policy(self) -> CachePolicy {

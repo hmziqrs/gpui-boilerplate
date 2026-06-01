@@ -3,10 +3,9 @@ use std::collections::BTreeMap;
 use gpui::Global;
 use serde::{Deserialize, Serialize};
 
-use crate::services::{
-    http_lab::types::{HttpCookieSnapshot, HttpExchange, HttpLabAction},
-    query::{QueryResource, RequestId, RequestSequencer},
-};
+use gpui_query::{QueryResource, RequestId, RequestSequencer};
+
+use crate::services::http_lab::types::{HttpCookieSnapshot, HttpExchange, HttpLabAction};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HttpLabState {

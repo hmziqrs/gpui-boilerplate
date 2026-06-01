@@ -3,7 +3,7 @@ use super::{
     transitions::{apply_result_to_state, begin_action},
     *,
 };
-use crate::services::query::{QueryError, QueryResource};
+use gpui_query::{QueryError, QueryResource};
 
 pub(super) fn exchange(label: &str, status: u16, error: Option<&str>) -> HttpExchange {
     HttpExchange {

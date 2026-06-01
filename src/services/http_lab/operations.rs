@@ -12,9 +12,9 @@ use crate::services::{
         },
         types::{ActionExchange, HttpLabAction},
     },
-    query::RequestId,
     tokio_runtime::TokioRuntimeGlobal,
 };
+use gpui_query::RequestId;
 
 const LOG: &str = "gpui_starter::http_lab";
 
@@ -196,7 +196,7 @@ pub async fn execute_action(handle: ActionHandle, cx: &mut gpui::AsyncApp) {
 
 pub struct ActionHandle {
     pub action: HttpLabAction,
-    request_id: crate::services::query::RequestId,
+    request_id: gpui_query::RequestId,
     cancellation: tokio_util::sync::CancellationToken,
     http_handle: tokio::task::JoinHandle<Result<Vec<ActionExchange>, String>>,
 }
