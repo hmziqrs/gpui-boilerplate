@@ -4,8 +4,8 @@
 //! same cancellation state. The fetcher is expected to check `is_cancelled()`
 //! periodically and abort early when possible.
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// A cooperative cancellation signal for in-flight query requests.
 ///

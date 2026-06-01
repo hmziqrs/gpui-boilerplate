@@ -37,10 +37,7 @@ pub struct QueryKey(Arc<[Arc<str>]>);
 impl QueryKey {
     /// Create a key from an iterator of string-like parts.
     pub fn new(parts: impl IntoIterator<Item: AsRef<str>>) -> Self {
-        let segments: Vec<Arc<str>> = parts
-            .into_iter()
-            .map(|s| Arc::from(s.as_ref()))
-            .collect();
+        let segments: Vec<Arc<str>> = parts.into_iter().map(|s| Arc::from(s.as_ref())).collect();
         Self(segments.into())
     }
 

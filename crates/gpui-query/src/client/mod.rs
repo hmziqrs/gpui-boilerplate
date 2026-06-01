@@ -59,10 +59,7 @@ impl Global for QueryClient {}
 
 impl QueryClient {
     /// Create a new `QueryClient` with the given default policies.
-    pub fn new(
-        default_cache_policy: CachePolicy,
-        default_request_policy: RequestPolicy,
-    ) -> Self {
+    pub fn new(default_cache_policy: CachePolicy, default_request_policy: RequestPolicy) -> Self {
         Self {
             buckets: HashMap::new(),
             default_cache_policy,
@@ -140,7 +137,14 @@ impl QueryClient {
         T: Clone + Send + Sync + 'static,
         E: Clone + Send + Sync + 'static,
     {
-        self.fetch_query_inner(key, cache_policy, request_policy, now_ms, QueryFetchMode::Normal, cx)
+        self.fetch_query_inner(
+            key,
+            cache_policy,
+            request_policy,
+            now_ms,
+            QueryFetchMode::Normal,
+            cx,
+        )
     }
 
     /// Force-fetch a query, bypassing cache freshness checks.
@@ -160,7 +164,14 @@ impl QueryClient {
         T: Clone + Send + Sync + 'static,
         E: Clone + Send + Sync + 'static,
     {
-        self.fetch_query_inner(key, cache_policy, request_policy, now_ms, QueryFetchMode::Force, cx)
+        self.fetch_query_inner(
+            key,
+            cache_policy,
+            request_policy,
+            now_ms,
+            QueryFetchMode::Force,
+            cx,
+        )
     }
 
     /// Check if a resource exists for the given key and type.
@@ -234,7 +245,10 @@ impl QueryClient {
     ///
     /// Returns `true` if the resource was found and had previous data to restore.
     /// Returns `false` if the resource wasn't found or had no previous data.
-    pub fn rollback_query_data<T: Clone + Send + Sync + 'static, E: Clone + Send + Sync + 'static>(
+    pub fn rollback_query_data<
+        T: Clone + Send + Sync + 'static,
+        E: Clone + Send + Sync + 'static,
+    >(
         &mut self,
         key: &QueryKey,
         cx: &mut App,
@@ -309,10 +323,7 @@ impl QueryClient {
             .fetch(&key, cache_policy, request_policy, now_ms, fetch_mode, cx)
     }
 
-    fn ensure_bucket<
-        T: Clone + Send + Sync + 'static,
-        E: Clone + Send + Sync + 'static,
-    >(
+    fn ensure_bucket<T: Clone + Send + Sync + 'static, E: Clone + Send + Sync + 'static>(
         &mut self,
         type_id: TypeId,
     ) {

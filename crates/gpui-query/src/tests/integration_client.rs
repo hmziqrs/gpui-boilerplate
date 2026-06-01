@@ -90,8 +90,12 @@ fn bucket_begin_request_for_unknown_key_returns_none(cx: &mut TestAppContext) {
             gc_time_ms: 300_000,
         });
 
-        let result =
-            bucket.begin_request_for(&QueryKey::from("nonexistent"), 1_000, QueryFetchMode::Normal, cx);
+        let result = bucket.begin_request_for(
+            &QueryKey::from("nonexistent"),
+            1_000,
+            QueryFetchMode::Normal,
+            cx,
+        );
         assert!(result.is_none());
     });
 }
@@ -189,7 +193,10 @@ fn bucket_invalidate_matching_uses_prefix_filter(cx: &mut TestAppContext) {
 
         // User resources: cache expired, data still present
         let e1 = bucket.resources.get(&u1_key).unwrap();
-        assert!(e1.read(cx).data().is_some(), "data should remain after invalidate");
+        assert!(
+            e1.read(cx).data().is_some(),
+            "data should remain after invalidate"
+        );
         assert!(
             !e1.read(cx).is_cache_fresh(1_500),
             "cache should be stale after invalidate"
@@ -260,8 +267,10 @@ fn client_deduplicates_same_key_same_type(cx: &mut TestAppContext) {
 #[gpui::test]
 fn client_invalidate_queries_prefix_match_across_types(cx: &mut TestAppContext) {
     cx.update(|cx| {
-        let mut client =
-            QueryClient::new(CachePolicy::Ttl { ttl_ms: 60_000 }, RequestPolicy::LatestWins);
+        let mut client = QueryClient::new(
+            CachePolicy::Ttl { ttl_ms: 60_000 },
+            RequestPolicy::LatestWins,
+        );
 
         let u1 = client.resource::<User, QueryError>(QueryKey::from(["users", "1"]), cx);
         let u2 = client.resource::<User, QueryError>(QueryKey::from(["users", "2"]), cx);
@@ -283,17 +292,28 @@ fn client_invalidate_queries_prefix_match_across_types(cx: &mut TestAppContext) 
         let prefix = QueryKey::from(["users"]);
         client.invalidate_queries(&QueryKeyFilter::Prefix(&prefix), cx);
 
-        assert!(!u1.read(cx).is_cache_fresh(1_500), "user:1 cache should be stale");
-        assert!(!u2.read(cx).is_cache_fresh(1_500), "user:2 cache should be stale");
-        assert!(p1.read(cx).is_cache_fresh(1_500), "posts:1 cache should still be fresh");
+        assert!(
+            !u1.read(cx).is_cache_fresh(1_500),
+            "user:1 cache should be stale"
+        );
+        assert!(
+            !u2.read(cx).is_cache_fresh(1_500),
+            "user:2 cache should be stale"
+        );
+        assert!(
+            p1.read(cx).is_cache_fresh(1_500),
+            "posts:1 cache should still be fresh"
+        );
     });
 }
 
 #[gpui::test]
 fn client_invalidate_queries_all_matches_everything(cx: &mut TestAppContext) {
     cx.update(|cx| {
-        let mut client =
-            QueryClient::new(CachePolicy::Ttl { ttl_ms: 60_000 }, RequestPolicy::LatestWins);
+        let mut client = QueryClient::new(
+            CachePolicy::Ttl { ttl_ms: 60_000 },
+            RequestPolicy::LatestWins,
+        );
 
         let u = client.resource::<User, QueryError>(QueryKey::from("user"), cx);
         let p = client.resource::<Post, QueryError>(QueryKey::from("post"), cx);
@@ -341,8 +361,10 @@ fn client_gc_removes_stale_across_types(cx: &mut TestAppContext) {
 #[gpui::test]
 fn client_reset_queries_clears_state(cx: &mut TestAppContext) {
     cx.update(|cx| {
-        let mut client =
-            QueryClient::new(CachePolicy::Ttl { ttl_ms: 60_000 }, RequestPolicy::LatestWins);
+        let mut client = QueryClient::new(
+            CachePolicy::Ttl { ttl_ms: 60_000 },
+            RequestPolicy::LatestWins,
+        );
 
         let u = client.resource::<User, QueryError>(QueryKey::from("user:1"), cx);
         u.update(cx, |r, _| r.apply_success(default_user(), 1_000));
@@ -361,9 +383,11 @@ fn client_reset_queries_clears_state(cx: &mut TestAppContext) {
 #[gpui::test]
 fn full_lifecycle_idle_to_loading_to_success_to_gc(cx: &mut TestAppContext) {
     cx.update(|cx| {
-        let mut client =
-            QueryClient::new(CachePolicy::Ttl { ttl_ms: 1_000 }, RequestPolicy::LatestWins)
-                .with_gc_time(5_000);
+        let mut client = QueryClient::new(
+            CachePolicy::Ttl { ttl_ms: 1_000 },
+            RequestPolicy::LatestWins,
+        )
+        .with_gc_time(5_000);
 
         // 1. Create resource
         let key = QueryKey::from(["users", "42"]);
@@ -409,9 +433,11 @@ fn full_lifecycle_idle_to_loading_to_success_to_gc(cx: &mut TestAppContext) {
 #[gpui::test]
 fn invalidated_resource_survives_gc_because_timestamp_is_cleared(cx: &mut TestAppContext) {
     cx.update(|cx| {
-        let mut client =
-            QueryClient::new(CachePolicy::Ttl { ttl_ms: 1_000 }, RequestPolicy::LatestWins)
-                .with_gc_time(1_000);
+        let mut client = QueryClient::new(
+            CachePolicy::Ttl { ttl_ms: 1_000 },
+            RequestPolicy::LatestWins,
+        )
+        .with_gc_time(1_000);
 
         let key = QueryKey::from("user:1");
         let entity = client.resource::<User, QueryError>(key.clone(), cx);
@@ -419,8 +445,14 @@ fn invalidated_resource_survives_gc_because_timestamp_is_cleared(cx: &mut TestAp
 
         // Invalidate clears last_updated_at → GC can't determine age → resource kept
         client.invalidate_queries(&QueryKeyFilter::All, cx);
-        assert!(entity.read(cx).data().is_some(), "data survives invalidation");
-        assert!(entity.read(cx).last_updated_at_ms().is_none(), "timestamp cleared");
+        assert!(
+            entity.read(cx).data().is_some(),
+            "data survives invalidation"
+        );
+        assert!(
+            entity.read(cx).last_updated_at_ms().is_none(),
+            "timestamp cleared"
+        );
 
         client.gc(cx, 100_000);
         assert_eq!(client.total_count(), 1, "invalidated resource survives GC");
@@ -432,8 +464,7 @@ fn invalidated_resource_survives_gc_because_timestamp_is_cleared(cx: &mut TestAp
 #[gpui::test]
 fn client_cancel_query_cancels_active_request(cx: &mut TestAppContext) {
     cx.update(|cx| {
-        let mut client =
-            QueryClient::new(CachePolicy::NoCache, RequestPolicy::LatestWins);
+        let mut client = QueryClient::new(CachePolicy::NoCache, RequestPolicy::LatestWins);
 
         let key = QueryKey::from(["users", "42"]);
         let entity = client.resource::<User, QueryError>(key.clone(), cx);
@@ -452,11 +483,8 @@ fn client_cancel_query_cancels_active_request(cx: &mut TestAppContext) {
         assert!(!signal.is_cancelled());
 
         // Cancel via client
-        let cancelled = client.cancel_query::<User, QueryError>(
-            &key,
-            QueryError::cancelled("aborted"),
-            cx,
-        );
+        let cancelled =
+            client.cancel_query::<User, QueryError>(&key, QueryError::cancelled("aborted"), cx);
         assert!(cancelled, "should have cancelled an active request");
         assert_eq!(entity.read(cx).status(), QueryStatus::Cancelled);
         assert!(signal.is_cancelled(), "signal should be cancelled");
@@ -466,18 +494,14 @@ fn client_cancel_query_cancels_active_request(cx: &mut TestAppContext) {
 #[gpui::test]
 fn client_cancel_query_returns_false_for_idle_resource(cx: &mut TestAppContext) {
     cx.update(|cx| {
-        let mut client =
-            QueryClient::new(CachePolicy::NoCache, RequestPolicy::LatestWins);
+        let mut client = QueryClient::new(CachePolicy::NoCache, RequestPolicy::LatestWins);
 
         let key = QueryKey::from(["users", "99"]);
         let _entity = client.resource::<User, QueryError>(key.clone(), cx);
 
         // Resource is idle (no request started)
-        let cancelled = client.cancel_query::<User, QueryError>(
-            &key,
-            QueryError::cancelled("nope"),
-            cx,
-        );
+        let cancelled =
+            client.cancel_query::<User, QueryError>(&key, QueryError::cancelled("nope"), cx);
         assert!(!cancelled, "idle resource should not be cancellable");
     });
 }
@@ -485,8 +509,7 @@ fn client_cancel_query_returns_false_for_idle_resource(cx: &mut TestAppContext) 
 #[gpui::test]
 fn client_cancel_query_returns_false_for_nonexistent_key(cx: &mut TestAppContext) {
     cx.update(|cx| {
-        let mut client =
-            QueryClient::new(CachePolicy::NoCache, RequestPolicy::LatestWins);
+        let mut client = QueryClient::new(CachePolicy::NoCache, RequestPolicy::LatestWins);
 
         let cancelled = client.cancel_query::<User, QueryError>(
             &QueryKey::from("ghost"),
@@ -500,8 +523,7 @@ fn client_cancel_query_returns_false_for_nonexistent_key(cx: &mut TestAppContext
 #[gpui::test]
 fn client_signal_for_returns_none_when_no_active_request(cx: &mut TestAppContext) {
     cx.update(|cx| {
-        let mut client =
-            QueryClient::new(CachePolicy::NoCache, RequestPolicy::LatestWins);
+        let mut client = QueryClient::new(CachePolicy::NoCache, RequestPolicy::LatestWins);
 
         let key = QueryKey::from(["users", "1"]);
         let _entity = client.resource::<User, QueryError>(key.clone(), cx);
@@ -515,8 +537,7 @@ fn client_signal_for_returns_none_when_no_active_request(cx: &mut TestAppContext
 #[gpui::test]
 fn client_signal_for_returns_signal_while_loading(cx: &mut TestAppContext) {
     cx.update(|cx| {
-        let mut client =
-            QueryClient::new(CachePolicy::NoCache, RequestPolicy::LatestWins);
+        let mut client = QueryClient::new(CachePolicy::NoCache, RequestPolicy::LatestWins);
 
         let key = QueryKey::from(["users", "7"]);
         let entity = client.resource::<User, QueryError>(key.clone(), cx);
@@ -537,8 +558,7 @@ fn client_signal_for_returns_signal_while_loading(cx: &mut TestAppContext) {
 #[gpui::test]
 fn client_fetch_query_creates_resource_and_starts_request(cx: &mut TestAppContext) {
     cx.update(|cx| {
-        let mut client =
-            QueryClient::new(CachePolicy::NoCache, RequestPolicy::LatestWins);
+        let mut client = QueryClient::new(CachePolicy::NoCache, RequestPolicy::LatestWins);
 
         let key = QueryKey::from(["users", "42"]);
         assert_eq!(client.total_count(), 0, "client should start empty");
@@ -562,8 +582,10 @@ fn client_fetch_query_creates_resource_and_starts_request(cx: &mut TestAppContex
 #[gpui::test]
 fn client_fetch_query_returns_none_on_cache_hit(cx: &mut TestAppContext) {
     cx.update(|cx| {
-        let mut client =
-            QueryClient::new(CachePolicy::Ttl { ttl_ms: 5_000 }, RequestPolicy::LatestWins);
+        let mut client = QueryClient::new(
+            CachePolicy::Ttl { ttl_ms: 5_000 },
+            RequestPolicy::LatestWins,
+        );
 
         let key = QueryKey::from(["users", "1"]);
 
@@ -580,11 +602,7 @@ fn client_fetch_query_returns_none_on_cache_hit(cx: &mut TestAppContext) {
 
         // Complete the request with success
         entity.update(cx, |r, _| {
-            r.complete_current_success(
-                request_id,
-                default_user(),
-                1_200,
-            )
+            r.complete_current_success(request_id, default_user(), 1_200)
         });
 
         // Second fetch at t=2_000: cache is fresh (age = 800 < 5000)
@@ -597,15 +615,18 @@ fn client_fetch_query_returns_none_on_cache_hit(cx: &mut TestAppContext) {
         );
 
         assert!(result.is_none(), "should return None on cache hit");
-        assert_eq!(entity.read(cx).cache_hits(), 1, "cache hit should be recorded");
+        assert_eq!(
+            entity.read(cx).cache_hits(),
+            1,
+            "cache hit should be recorded"
+        );
     });
 }
 
 #[gpui::test]
 fn client_fetch_query_returns_none_on_ignore_while_loading(cx: &mut TestAppContext) {
     cx.update(|cx| {
-        let mut client =
-            QueryClient::new(CachePolicy::NoCache, RequestPolicy::IgnoreWhileLoading);
+        let mut client = QueryClient::new(CachePolicy::NoCache, RequestPolicy::IgnoreWhileLoading);
 
         let key = QueryKey::from(["users", "5"]);
 
@@ -639,8 +660,10 @@ fn client_fetch_query_returns_none_on_ignore_while_loading(cx: &mut TestAppConte
 #[gpui::test]
 fn client_force_fetch_query_bypasses_cache(cx: &mut TestAppContext) {
     cx.update(|cx| {
-        let mut client =
-            QueryClient::new(CachePolicy::Ttl { ttl_ms: 5_000 }, RequestPolicy::LatestWins);
+        let mut client = QueryClient::new(
+            CachePolicy::Ttl { ttl_ms: 5_000 },
+            RequestPolicy::LatestWins,
+        );
 
         let key = QueryKey::from(["users", "1"]);
 
@@ -679,16 +702,21 @@ fn client_force_fetch_query_bypasses_cache(cx: &mut TestAppContext) {
         );
 
         let (entity2, request_id2) = result.expect("force fetch should return Some");
-        assert!(entity2.read(cx).is_loading(), "resource should be loading after force fetch");
-        assert!(request_id2.value() > 1, "force fetch should start a new request");
+        assert!(
+            entity2.read(cx).is_loading(),
+            "resource should be loading after force fetch"
+        );
+        assert!(
+            request_id2.value() > 1,
+            "force fetch should start a new request"
+        );
     });
 }
 
 #[gpui::test]
 fn client_fetch_query_can_complete(cx: &mut TestAppContext) {
     cx.update(|cx| {
-        let mut client =
-            QueryClient::new(CachePolicy::NoCache, RequestPolicy::LatestWins);
+        let mut client = QueryClient::new(CachePolicy::NoCache, RequestPolicy::LatestWins);
 
         let key = QueryKey::from(["users", "99"]);
 
@@ -758,8 +786,7 @@ fn bucket_fetch_creates_and_begins(cx: &mut TestAppContext) {
 #[gpui::test]
 fn resource_display_data_lifecycle(cx: &mut TestAppContext) {
     cx.update(|cx| {
-        let mut client =
-            QueryClient::new(CachePolicy::NoCache, RequestPolicy::LatestWins);
+        let mut client = QueryClient::new(CachePolicy::NoCache, RequestPolicy::LatestWins);
 
         let key = QueryKey::from("user:1");
         let entity = client.resource::<User, QueryError>(key.clone(), cx);
@@ -769,7 +796,10 @@ fn resource_display_data_lifecycle(cx: &mut TestAppContext) {
 
         // 2. Set placeholder data, then start loading
         entity.update(cx, |r, _| {
-            r.set_placeholder_data(Some(User { id: 0, name: "Loading...".into() }));
+            r.set_placeholder_data(Some(User {
+                id: 0,
+                name: "Loading...".into(),
+            }));
         });
         assert_eq!(
             entity.read(cx).display_data().unwrap().name,
@@ -794,7 +824,10 @@ fn resource_display_data_lifecycle(cx: &mut TestAppContext) {
         entity.update(cx, |r, _| {
             r.complete_current_success(
                 request_id,
-                User { id: 1, name: "Alice".into() },
+                User {
+                    id: 1,
+                    name: "Alice".into(),
+                },
                 1_200,
             )
         });
@@ -811,21 +844,32 @@ fn resource_display_data_lifecycle(cx: &mut TestAppContext) {
 #[gpui::test]
 fn resource_rollback_after_optimistic_update(cx: &mut TestAppContext) {
     cx.update(|cx| {
-        let mut client =
-            QueryClient::new(CachePolicy::NoCache, RequestPolicy::LatestWins);
+        let mut client = QueryClient::new(CachePolicy::NoCache, RequestPolicy::LatestWins);
 
         let key = QueryKey::from("user:1");
         let entity = client.resource::<User, QueryError>(key.clone(), cx);
 
         // 1. Populate with real data
         entity.update(cx, |r, _| {
-            r.apply_success(User { id: 1, name: "Alice".into() }, 1_000);
+            r.apply_success(
+                User {
+                    id: 1,
+                    name: "Alice".into(),
+                },
+                1_000,
+            );
         });
         assert_eq!(entity.read(cx).data().unwrap().name, "Alice");
 
         // 2. Optimistic update: set new data directly
         entity.update(cx, |r, _| {
-            r.apply_success(User { id: 1, name: "Alice (updated)".into() }, 1_100);
+            r.apply_success(
+                User {
+                    id: 1,
+                    name: "Alice (updated)".into(),
+                },
+                1_100,
+            );
         });
         assert_eq!(entity.read(cx).data().unwrap().name, "Alice (updated)");
         assert_eq!(
@@ -848,25 +892,36 @@ fn resource_rollback_after_optimistic_update(cx: &mut TestAppContext) {
 #[gpui::test]
 fn client_set_query_data_sets_data(cx: &mut TestAppContext) {
     cx.update(|cx| {
-        let mut client =
-            QueryClient::new(CachePolicy::NoCache, RequestPolicy::LatestWins);
+        let mut client = QueryClient::new(CachePolicy::NoCache, RequestPolicy::LatestWins);
 
         let key = QueryKey::from("user:1");
         let entity = client.resource::<User, QueryError>(key.clone(), cx);
 
         // Populate with real data
         entity.update(cx, |r, _| {
-            r.apply_success(User { id: 1, name: "Alice".into() }, 1_000);
+            r.apply_success(
+                User {
+                    id: 1,
+                    name: "Alice".into(),
+                },
+                1_000,
+            );
         });
         assert_eq!(entity.read(cx).data().unwrap().name, "Alice");
 
         // Optimistic update via client
         let set = client.set_query_data::<User, QueryError>(
             &key,
-            User { id: 1, name: "Alice (optimistic)".into() },
+            User {
+                id: 1,
+                name: "Alice (optimistic)".into(),
+            },
             cx,
         );
-        assert!(set, "set_query_data should return true for existing resource");
+        assert!(
+            set,
+            "set_query_data should return true for existing resource"
+        );
         assert_eq!(entity.read(cx).data().unwrap().name, "Alice (optimistic)");
         assert_eq!(
             entity.read(cx).previous_data().unwrap().name,
@@ -879,26 +934,37 @@ fn client_set_query_data_sets_data(cx: &mut TestAppContext) {
 #[gpui::test]
 fn client_rollback_query_data_restores(cx: &mut TestAppContext) {
     cx.update(|cx| {
-        let mut client =
-            QueryClient::new(CachePolicy::NoCache, RequestPolicy::LatestWins);
+        let mut client = QueryClient::new(CachePolicy::NoCache, RequestPolicy::LatestWins);
 
         let key = QueryKey::from("user:1");
         let entity = client.resource::<User, QueryError>(key.clone(), cx);
 
         // Populate and then optimistic update
         entity.update(cx, |r, _| {
-            r.apply_success(User { id: 1, name: "Alice".into() }, 1_000);
+            r.apply_success(
+                User {
+                    id: 1,
+                    name: "Alice".into(),
+                },
+                1_000,
+            );
         });
         client.set_query_data::<User, QueryError>(
             &key,
-            User { id: 1, name: "Alice (optimistic)".into() },
+            User {
+                id: 1,
+                name: "Alice (optimistic)".into(),
+            },
             cx,
         );
         assert_eq!(entity.read(cx).data().unwrap().name, "Alice (optimistic)");
 
         // Rollback via client
         let rolled_back = client.rollback_query_data::<User, QueryError>(&key, cx);
-        assert!(rolled_back, "rollback should return true when previous data exists");
+        assert!(
+            rolled_back,
+            "rollback should return true when previous data exists"
+        );
         assert_eq!(entity.read(cx).data().unwrap().name, "Alice");
         assert_eq!(entity.read(cx).status(), QueryStatus::Success);
     });
@@ -907,60 +973,81 @@ fn client_rollback_query_data_restores(cx: &mut TestAppContext) {
 #[gpui::test]
 fn client_set_query_data_returns_false_for_missing_resource(cx: &mut TestAppContext) {
     cx.update(|cx| {
-        let mut client =
-            QueryClient::new(CachePolicy::NoCache, RequestPolicy::LatestWins);
+        let mut client = QueryClient::new(CachePolicy::NoCache, RequestPolicy::LatestWins);
 
         let key = QueryKey::from("ghost");
         // No resource created for this key
 
         let set = client.set_query_data::<User, QueryError>(
             &key,
-            User { id: 0, name: "Nobody".into() },
+            User {
+                id: 0,
+                name: "Nobody".into(),
+            },
             cx,
         );
-        assert!(!set, "set_query_data should return false for nonexistent resource");
+        assert!(
+            !set,
+            "set_query_data should return false for nonexistent resource"
+        );
     });
 }
 
 #[gpui::test]
 fn client_rollback_query_data_returns_false_when_no_previous(cx: &mut TestAppContext) {
     cx.update(|cx| {
-        let mut client =
-            QueryClient::new(CachePolicy::NoCache, RequestPolicy::LatestWins);
+        let mut client = QueryClient::new(CachePolicy::NoCache, RequestPolicy::LatestWins);
 
         let key = QueryKey::from("user:1");
         let entity = client.resource::<User, QueryError>(key.clone(), cx);
 
         // Set data directly (no previous_data)
         entity.update(cx, |r, _| {
-            r.apply_success(User { id: 1, name: "Alice".into() }, 1_000);
+            r.apply_success(
+                User {
+                    id: 1,
+                    name: "Alice".into(),
+                },
+                1_000,
+            );
         });
         // previous_data is None after first apply_success
 
         let rolled_back = client.rollback_query_data::<User, QueryError>(&key, cx);
-        assert!(!rolled_back, "rollback should return false when no previous data");
+        assert!(
+            !rolled_back,
+            "rollback should return false when no previous data"
+        );
     });
 }
 
 #[gpui::test]
 fn optimistic_update_full_lifecycle(cx: &mut TestAppContext) {
     cx.update(|cx| {
-        let mut client =
-            QueryClient::new(CachePolicy::NoCache, RequestPolicy::LatestWins);
+        let mut client = QueryClient::new(CachePolicy::NoCache, RequestPolicy::LatestWins);
 
         let key = QueryKey::from(["users", "42"]);
         let entity = client.resource::<User, QueryError>(key.clone(), cx);
 
         // 1. Populate with real data
         entity.update(cx, |r, _| {
-            r.apply_success(User { id: 42, name: "Carol".into() }, 1_000);
+            r.apply_success(
+                User {
+                    id: 42,
+                    name: "Carol".into(),
+                },
+                1_000,
+            );
         });
         assert_eq!(entity.read(cx).data().unwrap().name, "Carol");
 
         // 2. Optimistic update before mutation
         client.set_query_data::<User, QueryError>(
             &key,
-            User { id: 42, name: "Carol (saving...)".into() },
+            User {
+                id: 42,
+                name: "Carol (saving...)".into(),
+            },
             cx,
         );
         assert_eq!(entity.read(cx).data().unwrap().name, "Carol (saving...)");
@@ -978,7 +1065,10 @@ fn optimistic_update_full_lifecycle(cx: &mut TestAppContext) {
         entity.update(cx, |r, _| {
             r.complete_current_success(
                 request_id,
-                User { id: 42, name: "Carol (saved)".into() },
+                User {
+                    id: 42,
+                    name: "Carol (saved)".into(),
+                },
                 1_200,
             )
         });
@@ -996,21 +1086,29 @@ fn optimistic_update_full_lifecycle(cx: &mut TestAppContext) {
 #[gpui::test]
 fn optimistic_update_rollback_on_failure(cx: &mut TestAppContext) {
     cx.update(|cx| {
-        let mut client =
-            QueryClient::new(CachePolicy::NoCache, RequestPolicy::LatestWins);
+        let mut client = QueryClient::new(CachePolicy::NoCache, RequestPolicy::LatestWins);
 
         let key = QueryKey::from(["users", "42"]);
         let entity = client.resource::<User, QueryError>(key.clone(), cx);
 
         // 1. Populate with real data
         entity.update(cx, |r, _| {
-            r.apply_success(User { id: 42, name: "Carol".into() }, 1_000);
+            r.apply_success(
+                User {
+                    id: 42,
+                    name: "Carol".into(),
+                },
+                1_000,
+            );
         });
 
         // 2. Optimistic update
         client.set_query_data::<User, QueryError>(
             &key,
-            User { id: 42, name: "Carol (saving...)".into() },
+            User {
+                id: 42,
+                name: "Carol (saving...)".into(),
+            },
             cx,
         );
         assert_eq!(entity.read(cx).data().unwrap().name, "Carol (saving...)");

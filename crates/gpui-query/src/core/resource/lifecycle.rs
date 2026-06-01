@@ -37,11 +37,7 @@ impl<T, E> QueryResource<T, E> {
         }
     }
 
-    pub(crate) fn begin_loading(
-        &mut self,
-        request_id: RequestId,
-        now_ms: u128,
-    ) -> QueryStatus {
+    pub(crate) fn begin_loading(&mut self, request_id: RequestId, now_ms: u128) -> QueryStatus {
         let status = if self.has_data() {
             QueryStatus::LoadingWithData
         } else {

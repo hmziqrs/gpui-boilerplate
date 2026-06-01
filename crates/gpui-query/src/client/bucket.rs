@@ -94,7 +94,9 @@ impl<T: 'static, E: 'static> QueryBucket<T, E> {
     ) -> Option<QueryBeginResult> {
         let entity = self.resources.get(key).cloned()?;
         let sequencer = self.sequencers.entry(key.clone()).or_default();
-        Some(entity.update(cx, |resource, _| resource.begin_request(sequencer, now_ms, fetch_mode)))
+        Some(entity.update(cx, |resource, _| {
+            resource.begin_request(sequencer, now_ms, fetch_mode)
+        }))
     }
 
     /// Fetch (begin request) for a key, creating the resource if needed.

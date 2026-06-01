@@ -1,7 +1,4 @@
-use super::{
-    transitions::begin_action,
-    *,
-};
+use super::{transitions::begin_action, *};
 use gpui_query::QueryError;
 
 #[test]
@@ -20,7 +17,9 @@ fn signal_is_cancelled_on_resource_cancel() {
     let mut state = HttpLabState::default();
     begin_action(&mut state, HttpLabAction::GetText, 1);
 
-    let signal = state.signal_for_action(HttpLabAction::GetText).expect("signal");
+    let signal = state
+        .signal_for_action(HttpLabAction::GetText)
+        .expect("signal");
     assert!(!signal.is_cancelled());
 
     // Cancel the resource.
@@ -51,7 +50,9 @@ fn signal_is_fresh_on_second_request_after_cancel() {
     // Begin a new request.
     begin_action(&mut state, HttpLabAction::GetText, 2);
 
-    let signal = state.signal_for_action(HttpLabAction::GetText).expect("signal");
+    let signal = state
+        .signal_for_action(HttpLabAction::GetText)
+        .expect("signal");
     assert!(!signal.is_cancelled());
 }
 
@@ -60,8 +61,12 @@ fn signal_clones_share_cancellation() {
     let mut state = HttpLabState::default();
     begin_action(&mut state, HttpLabAction::GetJson, 1);
 
-    let signal1 = state.signal_for_action(HttpLabAction::GetJson).expect("signal");
-    let signal2 = state.signal_for_action(HttpLabAction::GetJson).expect("signal");
+    let signal1 = state
+        .signal_for_action(HttpLabAction::GetJson)
+        .expect("signal");
+    let signal2 = state
+        .signal_for_action(HttpLabAction::GetJson)
+        .expect("signal");
 
     assert!(!signal1.is_cancelled());
     assert!(!signal2.is_cancelled());

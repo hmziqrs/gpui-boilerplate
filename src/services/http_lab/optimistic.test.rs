@@ -21,7 +21,13 @@ fn set_data_stores_previous_and_updates_current() {
 
     let resource = state.resource(HttpLabAction::PostJson);
     assert_eq!(resource.data().unwrap().label, "optimistic");
-    assert_eq!(state.previous_resource_data(HttpLabAction::PostJson).unwrap().label, "original");
+    assert_eq!(
+        state
+            .previous_resource_data(HttpLabAction::PostJson)
+            .unwrap()
+            .label,
+        "original"
+    );
 }
 
 #[test]
@@ -38,7 +44,13 @@ fn clear_data_stores_previous_and_clears_current() {
 
     let resource = state.resource(HttpLabAction::PostJson);
     assert!(resource.data().is_none());
-    assert_eq!(state.previous_resource_data(HttpLabAction::PostJson).unwrap().label, "original");
+    assert_eq!(
+        state
+            .previous_resource_data(HttpLabAction::PostJson)
+            .unwrap()
+            .label,
+        "original"
+    );
 }
 
 #[test]
@@ -79,12 +91,18 @@ fn set_data_does_not_change_status() {
     );
 
     // Resource should be in Success state after seeding.
-    assert_eq!(state.resource(HttpLabAction::PostJson).status(), QueryStatus::Success);
+    assert_eq!(
+        state.resource(HttpLabAction::PostJson).status(),
+        QueryStatus::Success
+    );
 
     state.set_action_data(HttpLabAction::PostJson, exchange("optimistic", 200, None));
 
     // Status should not have changed.
-    assert_eq!(state.resource(HttpLabAction::PostJson).status(), QueryStatus::Success);
+    assert_eq!(
+        state.resource(HttpLabAction::PostJson).status(),
+        QueryStatus::Success
+    );
 }
 
 #[test]
@@ -106,14 +124,23 @@ fn complete_success_after_optimistic_update() {
         &mut state,
         HttpLabAction::PostJson,
         request,
-        Ok(vec![(HttpLabAction::PostJson, exchange("server confirmed", 200, None))]),
+        Ok(vec![(
+            HttpLabAction::PostJson,
+            exchange("server confirmed", 200, None),
+        )]),
         20_001,
     );
 
     let resource = state.resource(HttpLabAction::PostJson);
     assert_eq!(resource.data().unwrap().label, "server confirmed");
     // Previous data should be the optimistic value (set by apply_success overwriting the optimistic data).
-    assert_eq!(state.previous_resource_data(HttpLabAction::PostJson).unwrap().label, "optimistic");
+    assert_eq!(
+        state
+            .previous_resource_data(HttpLabAction::PostJson)
+            .unwrap()
+            .label,
+        "optimistic"
+    );
 }
 
 #[test]
@@ -162,5 +189,11 @@ fn double_set_data_keeps_latest_previous() {
 
     let resource = state.resource(HttpLabAction::PostJson);
     assert_eq!(resource.data().unwrap().label, "second_opt");
-    assert_eq!(state.previous_resource_data(HttpLabAction::PostJson).unwrap().label, "first_opt");
+    assert_eq!(
+        state
+            .previous_resource_data(HttpLabAction::PostJson)
+            .unwrap()
+            .label,
+        "first_opt"
+    );
 }

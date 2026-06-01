@@ -1,8 +1,9 @@
 use gpui::{prelude::*, *};
 use gpui_component::{
+    ActiveTheme as _, Icon, IconName, Root, Sizable as _,
     resizable::{h_resizable, resizable_panel},
     sidebar::{Sidebar, SidebarGroup, SidebarHeader, SidebarMenu, SidebarMenuItem},
-    v_flex, ActiveTheme as _, Icon, IconName, Root, Sizable as _,
+    v_flex,
 };
 
 use crate::sidebar::Page;

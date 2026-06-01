@@ -44,7 +44,11 @@ fn placeholder_data_visible_during_loading() {
     let mut state = HttpLabState::default();
 
     // Reset the resource first to clear data.
-    state.resources.get_mut(&HttpLabAction::PostJson).unwrap().reset();
+    state
+        .resources
+        .get_mut(&HttpLabAction::PostJson)
+        .unwrap()
+        .reset();
 
     // THEN set the placeholder (after reset, since reset clears placeholder_data).
     state.set_placeholder_for_action(

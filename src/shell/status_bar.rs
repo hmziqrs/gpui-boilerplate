@@ -1,4 +1,4 @@
-use gpui::{div, App, InteractiveElement as _, ParentElement as _, Styled as _};
+use gpui::{App, InteractiveElement as _, ParentElement as _, Styled as _, div};
 use gpui_component::ActiveTheme as _;
 
 use crate::{connectivity, notifications, routes::AppRoute, session, tasks};

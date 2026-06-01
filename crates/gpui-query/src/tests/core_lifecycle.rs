@@ -195,7 +195,10 @@ fn begin_request_creates_fresh_signal() {
     let mut resource = resource();
     let mut sequencer = RequestSequencer::new();
 
-    assert!(resource.signal().is_none(), "no signal before first request");
+    assert!(
+        resource.signal().is_none(),
+        "no signal before first request"
+    );
 
     let _ = resource.begin_request(&mut sequencer, 100, QueryFetchMode::Normal);
 
@@ -241,7 +244,9 @@ fn signal_is_fresh_on_new_request() {
     // Second request should get a fresh signal
     let _ = resource.begin_request(&mut sequencer, 200, QueryFetchMode::Normal);
 
-    let signal = resource.signal().expect("signal should exist after new begin_request");
+    let signal = resource
+        .signal()
+        .expect("signal should exist after new begin_request");
     assert!(
         !signal.is_cancelled(),
         "new request should have a fresh (non-cancelled) signal"
@@ -282,8 +287,5 @@ fn reset_clears_signal() {
 
     resource.reset();
 
-    assert!(
-        resource.signal().is_none(),
-        "reset should clear the signal"
-    );
+    assert!(resource.signal().is_none(), "reset should clear the signal");
 }

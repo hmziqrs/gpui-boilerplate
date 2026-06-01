@@ -46,7 +46,11 @@ fn success_stores_previous_data() {
     let mut resource = resource();
     resource.apply_success("first", 100);
 
-    assert_eq!(resource.previous_data(), None, "no previous before first success");
+    assert_eq!(
+        resource.previous_data(),
+        None,
+        "no previous before first success"
+    );
 
     resource.apply_success("second", 200);
 
@@ -100,7 +104,11 @@ fn rollback_restores_previous_data() {
     assert!(rolled_back);
     assert_eq!(resource.data(), Some(&"original"));
     assert_eq!(resource.status(), QueryStatus::Success);
-    assert_eq!(resource.previous_data(), None, "previous_data cleared after rollback");
+    assert_eq!(
+        resource.previous_data(),
+        None,
+        "previous_data cleared after rollback"
+    );
 }
 
 #[test]
@@ -187,8 +195,16 @@ fn failure_does_not_overwrite_previous_data() {
 
     resource.apply_failure("oops");
 
-    assert_eq!(resource.data(), Some(&"v2"), "failure preserves current data");
-    assert_eq!(resource.previous_data(), Some(&"v1"), "failure does not touch previous_data");
+    assert_eq!(
+        resource.data(),
+        Some(&"v2"),
+        "failure preserves current data"
+    );
+    assert_eq!(
+        resource.previous_data(),
+        Some(&"v1"),
+        "failure does not touch previous_data"
+    );
     assert_eq!(error_message(&resource), Some("oops"));
 }
 
@@ -336,8 +352,16 @@ fn complete_failure_after_optimistic_rollback() {
     resource.apply_failure("mutation failed");
 
     assert_eq!(resource.status(), QueryStatus::Failure);
-    assert_eq!(resource.data(), Some(&"optimistic"), "failure preserves current data");
-    assert_eq!(resource.previous_data(), Some(&"original"), "failure does not touch previous_data");
+    assert_eq!(
+        resource.data(),
+        Some(&"optimistic"),
+        "failure preserves current data"
+    );
+    assert_eq!(
+        resource.previous_data(),
+        Some(&"original"),
+        "failure does not touch previous_data"
+    );
 
     // Rollback to original
     let rolled_back = resource.rollback_to_previous();

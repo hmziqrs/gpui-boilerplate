@@ -82,6 +82,14 @@ pub struct HttpLabTestingPage {
     query_optimistic_message: String,
     // Client fetch exercise
     client_query_message: String,
+    show_query_details: bool,
+    show_signal_details: bool,
+    show_retention_details: bool,
+    show_optimistic_details: bool,
+    show_client_details: bool,
+    show_local_history: bool,
+    show_response_details: bool,
+    show_response_preview: bool,
 }
 
 impl HttpLabTestingPage {
@@ -142,6 +150,14 @@ impl HttpLabTestingPage {
             query_optimistic_sequencer: RequestSequencer::new(),
             query_optimistic_message: "No optimistic exercise run yet.".to_string(),
             client_query_message: "No client fetch exercise run yet.".to_string(),
+            show_query_details: false,
+            show_signal_details: false,
+            show_retention_details: false,
+            show_optimistic_details: false,
+            show_client_details: false,
+            show_local_history: false,
+            show_response_details: false,
+            show_response_preview: false,
         }
     }
 
@@ -1352,6 +1368,46 @@ impl HttpLabTestingPage {
         }
         cx.notify();
     }
+
+    fn toggle_query_details(&mut self, cx: &mut Context<Self>) {
+        self.show_query_details = !self.show_query_details;
+        cx.notify();
+    }
+
+    fn toggle_signal_details(&mut self, cx: &mut Context<Self>) {
+        self.show_signal_details = !self.show_signal_details;
+        cx.notify();
+    }
+
+    fn toggle_retention_details(&mut self, cx: &mut Context<Self>) {
+        self.show_retention_details = !self.show_retention_details;
+        cx.notify();
+    }
+
+    fn toggle_optimistic_details(&mut self, cx: &mut Context<Self>) {
+        self.show_optimistic_details = !self.show_optimistic_details;
+        cx.notify();
+    }
+
+    fn toggle_client_details(&mut self, cx: &mut Context<Self>) {
+        self.show_client_details = !self.show_client_details;
+        cx.notify();
+    }
+
+    fn toggle_local_history(&mut self, cx: &mut Context<Self>) {
+        self.show_local_history = !self.show_local_history;
+        cx.notify();
+    }
+
+    fn toggle_response_preview(&mut self, cx: &mut Context<Self>) {
+        self.show_response_preview = !self.show_response_preview;
+        cx.notify();
+    }
+
+    fn toggle_response_details(&mut self, cx: &mut Context<Self>) {
+        self.show_response_details = !self.show_response_details;
+        cx.notify();
+    }
 }
 
 impl Render for HttpLabTestingPage {
@@ -1417,15 +1473,27 @@ impl Render for HttpLabTestingPage {
             ),
         )
         .child(
-            div().px_4().py_3().child(
-                v_flex().gap_2()
-                    .child(query_resource_row("Main", &self.query_resource, cx))
-                    .child(query_resource_row("TTL", &self.query_ttl_resource, cx))
-                    .child(query_resource_row("Ignore", &self.query_ignore_resource, cx))
-                    .child(query_resource_row("Latest", &self.query_latest_resource, cx))
-                    .child(row("Query message", &self.query_message, cx)),
+            div().px_4().pb_3().child(
+                toggle_button(
+                    "http-lab-testing-toggle-query-details",
+                    "Query details",
+                    self.show_query_details,
+                )
+                .on_click(cx.listener(|this, _, _, cx| this.toggle_query_details(cx))),
             ),
-        );
+        )
+        .when(self.show_query_details, |section| {
+            section.child(
+                div().px_4().py_3().child(
+                    v_flex().gap_2()
+                        .child(query_resource_row("Main", &self.query_resource, cx))
+                        .child(query_resource_row("TTL", &self.query_ttl_resource, cx))
+                        .child(query_resource_row("Ignore", &self.query_ignore_resource, cx))
+                        .child(query_resource_row("Latest", &self.query_latest_resource, cx))
+                        .child(row("Query message", &self.query_message, cx)),
+                ),
+            )
+        });
 
         // -- Section 2: Cancel Signal --
         let signal_resource = &self.query_signal_resource;
@@ -1469,32 +1537,32 @@ impl Render for HttpLabTestingPage {
             ),
         )
         .child(
-            div().px_4().py_3().child(
-                v_flex().gap_2()
-                    .child(query_resource_row("Signal resource", signal_resource, cx))
-                    .child(row("Signal", signal_status, cx))
-                    .child(row("Signal message", &self.query_signal_message, cx)),
+            div().px_4().pb_3().child(
+                toggle_button(
+                    "http-lab-testing-toggle-signal-details",
+                    "Signal details",
+                    self.show_signal_details,
+                )
+                .on_click(cx.listener(|this, _, _, cx| this.toggle_signal_details(cx))),
             ),
-        );
+        )
+        .when(self.show_signal_details, |section| {
+            section.child(
+                div().px_4().py_3().child(
+                    v_flex().gap_2()
+                        .child(query_resource_row("Signal resource", signal_resource, cx))
+                        .child(row("Signal", signal_status, cx))
+                        .child(row("Signal message", &self.query_signal_message, cx)),
+                ),
+            )
+        });
 
         // -- Section 3: Cache & Data Retention --
         let placeholder_resource = &self.query_placeholder_resource;
-        let ph_data = placeholder_resource
-            .data()
-            .map(|r| r.preview.clone())
-            .unwrap_or_else(|| "none".to_string());
-        let ph_placeholder = placeholder_resource
-            .placeholder_data()
-            .map(|r| r.preview.clone())
-            .unwrap_or_else(|| "none".to_string());
-        let ph_display = placeholder_resource
-            .display_data()
-            .map(|r| r.preview.clone())
-            .unwrap_or_else(|| "none".to_string());
-        let ph_previous = placeholder_resource
-            .previous_data()
-            .map(|r| r.preview.clone())
-            .unwrap_or_else(|| "none".to_string());
+        let ph_data = compact_resource_preview(placeholder_resource.data());
+        let ph_placeholder = compact_resource_preview(placeholder_resource.placeholder_data());
+        let ph_display = compact_resource_preview(placeholder_resource.display_data());
+        let ph_previous = compact_resource_preview(placeholder_resource.previous_data());
 
         let data_retention_section = section_card(
             "Cache & Data Retention",
@@ -1535,31 +1603,34 @@ impl Render for HttpLabTestingPage {
             ),
         )
         .child(
-            div().px_4().py_3().child(
-                v_flex().gap_2()
-                    .child(query_resource_row("Placeholder resource", placeholder_resource, cx))
-                    .child(row("Data", &ph_data, cx))
-                    .child(row("Placeholder", &ph_placeholder, cx))
-                    .child(row("Display data", &ph_display, cx))
-                    .child(row("Previous data", &ph_previous, cx))
-                    .child(row("Placeholder message", &self.query_placeholder_message, cx)),
+            div().px_4().pb_3().child(
+                toggle_button(
+                    "http-lab-testing-toggle-retention-details",
+                    "Retention details",
+                    self.show_retention_details,
+                )
+                .on_click(cx.listener(|this, _, _, cx| this.toggle_retention_details(cx))),
             ),
-        );
+        )
+        .when(self.show_retention_details, |section| {
+            section.child(
+                div().px_4().py_3().child(
+                    v_flex().gap_2()
+                        .child(query_resource_row("Placeholder resource", placeholder_resource, cx))
+                        .child(row("Data", &ph_data, cx))
+                        .child(row("Placeholder", &ph_placeholder, cx))
+                        .child(row("Display data", &ph_display, cx))
+                        .child(row("Previous data", &ph_previous, cx))
+                        .child(row("Placeholder message", &self.query_placeholder_message, cx)),
+                ),
+            )
+        });
 
         // -- Section 4: Optimistic Updates --
         let optimistic_resource = &self.query_optimistic_resource;
-        let opt_data = optimistic_resource
-            .data()
-            .map(|r| r.preview.clone())
-            .unwrap_or_else(|| "none".to_string());
-        let opt_previous = optimistic_resource
-            .previous_data()
-            .map(|r| r.preview.clone())
-            .unwrap_or_else(|| "none".to_string());
-        let opt_display = optimistic_resource
-            .display_data()
-            .map(|r| r.preview.clone())
-            .unwrap_or_else(|| "none".to_string());
+        let opt_data = compact_resource_preview(optimistic_resource.data());
+        let opt_previous = compact_resource_preview(optimistic_resource.previous_data());
+        let opt_display = compact_resource_preview(optimistic_resource.display_data());
         let opt_status = optimistic_resource.status().label().to_string();
 
         let optimistic_section = section_card(
@@ -1601,16 +1672,28 @@ impl Render for HttpLabTestingPage {
             ),
         )
         .child(
-            div().px_4().py_3().child(
-                v_flex().gap_2()
-                    .child(query_resource_row("Optimistic resource", optimistic_resource, cx))
-                    .child(row("Data", &opt_data, cx))
-                    .child(row("Previous data", &opt_previous, cx))
-                    .child(row("Display data", &opt_display, cx))
-                    .child(row("Status", &opt_status, cx))
-                    .child(row("Optimistic message", &self.query_optimistic_message, cx)),
+            div().px_4().pb_3().child(
+                toggle_button(
+                    "http-lab-testing-toggle-optimistic-details",
+                    "Optimistic details",
+                    self.show_optimistic_details,
+                )
+                .on_click(cx.listener(|this, _, _, cx| this.toggle_optimistic_details(cx))),
             ),
-        );
+        )
+        .when(self.show_optimistic_details, |section| {
+            section.child(
+                div().px_4().py_3().child(
+                    v_flex().gap_2()
+                        .child(query_resource_row("Optimistic resource", optimistic_resource, cx))
+                        .child(row("Data", &opt_data, cx))
+                        .child(row("Previous data", &opt_previous, cx))
+                        .child(row("Display data", &opt_display, cx))
+                        .child(row("Status", &opt_status, cx))
+                        .child(row("Optimistic message", &self.query_optimistic_message, cx)),
+                ),
+            )
+        });
 
         // -- Section 5: Standalone Client Fetch --
         let client_fetch_section = section_card(
@@ -1642,12 +1725,24 @@ impl Render for HttpLabTestingPage {
             ),
         )
         .child(
-            div().px_4().py_3().child(
-                v_flex()
-                    .gap_2()
-                    .child(row("Client message", &self.client_query_message, cx)),
+            div().px_4().pb_3().child(
+                toggle_button(
+                    "http-lab-testing-toggle-client-details",
+                    "Client details",
+                    self.show_client_details,
+                )
+                .on_click(cx.listener(|this, _, _, cx| this.toggle_client_details(cx))),
             ),
-        );
+        )
+        .when(self.show_client_details, |section| {
+            section.child(
+                div().px_4().py_3().child(
+                    v_flex()
+                        .gap_2()
+                        .child(row("Client message", &self.client_query_message, cx)),
+                ),
+            )
+        });
 
         // -- Section 6: Local Full Lab --
         let local_lab_section = section_card(
@@ -1711,6 +1806,12 @@ impl Render for HttpLabTestingPage {
                         &self.local_lab_history.len().to_string(),
                         cx,
                     ))
+                    .child(toggle_button(
+                        "http-lab-testing-toggle-local-history",
+                        "History details",
+                        self.show_local_history,
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| this.toggle_local_history(cx))))
                     .children(HttpLabAction::all().iter().copied().map(|action| {
                         let resource = self
                             .local_lab_resources
@@ -1718,7 +1819,9 @@ impl Render for HttpLabTestingPage {
                             .expect("local lab resource must exist");
                         query_resource_row(action.label(), resource, cx)
                     }))
-                    .child(local_lab_history_panel(self, cx)),
+                    .when(self.show_local_history, |this| {
+                        this.child(local_lab_history_panel(self, cx))
+                    }),
             ),
         );
 
@@ -1759,20 +1862,40 @@ impl Render for HttpLabTestingPage {
                         cx,
                     ))
                     .child(row("Message", &self.last_message, cx))
-                    .when_some(self.last_response.as_ref(), |this, response| {
-                        this.child(row("Response status", &response.status.to_string(), cx))
-                            .child(row("Response URL", &response.final_url, cx))
-                            .child(row("Response headers", &response.header_count.to_string(), cx))
-                            .child(row("Preview bytes", &response.bytes.to_string(), cx))
-                            .child(
-                                div()
-                                    .p_3()
-                                    .rounded(cx.theme().radius)
-                                    .bg(cx.theme().muted)
-                                    .text_xs()
-                                    .font_family("monospace")
-                                    .child(response.preview.clone()),
-                            )
+                    .child(toggle_button(
+                        "http-lab-testing-toggle-response-details",
+                        "Response details",
+                        self.show_response_details,
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| this.toggle_response_details(cx))))
+                    .when(self.show_response_details, |this| {
+                        this.when_some(self.last_response.as_ref(), |this, response| {
+                            this.child(row("Response status", &response.status.to_string(), cx))
+                                .child(row("Response URL", &response.final_url, cx))
+                                .child(row(
+                                    "Response headers",
+                                    &response.header_count.to_string(),
+                                    cx,
+                                ))
+                                .child(row("Preview bytes", &response.bytes.to_string(), cx))
+                                .child(toggle_button(
+                                    "http-lab-testing-toggle-response-preview",
+                                    "Response preview",
+                                    self.show_response_preview,
+                                )
+                                .on_click(cx.listener(|this, _, _, cx| this.toggle_response_preview(cx))))
+                                .when(self.show_response_preview, |this| {
+                                    this.child(
+                                        div()
+                                            .p_3()
+                                            .rounded(cx.theme().radius)
+                                            .bg(cx.theme().muted)
+                                            .text_xs()
+                                            .font_family("monospace")
+                                            .child(preview_excerpt(&response.preview, 1024)),
+                                    )
+                                })
+                        })
                     })
                     .when(self.last_response.is_none(), |this| {
                         this.child(
@@ -1822,7 +1945,7 @@ impl Render for HttpLabTestingPage {
             .child(local_lab_section)
             .child(raw_baseline_section);
 
-        tracing::info!(
+        tracing::debug!(
             target: RENDER_LOG,
             elapsed_us = render_started.elapsed().as_micros() as u64,
             status = self.status.label(),
@@ -2020,6 +2143,38 @@ fn section_card(title: &str, description: &str, cx: &App) -> Div {
                         ),
                 ),
         )
+}
+
+fn toggle_button(id: &str, label: &str, expanded: bool) -> Button {
+    Button::new(id.to_string())
+        .ghost()
+        .label(if expanded {
+            format!("Hide {label}")
+        } else {
+            format!("Show {label}")
+        })
+        .tooltip("Toggles heavy debug content for this section.")
+}
+
+fn preview_excerpt(value: &str, limit: usize) -> String {
+    let truncated: String = value.chars().take(limit).collect();
+    if value.chars().count() > limit {
+        format!("{truncated}\n... truncated")
+    } else {
+        truncated
+    }
+}
+
+fn compact_resource_preview(resource: Option<&RawResponse>) -> String {
+    match resource {
+        Some(response) => format!(
+            "status={} bytes={} preview=\"{}\"",
+            response.status,
+            response.bytes,
+            preview_excerpt(&response.preview, 96).replace('\n', " ")
+        ),
+        None => "none".to_string(),
+    }
 }
 
 fn local_lab_history_panel(page: &HttpLabTestingPage, cx: &App) -> Div {
