@@ -17,7 +17,7 @@ use crate::services::{http_lab::HttpLabAction, tokio_runtime::TokioRuntimeGlobal
 
 const LOG: &str = "gpui_starter::http_lab_testing";
 const RENDER_LOG: &str = "gpui_starter::http_lab_testing::render";
-const TEST_URL: &str = "https://httpbingo.org/get";
+const TEST_URL: &str = "https://httpbin.org/get";
 const PREVIEW_LIMIT: usize = 8_000;
 
 #[derive(Clone, Debug)]
@@ -972,7 +972,8 @@ impl HttpLabTestingPage {
         let before_cancel = signal.as_ref().map(|s| s.is_cancelled());
 
         // Cancel the resource — this should propagate to the signal.
-        self.query_signal_resource.cancel(QueryError::cancelled("signal test"));
+        self.query_signal_resource
+            .cancel(QueryError::cancelled("signal test"));
         let after_cancel = signal.as_ref().map(|s| s.is_cancelled());
 
         self.query_signal_message = format!(
@@ -996,7 +997,11 @@ impl HttpLabTestingPage {
             now_ms,
             QueryFetchMode::Normal,
         );
-        let QueryBeginResult::Started { request_id: first_id, .. } = first else {
+        let QueryBeginResult::Started {
+            request_id: first_id,
+            ..
+        } = first
+        else {
             self.query_placeholder_message = format!("Placeholder setup did not start: {first:?}");
             cx.notify();
             return;
@@ -1008,12 +1013,14 @@ impl HttpLabTestingPage {
         );
 
         // Step 2: Set placeholder data, then reset (clears data).
-        self.query_placeholder_resource.set_placeholder_data(Some(fake_response("placeholder")));
+        self.query_placeholder_resource
+            .set_placeholder_data(Some(fake_response("placeholder")));
 
         // Step 3: Reset clears data but NOT placeholder (actually reset DOES clear placeholder).
         // So set placeholder AFTER reset.
         self.query_placeholder_resource.reset();
-        self.query_placeholder_resource.set_placeholder_data(Some(fake_response("placeholder")));
+        self.query_placeholder_resource
+            .set_placeholder_data(Some(fake_response("placeholder")));
 
         // Step 4: Begin new request — during loading, display_data returns placeholder.
         let second = self.query_placeholder_resource.begin_request(
@@ -1021,10 +1028,17 @@ impl HttpLabTestingPage {
             now_ms + 10,
             QueryFetchMode::Normal,
         );
-        let loading_display = self.query_placeholder_resource.display_data().map(|r| r.preview.clone());
+        let loading_display = self
+            .query_placeholder_resource
+            .display_data()
+            .map(|r| r.preview.clone());
 
         // Step 5: Complete with real data.
-        if let QueryBeginResult::Started { request_id: second_id, .. } = second {
+        if let QueryBeginResult::Started {
+            request_id: second_id,
+            ..
+        } = second
+        {
             self.query_placeholder_resource.complete_current_success(
                 second_id,
                 fake_response("real"),
@@ -1032,9 +1046,18 @@ impl HttpLabTestingPage {
             );
         }
 
-        let final_data = self.query_placeholder_resource.data().map(|r| r.preview.clone());
-        let final_display = self.query_placeholder_resource.display_data().map(|r| r.preview.clone());
-        let previous = self.query_placeholder_resource.previous_data().map(|r| r.preview.clone());
+        let final_data = self
+            .query_placeholder_resource
+            .data()
+            .map(|r| r.preview.clone());
+        let final_display = self
+            .query_placeholder_resource
+            .display_data()
+            .map(|r| r.preview.clone());
+        let previous = self
+            .query_placeholder_resource
+            .previous_data()
+            .map(|r| r.preview.clone());
 
         self.query_placeholder_message = format!(
             "Placeholder probe: loading_display={loading_display:?} final_data={final_data:?} final_display={final_display:?} previous={previous:?}"
@@ -1073,12 +1096,17 @@ impl HttpLabTestingPage {
             );
         }
 
-        let data = self.query_placeholder_resource.data().map(|r| r.preview.clone());
-        let previous = self.query_placeholder_resource.previous_data().map(|r| r.preview.clone());
+        let data = self
+            .query_placeholder_resource
+            .data()
+            .map(|r| r.preview.clone());
+        let previous = self
+            .query_placeholder_resource
+            .previous_data()
+            .map(|r| r.preview.clone());
 
-        self.query_placeholder_message = format!(
-            "Previous data probe: data={data:?} previous={previous:?}"
-        );
+        self.query_placeholder_message =
+            format!("Previous data probe: data={data:?} previous={previous:?}");
         cx.notify();
     }
 
@@ -1103,15 +1131,21 @@ impl HttpLabTestingPage {
         }
 
         // Optimistic update.
-        self.query_optimistic_resource.set_data(fake_response("optimistic"));
+        self.query_optimistic_resource
+            .set_data(fake_response("optimistic"));
 
-        let data = self.query_optimistic_resource.data().map(|r| r.preview.clone());
-        let previous = self.query_optimistic_resource.previous_data().map(|r| r.preview.clone());
+        let data = self
+            .query_optimistic_resource
+            .data()
+            .map(|r| r.preview.clone());
+        let previous = self
+            .query_optimistic_resource
+            .previous_data()
+            .map(|r| r.preview.clone());
         let status = self.query_optimistic_resource.status().label().to_string();
 
-        self.query_optimistic_message = format!(
-            "Optimistic set: data={data:?} previous={previous:?} status={status}"
-        );
+        self.query_optimistic_message =
+            format!("Optimistic set: data={data:?} previous={previous:?} status={status}");
         cx.notify();
     }
 
@@ -1134,11 +1168,18 @@ impl HttpLabTestingPage {
         }
 
         // Optimistic update then rollback.
-        self.query_optimistic_resource.set_data(fake_response("optimistic"));
+        self.query_optimistic_resource
+            .set_data(fake_response("optimistic"));
         let rolled_back = self.query_optimistic_resource.rollback_to_previous();
 
-        let data = self.query_optimistic_resource.data().map(|r| r.preview.clone());
-        let previous = self.query_optimistic_resource.previous_data().map(|r| r.preview.clone());
+        let data = self
+            .query_optimistic_resource
+            .data()
+            .map(|r| r.preview.clone());
+        let previous = self
+            .query_optimistic_resource
+            .previous_data()
+            .map(|r| r.preview.clone());
         let status = self.query_optimistic_resource.status().label().to_string();
 
         self.query_optimistic_message = format!(
@@ -1166,7 +1207,8 @@ impl HttpLabTestingPage {
         }
 
         // Optimistic update.
-        self.query_optimistic_resource.set_data(fake_response("optimistic"));
+        self.query_optimistic_resource
+            .set_data(fake_response("optimistic"));
 
         // Simulate mutation success — begin request and complete with server data.
         let mutation = self.query_optimistic_resource.begin_request(
@@ -1182,13 +1224,18 @@ impl HttpLabTestingPage {
             );
         }
 
-        let data = self.query_optimistic_resource.data().map(|r| r.preview.clone());
-        let previous = self.query_optimistic_resource.previous_data().map(|r| r.preview.clone());
+        let data = self
+            .query_optimistic_resource
+            .data()
+            .map(|r| r.preview.clone());
+        let previous = self
+            .query_optimistic_resource
+            .previous_data()
+            .map(|r| r.preview.clone());
         let status = self.query_optimistic_resource.status().label().to_string();
 
-        self.query_optimistic_message = format!(
-            "Optimistic flow: data={data:?} previous={previous:?} status={status}"
-        );
+        self.query_optimistic_message =
+            format!("Optimistic flow: data={data:?} previous={previous:?} status={status}");
         cx.notify();
     }
 
@@ -1223,7 +1270,8 @@ impl HttpLabTestingPage {
                 );
             }
             None => {
-                self.client_query_message = "Client fetch: cache hit or ignored (None returned)".to_string();
+                self.client_query_message =
+                    "Client fetch: cache hit or ignored (None returned)".to_string();
             }
         }
         cx.notify();
@@ -1258,7 +1306,8 @@ impl HttpLabTestingPage {
                 );
             }
             None => {
-                self.client_query_message = "Client force fetch: ignored (None returned)".to_string();
+                self.client_query_message =
+                    "Client force fetch: ignored (None returned)".to_string();
             }
         }
         cx.notify();
@@ -1624,14 +1673,14 @@ async fn run_local_lab_action(
 
 fn local_lab_url(action: HttpLabAction) -> String {
     match action {
-        HttpLabAction::GetText => "https://httpbingo.org/encoding/utf8".to_string(),
-        HttpLabAction::GetJson => "https://httpbingo.org/json".to_string(),
-        HttpLabAction::GetXml => "https://httpbingo.org/xml".to_string(),
-        HttpLabAction::PostJson => "https://httpbingo.org/post?local=post_json".to_string(),
-        HttpLabAction::PostForm => "https://httpbingo.org/post?local=post_form".to_string(),
-        HttpLabAction::PostMultipart => "https://httpbingo.org/post?local=multipart".to_string(),
-        HttpLabAction::Cookies => "https://httpbingo.org/cookies".to_string(),
-        HttpLabAction::Failure => "https://httpbingo.org/status/418".to_string(),
+        HttpLabAction::GetText => "https://httpbin.org/encoding/utf8".to_string(),
+        HttpLabAction::GetJson => "https://httpbin.org/json".to_string(),
+        HttpLabAction::GetXml => "https://httpbin.org/xml".to_string(),
+        HttpLabAction::PostJson => "https://httpbin.org/post?local=post_json".to_string(),
+        HttpLabAction::PostForm => "https://httpbin.org/post?local=post_form".to_string(),
+        HttpLabAction::PostMultipart => "https://httpbin.org/post?local=multipart".to_string(),
+        HttpLabAction::Cookies => "https://httpbin.org/cookies".to_string(),
+        HttpLabAction::Failure => "https://httpbin.org/status/418".to_string(),
         HttpLabAction::FullFlow => TEST_URL.to_string(),
     }
 }
@@ -1914,7 +1963,13 @@ fn query_resource_row(label: &str, resource: &QueryResource<RawResponse>, cx: &A
 fn signal_panel(page: &HttpLabTestingPage, cx: &App) -> Div {
     let resource = &page.query_signal_resource;
     let signal_status = match resource.signal() {
-        Some(signal) => if signal.is_cancelled() { "cancelled" } else { "active" },
+        Some(signal) => {
+            if signal.is_cancelled() {
+                "cancelled"
+            } else {
+                "active"
+            }
+        }
         None => "none",
     };
     div()
@@ -1939,10 +1994,22 @@ fn signal_panel(page: &HttpLabTestingPage, cx: &App) -> Div {
 
 fn data_retention_panel(page: &HttpLabTestingPage, cx: &App) -> Div {
     let resource = &page.query_placeholder_resource;
-    let data_label = resource.data().map(|r| r.preview.clone()).unwrap_or_else(|| "none".to_string());
-    let placeholder_label = resource.placeholder_data().map(|r| r.preview.clone()).unwrap_or_else(|| "none".to_string());
-    let display_label = resource.display_data().map(|r| r.preview.clone()).unwrap_or_else(|| "none".to_string());
-    let previous_label = resource.previous_data().map(|r| r.preview.clone()).unwrap_or_else(|| "none".to_string());
+    let data_label = resource
+        .data()
+        .map(|r| r.preview.clone())
+        .unwrap_or_else(|| "none".to_string());
+    let placeholder_label = resource
+        .placeholder_data()
+        .map(|r| r.preview.clone())
+        .unwrap_or_else(|| "none".to_string());
+    let display_label = resource
+        .display_data()
+        .map(|r| r.preview.clone())
+        .unwrap_or_else(|| "none".to_string());
+    let previous_label = resource
+        .previous_data()
+        .map(|r| r.preview.clone())
+        .unwrap_or_else(|| "none".to_string());
 
     div()
         .p_4()
@@ -1963,15 +2030,28 @@ fn data_retention_panel(page: &HttpLabTestingPage, cx: &App) -> Div {
                 .child(row("Placeholder", &placeholder_label, cx))
                 .child(row("Display data", &display_label, cx))
                 .child(row("Previous data", &previous_label, cx))
-                .child(row("Placeholder message", &page.query_placeholder_message, cx)),
+                .child(row(
+                    "Placeholder message",
+                    &page.query_placeholder_message,
+                    cx,
+                )),
         )
 }
 
 fn optimistic_panel(page: &HttpLabTestingPage, cx: &App) -> Div {
     let resource = &page.query_optimistic_resource;
-    let data_label = resource.data().map(|r| r.preview.clone()).unwrap_or_else(|| "none".to_string());
-    let previous_label = resource.previous_data().map(|r| r.preview.clone()).unwrap_or_else(|| "none".to_string());
-    let display_label = resource.display_data().map(|r| r.preview.clone()).unwrap_or_else(|| "none".to_string());
+    let data_label = resource
+        .data()
+        .map(|r| r.preview.clone())
+        .unwrap_or_else(|| "none".to_string());
+    let previous_label = resource
+        .previous_data()
+        .map(|r| r.preview.clone())
+        .unwrap_or_else(|| "none".to_string());
+    let display_label = resource
+        .display_data()
+        .map(|r| r.preview.clone())
+        .unwrap_or_else(|| "none".to_string());
 
     div()
         .p_4()
@@ -1991,7 +2071,11 @@ fn optimistic_panel(page: &HttpLabTestingPage, cx: &App) -> Div {
                 .child(row("Data", &data_label, cx))
                 .child(row("Previous data", &previous_label, cx))
                 .child(row("Display data", &display_label, cx))
-                .child(row("Optimistic message", &page.query_optimistic_message, cx)),
+                .child(row(
+                    "Optimistic message",
+                    &page.query_optimistic_message,
+                    cx,
+                )),
         )
 }
 

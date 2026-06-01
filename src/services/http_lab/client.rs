@@ -9,7 +9,7 @@ use crate::services::http_lab::{
     },
 };
 
-pub(super) const HTTP_LAB_BASE: &str = "https://httpbingo.org";
+pub(super) const HTTP_LAB_BASE: &str = "https://httpbin.org";
 const LOG: &str = "gpui_starter::http_lab::client";
 
 /// Run an HTTP action. Must be called inside a tokio runtime context.
