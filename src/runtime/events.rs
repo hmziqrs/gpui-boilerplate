@@ -1,18 +1,12 @@
 use gpui::{App, Global};
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    errors::AppError,
-    ids::{EventId, TaskId},
-    routes::AppRoute,
-    time::AppTimestamp,
-};
+use crate::{errors::AppError, ids::EventId, routes::AppRoute, time::AppTimestamp};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum AppEventKind {
     Navigate(AppRoute),
     DeepLinkReceived(String),
-    BackgroundTaskChanged(TaskId),
     AppError {
         message: String,
         severity: crate::errors::AppErrorSeverity,

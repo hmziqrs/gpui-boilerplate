@@ -1,10 +1,9 @@
 use gpui::{prelude::*, *};
 use gpui_component::{
-    ActiveTheme as _, Selectable as _,
     button::{Button, ButtonVariants as _},
     label::Label,
     switch::Switch,
-    v_flex,
+    v_flex, ActiveTheme as _, Selectable as _,
 };
 
 pub struct HomePage;
@@ -23,9 +22,21 @@ impl Default for HomePage {
 
 impl Render for HomePage {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let render_started = std::time::Instant::now();
         let first_run_pending = crate::first_run::is_pending(cx);
         let locale = crate::app::current_locale(cx);
         let notifications_enabled = crate::notifications::snapshot(cx).enabled_by_user;
+        let active_tasks = crate::tasks::active_count(cx);
+
+        tracing::debug!(
+            target: "gpui_starter::features::pages::home::render",
+            first_run_pending,
+            locale = %locale,
+            notifications_enabled,
+            active_tasks,
+            elapsed_us = render_started.elapsed().as_micros() as u64,
+            "HomePage render prepared"
+        );
 
         v_flex()
             .min_h_full()
@@ -56,6 +67,11 @@ impl Render for HomePage {
                     .outline()
                     .label("Start Demo Task")
                     .on_click(|_, _, cx| {
+                        tracing::info!(
+                            target: "gpui_starter::features::pages::home",
+                            active_tasks_before = crate::tasks::active_count(cx),
+                            "Start Demo Task clicked"
+                        );
                         crate::tasks::start_demo_task(cx);
                     }),
             )

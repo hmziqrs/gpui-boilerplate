@@ -1,9 +1,8 @@
 use gpui::{prelude::*, *};
 use gpui_component::{
-    ActiveTheme as _, Icon, IconName, Root, Sizable as _,
     resizable::{h_resizable, resizable_panel},
     sidebar::{Sidebar, SidebarGroup, SidebarHeader, SidebarMenu, SidebarMenuItem},
-    v_flex,
+    v_flex, ActiveTheme as _, Icon, IconName, Root, Sizable as _,
 };
 
 use crate::sidebar::Page;
@@ -98,12 +97,17 @@ impl AppRoot {
                         );
                         cx.notify();
                     }
-                    AppEventKind::BackgroundTaskChanged(_) | AppEventKind::DiagnosticsChanged => {}
+                    AppEventKind::DiagnosticsChanged => {}
                 }
             }
         })
         .detach();
         cx.observe_global::<crate::tasks::TaskRegistry>(|_, cx| {
+            tracing::debug!(
+                target: "gpui_starter::root::render",
+                active_tasks = crate::tasks::active_count(cx),
+                "TaskRegistry changed; notifying root"
+            );
             cx.notify();
         })
         .detach();
@@ -210,6 +214,7 @@ impl Focusable for AppRoot {
 
 impl Render for AppRoot {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let render_started = std::time::Instant::now();
         let sheet_layer = Root::render_sheet_layer(window, cx);
         let dialog_layer = Root::render_dialog_layer(window, cx);
         let notification_layer = Root::render_notification_layer(window, cx);
@@ -335,6 +340,15 @@ impl Render for AppRoot {
             .flex_1()
             .overflow_hidden()
             .child(layout);
+
+        tracing::debug!(
+            target: "gpui_starter::root::render",
+            route = %self.active_route.title(),
+            page = ?active_page,
+            tasks_active = crate::tasks::active_count(cx),
+            elapsed_us = render_started.elapsed().as_micros() as u64,
+            "AppRoot render prepared"
+        );
 
         v_flex()
             .size_full()

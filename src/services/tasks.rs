@@ -3,11 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-use crate::{
-    events::{self, AppEventKind},
-    ids::TaskId,
-    time::AppTimestamp,
-};
+use crate::{ids::TaskId, time::AppTimestamp};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TaskStatus {
@@ -76,6 +72,11 @@ pub fn active_count(cx: &App) -> usize {
 
 pub fn start_demo_task(cx: &mut App) {
     let id = TaskId::new();
+    tracing::info!(
+        target: "gpui_starter::tasks",
+        task_id = %id,
+        "starting demo task"
+    );
     start(
         id,
         "Demo background task".to_string(),
@@ -94,10 +95,21 @@ pub fn start_demo_task(cx: &mut App) {
             }
             background.timer(Duration::from_millis(350)).await;
             cx.update(move |cx| {
+                tracing::debug!(
+                    target: "gpui_starter::tasks",
+                    task_id = %id,
+                    progress = step,
+                    "updating demo task progress"
+                );
                 update_progress(id, TaskProgress::Percent(step), cx);
             });
         }
         cx.update(move |cx| {
+            tracing::info!(
+                target: "gpui_starter::tasks",
+                task_id = %id,
+                "demo task succeeded"
+            );
             succeed(id, cx);
         });
     })
@@ -105,6 +117,14 @@ pub fn start_demo_task(cx: &mut App) {
 }
 
 pub fn start(id: TaskId, label: String, progress: TaskProgress, cx: &mut App) {
+    tracing::info!(
+        target: "gpui_starter::tasks",
+        task_id = %id,
+        task_label = %label,
+        progress = ?progress,
+        active_tasks_before = active_count(cx),
+        "background task starting"
+    );
     cx.default_global::<TaskRegistry>().tasks.insert(
         0,
         BackgroundTask {
@@ -117,7 +137,12 @@ pub fn start(id: TaskId, label: String, progress: TaskProgress, cx: &mut App) {
             error: None,
         },
     );
-    events::emit(AppEventKind::BackgroundTaskChanged(id), cx);
+    tracing::debug!(
+        target: "gpui_starter::tasks",
+        task_id = %id,
+        active_tasks = active_count(cx),
+        "background task registered"
+    );
 }
 
 pub fn update_progress(id: TaskId, progress: TaskProgress, cx: &mut App) {
@@ -212,6 +237,13 @@ fn mutate_task(id: TaskId, cx: &mut App, mutate: impl FnOnce(&mut BackgroundTask
     let registry = cx.default_global::<TaskRegistry>();
     if let Some(task) = registry.tasks.iter_mut().find(|task| task.id == id) {
         mutate(task);
-        events::emit(AppEventKind::BackgroundTaskChanged(id), cx);
+        tracing::debug!(
+            target: "gpui_starter::tasks",
+            task_id = %id,
+            status = ?task.status,
+            progress = ?task.progress,
+            finished = task.finished_at.is_some(),
+            "background task mutated"
+        );
     }
 }
