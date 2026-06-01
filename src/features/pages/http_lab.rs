@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use gpui::{prelude::*, *};
 use gpui_component::{
     ActiveTheme as _, Disableable as _, Selectable as _,
@@ -7,6 +9,8 @@ use gpui_component::{
 
 use crate::http_lab::{self, HttpExchange, HttpLabAction, HttpLabState};
 use crate::services::query::{QueryResource, QueryStatus, RequestPolicy};
+
+const RENDER_LOG: &str = "gpui_starter::http_lab::render";
 
 pub struct HttpLabPage {
     _subscriptions: Vec<Subscription>,
@@ -41,7 +45,7 @@ impl HttpLabPage {
                 "HTTP Lab GPUI entity task started"
             );
 
-            let handle = match cx.update(|cx| http_lab::prepare_action(action, cx)) {
+            let handle = match cx.update(|cx| http_lab::prepare_action_untracked(action, cx)) {
                 Some(handle) => handle,
                 None => {
                     tracing::info!(
@@ -76,10 +80,16 @@ impl HttpLabPage {
 
 impl Render for HttpLabPage {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let render_started = Instant::now();
         let state = http_lab::snapshot(cx);
         let selected_resource = state.selected_resource();
+        let selected_action = state.selected_action;
+        let selected_status = selected_resource.status();
+        let active_count = state.active_count();
+        let history_len = state.history.len();
+        let transition_len = state.transition_log.len();
 
-        v_flex()
+        let view = v_flex()
             .min_h_full()
             .p_6()
             .gap_5()
@@ -92,7 +102,20 @@ impl Render for HttpLabPage {
                 selected_resource,
                 cx,
             ))
-            .child(activity_panel(&state, cx))
+            .child(activity_panel(&state, cx));
+
+        tracing::info!(
+            target: RENDER_LOG,
+            elapsed_us = render_started.elapsed().as_micros() as u64,
+            selected_action = selected_action.id(),
+            selected_status = selected_status.label(),
+            active_count,
+            history_len,
+            transition_len,
+            "HTTP Lab render completed"
+        );
+
+        view
     }
 }
 
@@ -219,7 +242,12 @@ fn resource_panel(
     resource: &QueryResource<HttpExchange>,
     cx: &App,
 ) -> Div {
-    panel(action.label(), cx)
+    let render_started = Instant::now();
+    let has_data = resource.data().is_some();
+    let has_error = resource.error().is_some();
+    let active_request_id = resource.active_request_id().map(|id| id.label());
+
+    let view = panel(action.label(), cx)
         .child(
             div()
                 .flex()
@@ -282,7 +310,20 @@ fn resource_panel(
                         )),
                 )
             })
-        })
+        });
+
+    tracing::debug!(
+        target: RENDER_LOG,
+        elapsed_us = render_started.elapsed().as_micros() as u64,
+        action = action.id(),
+        status = resource.status().label(),
+        has_data,
+        has_error,
+        active_request_id,
+        "HTTP Lab resource panel rendered"
+    );
+
+    view
 }
 
 fn resource_metrics(resource: &QueryResource<HttpExchange>, cx: &App) -> Div {
@@ -307,7 +348,8 @@ fn resource_metrics(resource: &QueryResource<HttpExchange>, cx: &App) -> Div {
 }
 
 fn activity_panel(state: &HttpLabState, cx: &App) -> Div {
-    div()
+    let render_started = Instant::now();
+    let view = div()
         .grid()
         .gap_4()
         .child(
@@ -331,10 +373,21 @@ fn activity_panel(state: &HttpLabState, cx: &App) -> Div {
                     .text_color(cx.theme().muted_foreground)
                     .child(summary)
             })),
-        )
+        );
+
+    tracing::debug!(
+        target: RENDER_LOG,
+        elapsed_us = render_started.elapsed().as_micros() as u64,
+        history_len = state.history.len(),
+        transition_len = state.transition_log.len(),
+        "HTTP Lab activity panel rendered"
+    );
+
+    view
 }
 
 fn exchange_panel(exchange: &HttpExchange, cx: &App) -> Div {
+    let render_started = Instant::now();
     let mut panel = panel("Response", cx)
         .child(kv("Label", &exchange.label, cx))
         .child(kv("Method", &exchange.request.method, cx))
@@ -370,9 +423,21 @@ fn exchange_panel(exchange: &HttpExchange, cx: &App) -> Div {
             });
     }
 
-    panel.when_some(exchange.error.as_ref(), |this, error| {
+    let view = panel.when_some(exchange.error.as_ref(), |this, error| {
         this.child(callout("Response error", error, cx))
-    })
+    });
+
+    tracing::debug!(
+        target: RENDER_LOG,
+        elapsed_us = render_started.elapsed().as_micros() as u64,
+        label = %exchange.label,
+        has_response = exchange.response.is_some(),
+        has_error = exchange.error.is_some(),
+        request_url = %exchange.request.url,
+        "HTTP Lab exchange panel rendered"
+    );
+
+    view
 }
 
 fn headers_block(headers: &[(String, String)], cx: &App) -> Div {

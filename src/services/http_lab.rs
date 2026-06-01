@@ -8,7 +8,7 @@ mod types;
 
 pub use operations::{
     ActionHandle, cancel_action, cancel_all, execute_action, initialize, prepare_action,
-    read_state, reset, select_action, snapshot,
+    prepare_action_untracked, read_state, reset, select_action, snapshot,
 };
 pub use response::response_fields;
 pub use state::HttpLabState;

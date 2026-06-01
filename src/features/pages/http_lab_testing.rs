@@ -1,4 +1,4 @@
-use std::{sync::OnceLock, time::Instant};
+use std::{collections::BTreeMap, sync::OnceLock, time::Instant};
 
 use gpui::{prelude::*, *};
 use gpui_component::{
@@ -9,6 +9,7 @@ use gpui_component::{
 use tokio_util::sync::CancellationToken;
 
 use crate::services::{
+    http_lab::HttpLabAction,
     query::{
         CachePolicy, QueryBeginResult, QueryError, QueryFetchMode, QueryResource, RequestPolicy,
         RequestSequencer,
@@ -17,6 +18,7 @@ use crate::services::{
 };
 
 const LOG: &str = "gpui_starter::http_lab_testing";
+const RENDER_LOG: &str = "gpui_starter::http_lab_testing::render";
 const TEST_URL: &str = "https://httpbingo.org/get";
 const PREVIEW_LIMIT: usize = 8_000;
 
@@ -63,6 +65,11 @@ pub struct HttpLabTestingPage {
     query_latest_resource: QueryResource<RawResponse>,
     query_sequencer: RequestSequencer,
     query_message: String,
+    local_lab_resources: BTreeMap<HttpLabAction, QueryResource<RawResponse>>,
+    local_lab_sequencer: RequestSequencer,
+    local_lab_selected: HttpLabAction,
+    local_lab_history: Vec<(HttpLabAction, RawResponse)>,
+    local_lab_message: String,
 }
 
 impl HttpLabTestingPage {
@@ -96,6 +103,11 @@ impl HttpLabTestingPage {
             ),
             query_sequencer: RequestSequencer::new(),
             query_message: "No query request sent yet.".to_string(),
+            local_lab_resources: local_lab_resources(),
+            local_lab_sequencer: RequestSequencer::new(),
+            local_lab_selected: HttpLabAction::GetJson,
+            local_lab_history: Vec::new(),
+            local_lab_message: "No local full-query lab request sent yet.".to_string(),
         }
     }
 
@@ -583,13 +595,336 @@ impl HttpLabTestingPage {
         );
         cx.notify();
     }
+
+    fn reset_local_lab(&mut self, cx: &mut Context<Self>) {
+        if let Some(token) = self.cancellation.take() {
+            token.cancel();
+        }
+        self.active_operation_id = None;
+        self.local_lab_resources = local_lab_resources();
+        self.local_lab_sequencer.advance_scope();
+        self.local_lab_history.clear();
+        self.local_lab_message = "Local full-query lab reset.".to_string();
+        tracing::info!(target: LOG, "HTTP Lab Testing local full-query lab reset");
+        cx.notify();
+    }
+
+    fn send_local_lab_action(&mut self, action: HttpLabAction, cx: &mut Context<Self>) {
+        let operation_id = self.next_operation_id;
+        self.next_operation_id += 1;
+
+        if let Some(token) = self.cancellation.take() {
+            token.cancel();
+        }
+
+        let now_ms = query_now_ms();
+        self.local_lab_selected = action;
+        if action == HttpLabAction::FullFlow {
+            self.cancel_local_lab_active_requests("cancelled by local full flow");
+        } else {
+            self.cancel_local_lab_action(HttpLabAction::FullFlow, "cancelled by local request");
+        }
+
+        let request_id = match self
+            .local_lab_resources
+            .get_mut(&action)
+            .expect("local lab resource must exist")
+            .begin_request(
+                &mut self.local_lab_sequencer,
+                now_ms,
+                QueryFetchMode::Normal,
+            ) {
+            QueryBeginResult::Started {
+                request_id,
+                status,
+                replaced_request_id,
+            } => {
+                tracing::info!(
+                    target: LOG,
+                    operation_id,
+                    action = action.id(),
+                    request_id = %request_id.label(),
+                    status = status.label(),
+                    replaced_request_id = ?replaced_request_id.map(|id| id.label()),
+                    "HTTP Lab Testing local lab query started"
+                );
+                request_id
+            }
+            QueryBeginResult::CacheHit => {
+                self.local_lab_message = format!("{} local cache hit", action.label());
+                tracing::info!(
+                    target: LOG,
+                    operation_id,
+                    action = action.id(),
+                    "HTTP Lab Testing local lab cache hit"
+                );
+                cx.notify();
+                return;
+            }
+            QueryBeginResult::IgnoredWhileLoading { active_request_id } => {
+                self.local_lab_message = format!(
+                    "{} ignored while loading {}",
+                    action.label(),
+                    active_request_id.label()
+                );
+                tracing::info!(
+                    target: LOG,
+                    operation_id,
+                    action = action.id(),
+                    active_request_id = %active_request_id.label(),
+                    "HTTP Lab Testing local lab ignored while loading"
+                );
+                cx.notify();
+                return;
+            }
+        };
+
+        let cancellation = CancellationToken::new();
+        self.active_operation_id = Some(operation_id);
+        self.cancellation = Some(cancellation.clone());
+        self.status = RawStatus::Sending;
+        self.last_message = format!("operation {operation_id}: local lab {}", action.label());
+        self.local_lab_message = format!(
+            "operation {operation_id}: {} loading request {}",
+            action.label(),
+            request_id.label()
+        );
+        self.last_response = None;
+        cx.notify();
+
+        let runtime = cx.global::<TokioRuntimeGlobal>().0.runtime.clone();
+        let client = cx.global::<TokioRuntimeGlobal>().0.http_client.clone();
+
+        tracing::info!(
+            target: LOG,
+            operation_id,
+            action = action.id(),
+            request_id = %request_id.label(),
+            "HTTP Lab Testing scheduling local lab foreground task"
+        );
+
+        cx.spawn(async move |this, cx| {
+            tracing::info!(
+                target: LOG,
+                operation_id,
+                action = action.id(),
+                request_id = %request_id.label(),
+                "HTTP Lab Testing local lab foreground task started"
+            );
+
+            let started = Instant::now();
+            let request_cancellation = cancellation.clone();
+            let handle = runtime.spawn(async move {
+                run_local_lab_action(client, action, request_cancellation, operation_id).await
+            });
+
+            tracing::info!(
+                target: LOG,
+                operation_id,
+                action = action.id(),
+                request_id = %request_id.label(),
+                "HTTP Lab Testing local lab Tokio task spawned"
+            );
+
+            let result = match handle.await {
+                Ok(result) => result,
+                Err(err) => Err(format!("tokio task join failed: {err}")),
+            };
+            let elapsed_ms = started.elapsed().as_millis();
+
+            tracing::info!(
+                target: LOG,
+                operation_id,
+                action = action.id(),
+                request_id = %request_id.label(),
+                elapsed_ms,
+                ok = result.is_ok(),
+                "HTTP Lab Testing local lab foreground task joined Tokio result"
+            );
+
+            if let Err(err) = this.update(cx, |this, cx| {
+                if this.active_operation_id != Some(operation_id) {
+                    tracing::info!(
+                        target: LOG,
+                        operation_id,
+                        action = action.id(),
+                        request_id = %request_id.label(),
+                        active_operation_id = ?this.active_operation_id,
+                        "HTTP Lab Testing local lab ignored stale operation result"
+                    );
+                    return;
+                }
+
+                this.active_operation_id = None;
+                this.cancellation = None;
+
+                match result {
+                    Ok(exchanges) => {
+                        let mut accepted_count = 0usize;
+                        let last_response = exchanges.last().map(|(_, response)| response.clone());
+                        for (target_action, response) in exchanges {
+                            if action == HttpLabAction::FullFlow
+                                && target_action != HttpLabAction::FullFlow
+                            {
+                                this.complete_local_lab_child_resource(
+                                    target_action,
+                                    response.clone(),
+                                );
+                                accepted_count += 1;
+                            } else {
+                                let accepted = this
+                                    .local_lab_resources
+                                    .get_mut(&target_action)
+                                    .expect("local lab resource must exist")
+                                    .complete_current_success(
+                                        request_id,
+                                        response.clone(),
+                                        query_now_ms(),
+                                    );
+                                if accepted {
+                                    accepted_count += 1;
+                                }
+                            }
+                            this.push_local_lab_history(target_action, response);
+                        }
+
+                        if action == HttpLabAction::FullFlow {
+                            if let Some(response) = last_response.clone() {
+                                let accepted = this
+                                    .local_lab_resources
+                                    .get_mut(&HttpLabAction::FullFlow)
+                                    .expect("local lab full flow resource must exist")
+                                    .complete_current_success(request_id, response, query_now_ms());
+                                if accepted {
+                                    accepted_count += 1;
+                                }
+                            }
+                        }
+
+                        this.status = RawStatus::Completed;
+                        this.last_response = last_response;
+                        this.last_message = format!(
+                            "operation {operation_id}: local lab completed in {elapsed_ms}ms"
+                        );
+                        this.local_lab_message = format!(
+                            "operation {operation_id}: {} accepted {accepted_count} updates",
+                            action.label()
+                        );
+                    }
+                    Err(err) if err == "cancelled" => {
+                        let accepted = this
+                            .local_lab_resources
+                            .get_mut(&action)
+                            .expect("local lab resource must exist")
+                            .complete_current_failure(
+                                request_id,
+                                QueryError::cancelled("local lab cancelled"),
+                            );
+                        this.status = RawStatus::Cancelled;
+                        this.last_message = format!(
+                            "operation {operation_id}: local lab cancelled in {elapsed_ms}ms"
+                        );
+                        this.local_lab_message = format!(
+                            "operation {operation_id}: {} cancel accepted={accepted}",
+                            action.label()
+                        );
+                    }
+                    Err(err) => {
+                        let accepted = this
+                            .local_lab_resources
+                            .get_mut(&action)
+                            .expect("local lab resource must exist")
+                            .complete_current_failure(
+                                request_id,
+                                QueryError::transport(err.clone()),
+                            );
+                        this.status = RawStatus::Failed;
+                        this.last_message =
+                            format!("operation {operation_id}: local lab failed in {elapsed_ms}ms");
+                        this.local_lab_message = format!(
+                            "operation {operation_id}: {} failure accepted={accepted}: {err}",
+                            action.label()
+                        );
+                    }
+                }
+
+                tracing::info!(
+                    target: LOG,
+                    operation_id,
+                    action = action.id(),
+                    request_id = %request_id.label(),
+                    status = this.local_lab_resources[&action].status().label(),
+                    history_len = this.local_lab_history.len(),
+                    "HTTP Lab Testing local lab applied result"
+                );
+                cx.notify();
+            }) {
+                tracing::warn!(
+                    target: LOG,
+                    operation_id,
+                    action = action.id(),
+                    request_id = %request_id.label(),
+                    error = %err,
+                    "HTTP Lab Testing failed to apply local lab result"
+                );
+            }
+        })
+        .detach();
+
+        tracing::info!(
+            target: LOG,
+            operation_id,
+            action = action.id(),
+            request_id = %request_id.label(),
+            "HTTP Lab Testing local lab foreground task scheduled"
+        );
+    }
+
+    fn cancel_local_lab_action(&mut self, action: HttpLabAction, reason: &str) {
+        if let Some(resource) = self.local_lab_resources.get_mut(&action) {
+            resource.cancel(QueryError::cancelled(reason));
+        }
+    }
+
+    fn cancel_local_lab_active_requests(&mut self, reason: &str) {
+        for action in HttpLabAction::all() {
+            self.cancel_local_lab_action(*action, reason);
+        }
+    }
+
+    fn complete_local_lab_child_resource(&mut self, action: HttpLabAction, response: RawResponse) {
+        let now_ms = query_now_ms();
+        let request_id = match self
+            .local_lab_resources
+            .get_mut(&action)
+            .expect("local lab child resource must exist")
+            .begin_request(&mut self.local_lab_sequencer, now_ms, QueryFetchMode::Force)
+        {
+            QueryBeginResult::Started { request_id, .. } => request_id,
+            QueryBeginResult::CacheHit | QueryBeginResult::IgnoredWhileLoading { .. } => return,
+        };
+        self.local_lab_resources
+            .get_mut(&action)
+            .expect("local lab child resource must exist")
+            .complete_current_success(request_id, response, now_ms + 1);
+    }
+
+    fn push_local_lab_history(&mut self, action: HttpLabAction, response: RawResponse) {
+        self.local_lab_history.insert(0, (action, response));
+        self.local_lab_history.truncate(16);
+    }
 }
 
 impl Render for HttpLabTestingPage {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let render_started = Instant::now();
         let is_sending = matches!(self.status, RawStatus::Sending);
+        let active_operation_id = self.active_operation_id;
+        let query_status = self.query_resource.status();
+        let local_selected = self.local_lab_selected;
+        let local_history_len = self.local_lab_history.len();
 
-        v_flex()
+        let view = v_flex()
             .min_h_full()
             .p_6()
             .gap_5()
@@ -672,6 +1007,24 @@ impl Render for HttpLabTestingPage {
                                 this.exercise_query_latest_wins(cx);
                             })),
                     )
+                    .children(HttpLabAction::all().iter().copied().map(|action| {
+                        Button::new(format!("http-lab-testing-local-{}", action.id()))
+                            .outline()
+                            .label(format!("Local {}", action.label()))
+                            .disabled(is_sending)
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.send_local_lab_action(action, cx);
+                            }))
+                    }))
+                    .child(
+                        Button::new("http-lab-testing-local-reset")
+                            .outline()
+                            .label("Local reset")
+                            .disabled(is_sending)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.reset_local_lab(cx);
+                            })),
+                    )
                     .child(
                         Button::new("http-lab-testing-cancel")
                             .danger()
@@ -685,7 +1038,22 @@ impl Render for HttpLabTestingPage {
             )
             .child(status_panel(self, cx))
             .child(query_panel(self, cx))
-            .child(response_panel(self, cx))
+            .child(local_lab_panel(self, cx))
+            .child(response_panel(self, cx));
+
+        tracing::info!(
+            target: RENDER_LOG,
+            elapsed_us = render_started.elapsed().as_micros() as u64,
+            status = self.status.label(),
+            is_sending,
+            active_operation_id,
+            query_status = query_status.label(),
+            local_selected = local_selected.id(),
+            local_history_len,
+            "HTTP Lab Testing render completed"
+        );
+
+        view
     }
 }
 
@@ -791,8 +1159,59 @@ async fn raw_reqwest_get(
     })
 }
 
+async fn run_local_lab_action(
+    client: reqwest::Client,
+    action: HttpLabAction,
+    cancellation: CancellationToken,
+    operation_id: u64,
+) -> Result<Vec<(HttpLabAction, RawResponse)>, String> {
+    if action == HttpLabAction::FullFlow {
+        let mut exchanges = Vec::new();
+        for target_action in [
+            HttpLabAction::GetJson,
+            HttpLabAction::PostJson,
+            HttpLabAction::Cookies,
+            HttpLabAction::Failure,
+        ] {
+            let response = raw_reqwest_get(
+                client.clone(),
+                local_lab_url(target_action),
+                cancellation.clone(),
+                operation_id,
+            )
+            .await?;
+            exchanges.push((target_action, response));
+        }
+        return Ok(exchanges);
+    }
+
+    let response = raw_reqwest_get(
+        client,
+        local_lab_url(action),
+        cancellation.clone(),
+        operation_id,
+    )
+    .await?;
+    Ok(vec![(action, response)])
+}
+
+fn local_lab_url(action: HttpLabAction) -> String {
+    match action {
+        HttpLabAction::GetText => "https://httpbingo.org/encoding/utf8".to_string(),
+        HttpLabAction::GetJson => "https://httpbingo.org/json".to_string(),
+        HttpLabAction::GetXml => "https://httpbingo.org/xml".to_string(),
+        HttpLabAction::PostJson => "https://httpbingo.org/post?local=post_json".to_string(),
+        HttpLabAction::PostForm => "https://httpbingo.org/post?local=post_form".to_string(),
+        HttpLabAction::PostMultipart => "https://httpbingo.org/post?local=multipart".to_string(),
+        HttpLabAction::Cookies => "https://httpbingo.org/cookies".to_string(),
+        HttpLabAction::Failure => "https://httpbingo.org/status/418".to_string(),
+        HttpLabAction::FullFlow => TEST_URL.to_string(),
+    }
+}
+
 fn status_panel(page: &HttpLabTestingPage, cx: &App) -> Div {
-    div()
+    let render_started = Instant::now();
+    let view = div()
         .p_4()
         .rounded(cx.theme().radius_lg)
         .border_1()
@@ -816,10 +1235,22 @@ fn status_panel(page: &HttpLabTestingPage, cx: &App) -> Div {
                     cx,
                 ))
                 .child(row("Message", &page.last_message, cx)),
-        )
+        );
+
+    tracing::debug!(
+        target: RENDER_LOG,
+        elapsed_us = render_started.elapsed().as_micros() as u64,
+        status = page.status.label(),
+        active_operation_id = page.active_operation_id,
+        "HTTP Lab Testing status panel rendered"
+    );
+
+    view
 }
 
 fn response_panel(page: &HttpLabTestingPage, cx: &App) -> Div {
+    let render_started = Instant::now();
+    let has_response = page.last_response.is_some();
     let panel = div()
         .p_4()
         .rounded(cx.theme().radius_lg)
@@ -851,7 +1282,7 @@ fn response_panel(page: &HttpLabTestingPage, cx: &App) -> Div {
                 }),
         );
 
-    if page.last_response.is_some() {
+    let view = if page.last_response.is_some() {
         panel
     } else {
         panel.child(
@@ -860,11 +1291,21 @@ fn response_panel(page: &HttpLabTestingPage, cx: &App) -> Div {
                 .text_color(cx.theme().muted_foreground)
                 .child("No response captured."),
         )
-    }
+    };
+
+    tracing::debug!(
+        target: RENDER_LOG,
+        elapsed_us = render_started.elapsed().as_micros() as u64,
+        has_response,
+        "HTTP Lab Testing response panel rendered"
+    );
+
+    view
 }
 
 fn query_panel(page: &HttpLabTestingPage, cx: &App) -> Div {
-    div()
+    let render_started = Instant::now();
+    let view = div()
         .p_4()
         .rounded(cx.theme().radius_lg)
         .border_1()
@@ -921,7 +1362,109 @@ fn query_panel(page: &HttpLabTestingPage, cx: &App) -> Div {
                     cx,
                 ))
                 .child(row("Query message", &page.query_message, cx)),
-        )
+        );
+
+    tracing::debug!(
+        target: RENDER_LOG,
+        elapsed_us = render_started.elapsed().as_micros() as u64,
+        query_status = page.query_resource.status().label(),
+        ttl_status = page.query_ttl_resource.status().label(),
+        ignore_status = page.query_ignore_resource.status().label(),
+        latest_status = page.query_latest_resource.status().label(),
+        "HTTP Lab Testing query panel rendered"
+    );
+
+    view
+}
+
+fn local_lab_panel(page: &HttpLabTestingPage, cx: &App) -> Div {
+    let render_started = Instant::now();
+    let active_count = page
+        .local_lab_resources
+        .values()
+        .filter(|resource| resource.active_request_id().is_some())
+        .count();
+    let view = div()
+        .p_4()
+        .rounded(cx.theme().radius_lg)
+        .border_1()
+        .border_color(cx.theme().border)
+        .child(
+            v_flex()
+                .gap_3()
+                .child(
+                    div()
+                        .text_lg()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .child("Local full-query lab"),
+                )
+                .child(row("Selected", page.local_lab_selected.label(), cx))
+                .child(row("Message", &page.local_lab_message, cx))
+                .child(row(
+                    "History",
+                    &page.local_lab_history.len().to_string(),
+                    cx,
+                ))
+                .children(HttpLabAction::all().iter().copied().map(|action| {
+                    let resource = page
+                        .local_lab_resources
+                        .get(&action)
+                        .expect("local lab resource must exist");
+                    query_resource_row(action.label(), resource, cx)
+                }))
+                .child(local_lab_history_panel(page, cx)),
+        );
+
+    tracing::debug!(
+        target: RENDER_LOG,
+        elapsed_us = render_started.elapsed().as_micros() as u64,
+        selected = page.local_lab_selected.id(),
+        resource_count = page.local_lab_resources.len(),
+        active_count,
+        history_len = page.local_lab_history.len(),
+        "HTTP Lab Testing local lab panel rendered"
+    );
+
+    view
+}
+
+fn local_lab_history_panel(page: &HttpLabTestingPage, cx: &App) -> Div {
+    let render_started = Instant::now();
+    let mut body = v_flex().gap_1();
+    for (action, response) in page.local_lab_history.iter().take(6) {
+        body = body.child(div().text_xs().font_family("monospace").child(format!(
+            "{} status={} bytes={} url={}",
+            action.label(),
+            response.status,
+            response.bytes,
+            response.final_url
+        )));
+    }
+
+    let view = div()
+        .p_3()
+        .rounded(cx.theme().radius)
+        .bg(cx.theme().muted)
+        .child(if page.local_lab_history.is_empty() {
+            v_flex().child(
+                div()
+                    .text_sm()
+                    .text_color(cx.theme().muted_foreground)
+                    .child("No local lab history."),
+            )
+        } else {
+            body
+        });
+
+    tracing::debug!(
+        target: RENDER_LOG,
+        elapsed_us = render_started.elapsed().as_micros() as u64,
+        history_len = page.local_lab_history.len(),
+        rendered_rows = page.local_lab_history.len().min(6),
+        "HTTP Lab Testing local lab history panel rendered"
+    );
+
+    view
 }
 
 fn query_resource_row(label: &str, resource: &QueryResource<RawResponse>, cx: &App) -> Div {
@@ -969,5 +1512,42 @@ fn fake_response(label: &str) -> RawResponse {
         header_count: 0,
         bytes: label.len(),
         preview: label.to_string(),
+    }
+}
+
+fn local_lab_resources() -> BTreeMap<HttpLabAction, QueryResource<RawResponse>> {
+    HttpLabAction::all()
+        .iter()
+        .copied()
+        .map(|action| {
+            (
+                action,
+                QueryResource::new(
+                    format!("http_lab_testing/local/{}", action.id()),
+                    local_lab_cache_policy(action),
+                    local_lab_request_policy(action),
+                ),
+            )
+        })
+        .collect()
+}
+
+fn local_lab_cache_policy(action: HttpLabAction) -> CachePolicy {
+    match action {
+        HttpLabAction::GetText | HttpLabAction::GetXml => CachePolicy::Ttl { ttl_ms: 60_000 },
+        HttpLabAction::GetJson => CachePolicy::StaleWhileRevalidate { ttl_ms: 30_000 },
+        HttpLabAction::PostJson
+        | HttpLabAction::PostForm
+        | HttpLabAction::PostMultipart
+        | HttpLabAction::Cookies
+        | HttpLabAction::Failure
+        | HttpLabAction::FullFlow => CachePolicy::NoCache,
+    }
+}
+
+fn local_lab_request_policy(action: HttpLabAction) -> RequestPolicy {
+    match action {
+        HttpLabAction::PostMultipart | HttpLabAction::FullFlow => RequestPolicy::IgnoreWhileLoading,
+        _ => RequestPolicy::LatestWins,
     }
 }

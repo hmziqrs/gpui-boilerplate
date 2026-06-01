@@ -75,33 +75,60 @@ pub fn select_action(action: HttpLabAction, cx: &mut App) {
 /// Prepare an HTTP action: update state, register task, return handles for spawning.
 /// Returns `None` if the action was deduplicated (cache hit or already loading).
 pub fn prepare_action(action: HttpLabAction, cx: &mut App) -> Option<ActionHandle> {
+    prepare_action_impl(action, cx, true)
+}
+
+/// Prepare an HTTP action without registering a global background task.
+///
+/// The interactive HTTP Lab page uses this path while we isolate GPUI hangs:
+/// it keeps the query resource lifecycle intact but avoids TaskRegistry and
+/// AppEventQueue notifications during request startup.
+pub fn prepare_action_untracked(action: HttpLabAction, cx: &mut App) -> Option<ActionHandle> {
+    prepare_action_impl(action, cx, false)
+}
+
+fn prepare_action_impl(
+    action: HttpLabAction,
+    cx: &mut App,
+    track_background_task: bool,
+) -> Option<ActionHandle> {
     let now_ms = now_ms();
     tracing::info!(
         target: LOG,
         action = action.id(),
         now_ms,
+        track_background_task,
         "HTTP Lab preparing action"
     );
     let request_id =
         cx.update_global::<HttpLabState, _>(|state, _cx| begin_action(state, action, now_ms))?;
 
-    let task_id = TaskId::new();
-    tracing::info!(
-        target: LOG,
-        action = action.id(),
-        request_id = %request_id.label(),
-        task_id = ?task_id,
-        "HTTP Lab action accepted"
-    );
-    crate::tasks::start(
-        task_id,
-        format!("HTTP Lab {}", action.label()),
-        TaskProgress::Indeterminate,
-        cx,
-    );
-    cx.update_global::<HttpLabState, _>(|state, _cx| {
-        state.inflight_tasks.insert(request_id, task_id);
-    });
+    if track_background_task {
+        let task_id = TaskId::new();
+        tracing::info!(
+            target: LOG,
+            action = action.id(),
+            request_id = %request_id.label(),
+            task_id = ?task_id,
+            "HTTP Lab action accepted with background task"
+        );
+        crate::tasks::start(
+            task_id,
+            format!("HTTP Lab {}", action.label()),
+            TaskProgress::Indeterminate,
+            cx,
+        );
+        cx.update_global::<HttpLabState, _>(|state, _cx| {
+            state.inflight_tasks.insert(request_id, task_id);
+        });
+    } else {
+        tracing::info!(
+            target: LOG,
+            action = action.id(),
+            request_id = %request_id.label(),
+            "HTTP Lab action accepted without background task"
+        );
+    }
     let cancellation = register_request_flag(request_id);
     tracing::debug!(
         target: LOG,
